@@ -1,0 +1,22 @@
+[
+  {"id": "marketing_push", "title": "Marketing Push", "text": "+6% revenue for 2 turns, but costs cash.", "cost": 1800, "temporary_effects": {"revenue_bonus": 0.06}, "duration_turns": 2},
+  {"id": "cost_cutting", "title": "Cost Cutting", "text": "-5% expenses for 2 turns, +2% risk.", "cost": 800, "temporary_effects": {"expense_bonus": -0.05}, "duration_turns": 2, "risk": 0.02},
+  {"id": "automation", "title": "Automation", "text": "-8% expenses for 3 turns.", "cost": 4200, "temporary_effects": {"expense_bonus": -0.08}, "duration_turns": 3},
+  {"id": "brand_deal", "title": "Brand Deal", "text": "Immediate cash injection.", "cost": 0, "cash": 2500},
+  {"id": "fixed_rate", "title": "Fixed Rate Loan", "text": "Reduce debt exposure.", "cost": 1000, "risk": -0.02, "debt": -2500},
+  {"id": "aggressive_growth", "title": "Aggressive Growth", "text": "+9% revenue for 2 turns, +4% risk.", "cost": 1600, "temporary_effects": {"revenue_bonus": 0.09}, "duration_turns": 2, "risk": 0.04},
+  {"id": "supplier_contract", "title": "Supplier Contract", "text": "-6% expenses for 3 turns.", "cost": 2500, "temporary_effects": {"expense_bonus": -0.06}, "duration_turns": 3},
+  {"id": "online_channel", "title": "Online Channel", "text": "+6% revenue for 3 turns.", "cost": 2600, "temporary_effects": {"revenue_bonus": 0.06}, "duration_turns": 3},
+  {"id": "hire_manager", "title": "Hire Manager", "text": "Lower operating risk.", "cost": 3500, "risk": -0.04},
+  {"id": "bridge_loan", "title": "Bridge Loan", "text": "Fast cash, more debt.", "cost": 0, "cash": 7000, "debt": 9000, "risk": 0.04},
+  {"id": "repay_package", "title": "Debt Package", "text": "Repay part of debt.", "cost": 2000, "debt": -4000, "risk": -0.02},
+  {"id": "price_increase", "title": "Price Increase", "text": "+4% revenue for 2 turns, +1% risk.", "cost": 0, "temporary_effects": {"revenue_bonus": 0.04}, "duration_turns": 2, "risk": 0.01},
+  {"id": "insurance", "title": "Insurance", "text": "Reduce bankruptcy risk for 3 turns.", "cost": 2500, "temporary_effects": {"risk": -0.05}, "duration_turns": 3},
+  {"id": "lean_ops", "title": "Lean Operations", "text": "-5% expenses for 2 turns.", "cost": 1200, "temporary_effects": {"expense_bonus": -0.05}, "duration_turns": 2},
+  {"id": "premium_product", "title": "Premium Product", "text": "+7% revenue for 2 turns.", "cost": 3200, "temporary_effects": {"revenue_bonus": 0.07}, "duration_turns": 2},
+  {"id": "cash_reserve", "title": "Cash Reserve", "text": "Hold liquidity.", "cost": 0, "cash": 2000, "risk": -0.01},
+  {"id": "refinance", "title": "Refinance", "text": "Lower debt and risk.", "cost": 1000, "debt": -2500, "risk": -0.01},
+  {"id": "viral_ad", "title": "Viral Ad", "text": "+12% revenue for 2 turns, higher risk.", "cost": 2000, "temporary_effects": {"revenue_bonus": 0.12}, "duration_turns": 2, "risk": 0.05},
+  {"id": "energy_saving", "title": "Energy Saving", "text": "-6% expenses for 3 turns.", "cost": 2600, "temporary_effects": {"expense_bonus": -0.06}, "duration_turns": 3},
+  {"id": "wait_out", "title": "Wait Out", "text": "Small cash gain, lower risk.", "cost": 0, "cash": 1500, "risk": -0.02}
+]

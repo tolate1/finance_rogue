@@ -1,0 +1,10 @@
+[
+  {"id": "it", "name": "IT", "demand_weight": 0.4, "energy_weight": 0.1, "rate_weight": 0.15, "risk": 0.09},
+  {"id": "retail", "name": "Retail", "demand_weight": 0.9, "energy_weight": 0.3, "rate_weight": 0.1, "risk": 0.05},
+  {"id": "real_estate", "name": "Real Estate", "demand_weight": 0.2, "energy_weight": 0.3, "rate_weight": 0.8, "risk": 0.04},
+  {"id": "manufacturing", "name": "Manufacturing", "demand_weight": 0.5, "energy_weight": 1.0, "rate_weight": 0.35, "risk": 0.08},
+  {"id": "energy", "name": "Energy", "demand_weight": 0.2, "energy_weight": -0.6, "rate_weight": 0.45, "risk": 0.05},
+  {"id": "logistics", "name": "Logistics", "demand_weight": 0.5, "energy_weight": 0.9, "rate_weight": 0.2, "risk": 0.07},
+  {"id": "media", "name": "Media", "demand_weight": 0.7, "energy_weight": 0.1, "rate_weight": 0.1, "risk": 0.1}
+]
+

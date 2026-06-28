@@ -1,0 +1,12 @@
+[
+  {"id": "coffee_media", "name": "Local Buzz", "requires": ["coffee_shop", "online_media"], "revenue_bonus": 0.06, "expense_bonus": 0.0},
+  {"id": "retail_delivery", "name": "Retail Delivery", "requires": ["mini_market", "courier_service"], "revenue_bonus": 0.08, "expense_bonus": 0.0},
+  {"id": "studio_saas", "name": "Shared Tech Stack", "requires": ["mobile_studio", "saas_tool"], "revenue_bonus": 0.05, "expense_bonus": -0.05},
+  {"id": "warehouse_delivery", "name": "Warehouse Network", "requires": ["warehouse", "courier_service"], "revenue_bonus": 0.04, "expense_bonus": -0.08},
+  {"id": "factory_warehouse", "name": "Integrated Supply", "requires": ["small_factory", "warehouse"], "revenue_bonus": 0.05, "expense_bonus": -0.06},
+  {"id": "solar_factory", "name": "Cheap Power", "requires": ["solar_farm", "small_factory"], "revenue_bonus": 0.0, "expense_bonus": -0.12},
+  {"id": "solar_rental", "name": "Green Buildings", "requires": ["solar_farm", "rental_block"], "revenue_bonus": 0.03, "expense_bonus": -0.06},
+  {"id": "media_saas", "name": "Growth Funnel", "requires": ["online_media", "saas_tool"], "revenue_bonus": 0.1, "expense_bonus": 0.0},
+  {"id": "market_warehouse", "name": "Private Supply", "requires": ["mini_market", "warehouse"], "revenue_bonus": 0.03, "expense_bonus": -0.05},
+  {"id": "energy_logistics", "name": "Protected Logistics", "requires": ["solar_farm", "courier_service"], "revenue_bonus": 0.02, "expense_bonus": -0.08}
+]
