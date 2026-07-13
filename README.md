@@ -45,6 +45,7 @@ npm run check
 - industry data validation
 - bankruptcy check
 - playable browser UI
+- persistent three-step round guide: event, action, finish round
 - first-launch language selection
 - RU/EN localization
 - mobile-optimized WebP icons and company logos
@@ -74,13 +75,14 @@ Done:
 - GitHub Actions CI
 - canonical calculations for revenue, expenses, interest, dividends, valuation, and insolvency
 - public mobile beta deployment
+- guided round flow with a contextual primary action on every game screen
 
 Next:
 
 - continue extracting actions, events, stocks, and seeded randomness into the canonical engine
 - make the simulator match all live game mechanics
 - run the first measured balance pass
-- improve onboarding and mobile feedback
+- continue onboarding, action previews, and mobile feedback
 - add PWA installation support and graceful loading errors
 
 See [ROADMAP.user.ru.md](ROADMAP.user.ru.md) for goals, acceptance criteria, and the detailed delivery order.

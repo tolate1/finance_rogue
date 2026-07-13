@@ -170,6 +170,85 @@ button {
   box-shadow: 0 12px 24px rgba(15, 139, 114, 0.24);
 }
 
+#next-turn-button {
+  min-width: 132px;
+  max-width: 158px;
+  padding: 0 14px;
+  line-height: 1.15;
+}
+
+.turn-guide {
+  margin-bottom: 14px;
+}
+
+.turn-guide:empty {
+  display: none;
+}
+
+.turn-guide-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.turn-guide-step {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(24, 23, 20, 0.045);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.turn-guide-step.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1px rgba(15, 139, 114, 0.16);
+}
+
+.turn-guide-step.done {
+  color: var(--accent-strong);
+  background: rgba(15, 139, 114, 0.07);
+}
+
+.turn-guide-index {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(24, 23, 20, 0.08);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.turn-guide-step.active .turn-guide-index,
+.turn-guide-step.done .turn-guide-index {
+  background: var(--accent);
+  color: white;
+}
+
+.turn-guide-step strong,
+.turn-guide-step small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.turn-guide-step strong {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.turn-guide-step small {
+  margin-top: 2px;
+  font-size: 0.62rem;
+  line-height: 1.15;
+}
+
 .primary-button:disabled,
 .secondary-button:disabled,
 .business-button:disabled,
@@ -396,6 +475,10 @@ button {
   min-height: 48px;
 }
 
+.setup-quick-start {
+  width: 100%;
+}
+
 .run-configuration-tags {
   display: flex;
   gap: 8px;
@@ -462,6 +545,26 @@ button {
   display: flex;
   justify-content: flex-end;
   margin-top: 10px;
+}
+
+.round-explainer,
+.finish-round-card {
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 139, 114, 0.16);
+  background: linear-gradient(180deg, rgba(15, 139, 114, 0.08), rgba(255, 250, 244, 0.94));
+}
+
+.round-explainer p,
+.finish-round-card p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.finish-round-card .primary-button {
+  width: 100%;
+  margin-top: 14px;
 }
 
 .market-back-row {
@@ -1511,6 +1614,7 @@ button {
 }
 
 .nav-item {
+  position: relative;
   min-height: 64px;
   padding: 6px 8px;
   border-radius: 18px;
@@ -1519,6 +1623,28 @@ button {
   display: grid;
   place-items: center;
   gap: 4px;
+}
+
+.nav-item.recommended:not(.active) {
+  color: var(--accent-strong);
+  background: rgba(15, 139, 114, 0.07);
+}
+
+.nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 800;
+  box-shadow: 0 4px 10px rgba(15, 139, 114, 0.25);
 }
 
 .nav-item strong {
@@ -1554,5 +1680,20 @@ button {
     height: 100vh;
     border-radius: 0;
     border: 0;
+  }
+
+  .turn-guide-step {
+    justify-content: center;
+    padding: 7px 5px;
+  }
+
+  .turn-guide-step small {
+    display: none;
+  }
+
+  #next-turn-button {
+    min-width: 122px;
+    max-width: 142px;
+    font-size: 0.84rem;
   }
 }

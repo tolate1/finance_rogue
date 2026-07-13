@@ -15,6 +15,12 @@ import {
   calculateEffectiveMacro,
   sumModifierEffects
 } from "./src/engine/economy.js";
+import {
+  TURN_PHASES,
+  getRecommendedTab,
+  getTurnPhase,
+  getTurnStepStates
+} from "./src/ui/turn-flow.js";
 
 const MAX_TURNS = 10;
 const STARTING_CASH = 12000;
@@ -53,6 +59,19 @@ const translations = {
     stocks: "Stocks",
     economy: "Economy",
     nextTurn: "Next",
+    currentRoundStatus: "Round {turn} of {maxTurns}",
+    flowEventButton: "1. Resolve event",
+    flowActionButton: "2. Choose action",
+    flowFinishButton: "Finish round {turn}",
+    finishStep: "Finish",
+    eventStepBrief: "Choose outcome",
+    actionStepBrief: "Make one move",
+    finishStepBrief: "Collect result",
+    roundExplainerTitle: "How a round works",
+    roundExplainerText: "Resolve one event, then take one action. Finish the round to collect profit, move the market, and receive a new event.",
+    finishRoundHint: "Your action is complete. Finish the round to collect the result.",
+    quickStartRun: "Start with selected settings",
+    recommendedStep: "Next",
     reset: "Reset",
     language: "Language",
     resolveEventBeforeNextTurn: "Resolve the event before next turn",
@@ -442,6 +461,19 @@ const translations = {
     stocks: "Акции",
     economy: "Экономика",
     nextTurn: "Следующий",
+    currentRoundStatus: "Раунд {turn} из {maxTurns}",
+    flowEventButton: "1. Решить событие",
+    flowActionButton: "2. Выбрать действие",
+    flowFinishButton: "Завершить раунд {turn}",
+    finishStep: "Завершить",
+    eventStepBrief: "Выбрать исход",
+    actionStepBrief: "Сделать один ход",
+    finishStepBrief: "Получить результат",
+    roundExplainerTitle: "Как проходит раунд",
+    roundExplainerText: "Сначала решите одно событие, затем совершите одно действие. Завершите раунд — начислится прибыль, изменится рынок и появится новое событие.",
+    finishRoundHint: "Действие выполнено. Завершите раунд, чтобы получить результат.",
+    quickStartRun: "Начать с выбранными настройками",
+    recommendedStep: "Дальше",
     reset: "Сброс",
     language: "Язык",
     resolveEventBeforeNextTurn: "Решите событие перед следующим ходом",
@@ -852,6 +884,7 @@ const ui = {
   nextTurnButton: document.getElementById("next-turn-button"),
   turnLabel: document.getElementById("turn-label"),
   statusHint: document.getElementById("status-hint"),
+  turnGuide: document.getElementById("turn-guide"),
   statsGrid: document.getElementById("stats-grid"),
   tabContent: document.getElementById("tab-content"),
   bottomNav: document.getElementById("bottom-nav")
@@ -886,7 +919,7 @@ async function boot() {
   window.simulateRuns = simulateRuns;
 
   ui.newRunButton.addEventListener("click", openRunSetup);
-  ui.nextTurnButton.addEventListener("click", advanceTurn);
+  ui.nextTurnButton.addEventListener("click", handlePrimaryFlowAction);
 
   renderBottomNav();
   if (hasSelectedLanguage()) {
@@ -1114,6 +1147,51 @@ function render() {
   bindTabEvents();
 }
 
+function primaryFlowLabel(run) {
+  const phase = getTurnPhase(run);
+  if (phase === TURN_PHASES.EVENT) return t("flowEventButton");
+  if (phase === TURN_PHASES.ACTION) return t("flowActionButton");
+  if (phase === TURN_PHASES.FINISH) return t("flowFinishButton", { turn: run.turn });
+  return t("runComplete");
+}
+
+function primaryFlowStatus(run) {
+  const phase = getTurnPhase(run);
+  if (phase === TURN_PHASES.EVENT) return t("resolveEventBeforeNextTurn");
+  if (phase === TURN_PHASES.ACTION) return t("chooseAction");
+  if (phase === TURN_PHASES.FINISH) return t("finishRoundHint");
+  return run.statusMessage;
+}
+
+function handlePrimaryFlowAction() {
+  if (!state.run || state.run.finished) return;
+  const phase = getTurnPhase(state.run);
+  if (phase === TURN_PHASES.FINISH) {
+    advanceTurn();
+    return;
+  }
+  state.activeTab = "decisions";
+  state.marketView = "root";
+  render();
+}
+
+function renderTurnGuide(run) {
+  const labels = {
+    event: [t("eventStep"), t("eventStepBrief")],
+    action: [t("actionStep"), t("actionStepBrief")],
+    finish: [t("finishStep"), t("finishStepBrief")]
+  };
+  const steps = getTurnStepStates(run).map((step, index) => {
+    const current = step.state === "active" ? ' aria-current="step"' : "";
+    const marker = step.state === "done" ? "✓" : index + 1;
+    return '<div class="turn-guide-step ' + step.state + '"' + current + '>'
+      + '<span class="turn-guide-index">' + marker + '</span>'
+      + '<span><strong>' + labels[step.id][0] + '</strong><small>' + labels[step.id][1] + '</small></span>'
+      + '</div>';
+  }).join("");
+  return '<div class="turn-guide-track" aria-label="' + t("turnProgress") + '">' + steps + '</div>';
+}
+
 function renderHeader() {
   document.title = t("gameTitle");
   ui.eyebrow.textContent = t("gameTitle");
@@ -1125,6 +1203,7 @@ function renderHeader() {
     ui.nextTurnButton.style.display = "none";
     ui.nextTurnButton.disabled = true;
     ui.newRunButton.style.display = "none";
+    ui.turnGuide.innerHTML = "";
     ui.statsGrid.innerHTML = "";
     return;
   }
@@ -1136,6 +1215,8 @@ function renderHeader() {
     ui.statusHint.textContent = t("chooseLanguage");
     ui.nextTurnButton.textContent = t("nextTurn");
     ui.nextTurnButton.disabled = true;
+    ui.nextTurnButton.style.display = "";
+    ui.turnGuide.innerHTML = "";
     ui.statsGrid.innerHTML = "";
     return;
   }
@@ -1144,15 +1225,15 @@ function renderHeader() {
   const report = run.currentReport || calculateReport();
   const dashboardMode = state.activeTab === "dashboard";
   ui.headerTitle.textContent = dashboardMode ? t("currentRun") : tabTitle();
-  ui.turnLabel.textContent = dashboardMode
-    ? (run.finished
-      ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
-      : t("currentTurnStatus", { turn: run.turn, maxTurns: currentMaxTurns() }))
-    : "";
-  ui.statusHint.textContent = dashboardMode ? headerStatusText(run) : "";
-  ui.nextTurnButton.textContent = t("nextTurn");
-  ui.nextTurnButton.disabled = !turnReady() || run.finished || !dashboardMode;
-  ui.nextTurnButton.style.display = dashboardMode ? "" : "none";
+  ui.turnLabel.textContent = run.finished
+    ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
+    : t("currentRoundStatus", { turn: run.turn, maxTurns: currentMaxTurns() });
+  ui.statusHint.textContent = primaryFlowStatus(run);
+  ui.nextTurnButton.textContent = primaryFlowLabel(run);
+  ui.nextTurnButton.disabled = run.finished;
+  ui.nextTurnButton.style.display = "";
+  ui.nextTurnButton.classList.toggle("flow-ready", getTurnPhase(run) === TURN_PHASES.FINISH);
+  ui.turnGuide.innerHTML = run.finished ? "" : renderTurnGuide(run);
   ui.statsGrid.innerHTML = dashboardMode
     ? [
       [t("cash"), money(run.company.cash)],
@@ -1168,10 +1249,14 @@ function renderBottomNav() {
     ui.bottomNav.innerHTML = "";
     return;
   }
+  const recommendedTab = getRecommendedTab(state.run);
+  const phase = getTurnPhase(state.run);
+  const recommendedMarker = phase === TURN_PHASES.EVENT ? "1" : phase === TURN_PHASES.ACTION ? "2" : "✓";
   ui.bottomNav.innerHTML = NAV_ITEMS.map((item) => `
-    <button class="nav-item ${state.activeTab === item.id ? "active" : ""}" data-tab="${item.id}">
+    <button class="nav-item ${state.activeTab === item.id ? "active" : ""} ${recommendedTab === item.id && state.activeTab !== item.id ? "recommended" : ""}" data-tab="${item.id}">
       <img src="${item.icon}" alt="${t(item.labelKey)}" class="nav-icon">
       <strong>${t(item.labelKey)}</strong>
+      ${recommendedTab === item.id && state.activeTab !== item.id ? `<span class="nav-badge" aria-label="${t("recommendedStep")}">${recommendedMarker}</span>` : ""}
     </button>
   `).join("");
   ui.bottomNav.querySelectorAll("[data-tab]").forEach((button) => {
@@ -1241,6 +1326,7 @@ function renderRunSetupScreen() {
         <h2>${t("newRunSetup")}</h2>
         <p>${t("newRunSetupDesc")}</p>
       </div>
+      <button class="primary-button setup-quick-start" data-start-configured-run>${t("quickStartRun")}</button>
 
       <div class="run-setup-section">
         <div class="tab-header"><h2>${t("chooseScenario")}</h2></div>
@@ -1300,9 +1386,15 @@ function renderDashboardTab() {
   return `
     <section class="tab-screen">
       <button class="dashboard-cta" data-dashboard-primary>
-        <strong>${turnReady() ? t("nextTurn") : run.eventResolved ? t("chooseAction") : t("resolveEventCta")}</strong>
-        <span>${turnReady() ? t("turnReadyToAdvance") : run.eventResolved ? t("openDecisions") : run.statusMessage}</span>
+        <strong>${primaryFlowLabel(run)} →</strong>
+        <span>${primaryFlowStatus(run)}</span>
       </button>
+      ${run.turn <= 2 ? `
+        <article class="round-explainer">
+          <strong>${t("roundExplainerTitle")}</strong>
+          <p>${t("roundExplainerText")}</p>
+        </article>
+      ` : ""}
       <div class="dashboard-secondary-actions">
         <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
       </div>
@@ -1467,35 +1559,6 @@ function renderRunEndScreen() {
   `;
 }
 
-function renderTurnProgressCard() {
-  return `
-    <article class="overview-card">
-      <h3>${t("turnProgress")}</h3>
-      <div class="progress-list">
-        <div class="progress-row">${statusChip(state.run.eventResolved ? "✓" : "•", state.run.eventResolved ? "done" : "active")}<span>${state.run.eventResolved ? t("eventResolved") : t("eventPendingShort")}</span></div>
-        <div class="progress-row">${statusChip(state.run.pendingActionDone ? "✓" : "•", state.run.pendingActionDone ? "done" : "")}<span>${state.run.pendingActionDone ? t("actionSelected") : t("actionNotSelected")}</span></div>
-        <div class="progress-row">${statusChip(turnReady() ? "✓" : "•", turnReady() ? "done" : "")}<span>${turnReady() ? t("turnReadyToAdvance") : t("nextTurnLocked")}</span></div>
-      </div>
-    </article>
-  `;
-}
-
-function renderDecisionStepper(eventActive, actionActive) {
-  return `
-    <article class="stepper-card">
-      <div class="step-item ${state.run.eventResolved ? "done" : eventActive ? "active" : ""}">
-        <span class="step-index">1</span>
-        <div><strong>${t("eventStep")}</strong><p>${state.run.eventResolved ? t("completed") : eventActive ? t("active") : t("pending")}</p></div>
-      </div>
-      <div class="step-line"></div>
-      <div class="step-item ${state.run.pendingActionDone ? "done" : actionActive ? "active" : ""}">
-        <span class="step-index">2</span>
-        <div><strong>${t("actionStep")}</strong><p>${state.run.pendingActionDone ? t("completed") : actionActive ? t("active") : t("pending")}</p></div>
-      </div>
-    </article>
-  `;
-}
-
 function renderEventChoiceCard(choice, index) {
   const effectText = describeEffects(choice)
     .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
@@ -1589,8 +1652,6 @@ function debtRepayCardItems() {
 function renderDecisionsTab() {
   const run = state.run;
   const event = run.currentEvent;
-  const eventActive = !run.eventResolved;
-  const actionActive = run.eventResolved && !run.pendingActionDone;
   const categories = [
     { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.webp" },
     { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.webp" },
@@ -1607,7 +1668,6 @@ function renderDecisionsTab() {
         <span>${t("turnShort")} ${Math.min(run.turn, currentMaxTurns())}/${currentMaxTurns()}</span>
         ${statusChip(compactStatusChip())}
       </div>
-      ${renderDecisionStepper(eventActive, actionActive)}
       ${!run.eventResolved ? renderDecisionCardCarousel("event-choices", event.choices, renderEventChoiceCard, t("swipeMoreOptions")) : ``}
       ${run.eventResolved && !run.pendingActionDone ? `
         <article class="overview-card">
@@ -1628,7 +1688,13 @@ function renderDecisionsTab() {
       ${run.eventResolved && !run.pendingActionDone && state.selectedActionType ? `
         ${renderDecisionCardCarousel(`action-${state.selectedActionType}`, actionItemsForCurrentCategory(), (item) => item, t("swipeMoreOptions"))}
       ` : ""}
-      ${run.pendingActionDone ? `<article class="overview-card"><h3>${t("turnProgress")}</h3><p>${t("turnReadyToAdvance")}</p></article>` : ""}
+      ${run.pendingActionDone ? `
+        <article class="finish-round-card">
+          <h3>${t("turnReadyToAdvance")}</h3>
+          <p>${t("finishRoundHint")}</p>
+          <button class="primary-button" data-finish-turn>${t("flowFinishButton", { turn: run.turn })} →</button>
+        </article>
+      ` : ""}
     </section>
   `;
 }
@@ -1777,12 +1843,9 @@ function bindTabEvents() {
   ui.tabContent.querySelectorAll("[data-cancel-run-setup]").forEach((button) => button.addEventListener("click", closeRunSetup));
   ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
   ui.tabContent.querySelectorAll("[data-dashboard-primary]").forEach((button) => button.addEventListener("click", () => {
-    if (turnReady()) advanceTurn();
-    else {
-      state.activeTab = "decisions";
-      render();
-    }
+    handlePrimaryFlowAction();
   }));
+  ui.tabContent.querySelectorAll("[data-finish-turn]").forEach((button) => button.addEventListener("click", advanceTurn));
   ui.tabContent.querySelectorAll("[data-action-type]").forEach((button) => button.addEventListener("click", () => {
     const actionType = button.dataset.actionType;
     if (actionType === "buy") {
@@ -2908,12 +2971,6 @@ function tabTitle() {
   return map[state.activeTab] || t("gameTitle");
 }
 
-function headerStatusText(run) {
-  if (run.finished) return run.statusMessage;
-  if (run.eventResolved) return run.pendingActionDone ? t("turnReadyToAdvance") : t("chooseAction");
-  return t("resolveEventThenAction");
-}
-
 function compactStatusChip() {
   if (!state.run.eventResolved && ["decisions", "portfolio", "market"].includes(state.activeTab)) {
     return t("eventNeedsDecision");
@@ -2931,10 +2988,6 @@ function compactStatusChip() {
 
 function statusChip(text, tone = "") {
   return `<span class="status-chip ${tone}">${text}</span>`;
-}
-
-function turnReady() {
-  return !!(state.run && state.run.eventResolved && state.run.pendingActionDone);
 }
 
 function openMeta() {
