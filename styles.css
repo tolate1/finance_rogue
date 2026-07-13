@@ -2925,6 +2925,12 @@ body {
   padding: 22px 18px max(28px, env(safe-area-inset-bottom));
 }
 
+.bottom-nav:empty {
+  display: none;
+  padding: 0;
+  border: 0;
+}
+
 .welcome-hero {
   position: relative;
   overflow: hidden;
