@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { RUN_SCENARIOS } from "../src/engine/run-config.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const load = (name) => JSON.parse(readFileSync(join(root, "data", name), "utf8"));
@@ -67,5 +68,21 @@ test("stock definitions and logo files are valid", () => {
     assert.ok(stock.volatility >= 0, `${stock.id} volatility must not be negative`);
     assert.ok(stock.dividend_yield >= 0, `${stock.id} dividend yield must not be negative`);
     assert.ok(existsSync(join(root, stock.logo.replace(/^\.\//, ""))), `${stock.id} logo file is missing`);
+  });
+});
+
+test("run scenarios reference existing businesses and stocks", () => {
+  const businessIds = new Set(businesses.map((item) => item.id));
+  const stockIds = new Set(stocks.map((item) => item.id));
+
+  RUN_SCENARIOS.forEach((scenario) => {
+    assert.ok(scenario.starterBusinessIds.length > 0, `${scenario.id} must have a starter business`);
+    scenario.starterBusinessIds.forEach((businessId) => {
+      assert.ok(businessIds.has(businessId), `${scenario.id} references unknown business ${businessId}`);
+    });
+    scenario.startingStocks.forEach((holding) => {
+      assert.ok(stockIds.has(holding.stockId), `${scenario.id} references unknown stock ${holding.stockId}`);
+      assert.ok(holding.shares > 0, `${scenario.id} stock position must be positive`);
+    });
   });
 });

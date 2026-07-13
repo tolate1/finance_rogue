@@ -1,4 +1,13 @@
 ﻿import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
+import {
+  RUN_DIFFICULTIES,
+  RUN_SCENARIOS,
+  applyDifficultyToDebtThreshold,
+  applyDifficultyToKnowledgeReward,
+  createRunConfiguration,
+  difficultyById,
+  scenarioById
+} from "./src/engine/run-config.js";
 
 const MAX_TURNS = 10;
 const STARTING_CASH = 12000;
@@ -378,7 +387,35 @@ const translations = {
     noMetaItemsMatchFilter: "No prestige upgrades match this filter.",
     stockRising: "Stock rising",
     stockFalling: "Stock falling",
-    stockNeutral: "Neutral"
+    stockNeutral: "Neutral",
+    newRunSetup: "New Run",
+    newRunSetupDesc: "Choose the opening position and how much pressure the run should apply.",
+    chooseScenario: "Starting scenario",
+    chooseDifficulty: "Difficulty",
+    startConfiguredRun: "Start run",
+    cancelSetup: "Keep current run",
+    scenarioLabel: "Scenario",
+    difficultyLabel: "Difficulty",
+    scenarioBalancedTitle: "Balanced Start",
+    scenarioBalancedDesc: "A classic opening with one random operating business and no debt.",
+    scenarioLeveragedTitle: "Leveraged Growth",
+    scenarioLeveragedDesc: "Start with a SaaS business, extra liquidity, and dangerous debt pressure.",
+    scenarioTraderTitle: "Market Trader",
+    scenarioTraderDesc: "Start with a tech business and an Aplix stock position in a more volatile market.",
+    difficultyRelaxedTitle: "Relaxed",
+    difficultyRelaxedDesc: "More cash, lower risk, and a safer debt threshold. Prestige rewards are reduced.",
+    difficultyNormalTitle: "Normal",
+    difficultyNormalDesc: "The intended balance for the main game.",
+    difficultyHardTitle: "Hard",
+    difficultyHardDesc: "Less cash, higher risk, and faster debt collapse. Prestige rewards are increased.",
+    setupCash: "Starting cash",
+    setupDebt: "Starting debt",
+    setupRisk: "Starting risk",
+    setupReward: "Prestige reward",
+    setupRewardReduced: "×0.75",
+    setupRewardNormal: "×1.00",
+    setupRewardIncreased: "×1.25",
+    startingConfiguration: "{scenario} · {difficulty}"
   },
   ru: {
     gameTitle: "Finance Roguelike",
@@ -739,7 +776,35 @@ const translations = {
     noMetaItemsMatchFilter: "Нет улучшений престижа для этого фильтра.",
     stockRising: "Акция растет",
     stockFalling: "Акция падает",
-    stockNeutral: "Нейтрально"
+    stockNeutral: "Нейтрально",
+    newRunSetup: "Новая партия",
+    newRunSetupDesc: "Выберите стартовую позицию и уровень давления в партии.",
+    chooseScenario: "Стартовый сценарий",
+    chooseDifficulty: "Сложность",
+    startConfiguredRun: "Начать партию",
+    cancelSetup: "Оставить текущую партию",
+    scenarioLabel: "Сценарий",
+    difficultyLabel: "Сложность",
+    scenarioBalancedTitle: "Сбалансированный старт",
+    scenarioBalancedDesc: "Классический старт с одним случайным бизнесом и без долга.",
+    scenarioLeveragedTitle: "Рост на заёмные",
+    scenarioLeveragedDesc: "SaaS-бизнес, дополнительная ликвидность и опасное долговое давление.",
+    scenarioTraderTitle: "Биржевой трейдер",
+    scenarioTraderDesc: "Технологический бизнес и позиция в Aplix на более волатильном рынке.",
+    difficultyRelaxedTitle: "Спокойная",
+    difficultyRelaxedDesc: "Больше денег, ниже риск и безопаснее долг. Награда престижа уменьшена.",
+    difficultyNormalTitle: "Обычная",
+    difficultyNormalDesc: "Основной задуманный баланс игры.",
+    difficultyHardTitle: "Сложная",
+    difficultyHardDesc: "Меньше денег, выше риск и быстрее долговой крах. Награда престижа увеличена.",
+    setupCash: "Деньги на старте",
+    setupDebt: "Долг на старте",
+    setupRisk: "Стартовый риск",
+    setupReward: "Награда престижа",
+    setupRewardReduced: "×0,75",
+    setupRewardNormal: "×1,00",
+    setupRewardIncreased: "×1,25",
+    startingConfiguration: "{scenario} · {difficulty}"
   }
 };
 
@@ -758,6 +823,9 @@ const state = {
   marketFilterRisk: "all",
   selectedLanguage: localStorage.getItem(LANGUAGE_KEY),
   languageModalOpen: false,
+  runSetupOpen: false,
+  selectedScenarioId: "balanced",
+  selectedDifficultyId: "normal",
   pendingActionType: null,
   selectedActionType: null,
   selectedActionItem: null,
@@ -810,12 +878,12 @@ async function boot() {
   window.validateGameData = validateGameData;
   window.simulateRuns = simulateRuns;
 
-  ui.newRunButton.addEventListener("click", startRun);
+  ui.newRunButton.addEventListener("click", openRunSetup);
   ui.nextTurnButton.addEventListener("click", advanceTurn);
 
   renderBottomNav();
   if (hasSelectedLanguage()) {
-    if (!restoreSavedRun()) startRun();
+    if (!restoreSavedRun()) openRunSetup();
   } else {
     render();
   }
@@ -841,7 +909,7 @@ function setLanguage(language) {
   state.selectedLanguage = language;
   localStorage.setItem(LANGUAGE_KEY, language);
   state.languageModalOpen = false;
-  if (!state.run) startRun();
+  if (!state.run) openRunSetup();
   else render();
 }
 
@@ -909,6 +977,7 @@ function restoreSavedRun() {
   const savedRun = loadRunState(localStorage, RUN_KEY);
   if (!savedRun) return false;
   state.run = savedRun;
+  state.runSetupOpen = false;
   state.activeTab = "dashboard";
   state.marketView = "root";
   state.pendingActionType = null;
@@ -929,13 +998,35 @@ function saveCurrentRun() {
   return saveRunState(localStorage, RUN_KEY, state.run);
 }
 
+function openRunSetup() {
+  state.runSetupOpen = true;
+  state.selectedScenarioId = "balanced";
+  state.selectedDifficultyId = "normal";
+  render();
+}
+
+function closeRunSetup() {
+  if (!state.run) return;
+  state.runSetupOpen = false;
+  render();
+}
+
 function startRun() {
   clearRunState(localStorage, RUN_KEY);
-  const starter = sample(["coffee_shop", "mini_market", "mobile_studio"]);
   const startingBonus = metaStartingBonuses();
+  const configuration = createRunConfiguration({
+    scenarioId: state.selectedScenarioId,
+    difficultyId: state.selectedDifficultyId,
+    baseCash: STARTING_CASH,
+    metaExtraCash: startingBonus.extraCash,
+    stocks: state.stocks
+  });
+  const starter = configuration.company.businesses[0].businessId;
   state.run = {
     id: `run-${Date.now()}`,
     maxTurns: nextRunMaxTurns(),
+    scenarioId: configuration.scenario.id,
+    difficultyId: configuration.difficulty.id,
     turn: 1,
     finished: false,
     endReason: null,
@@ -950,29 +1041,22 @@ function startRun() {
     pendingActionDone: false,
     eventResolved: false,
     statusMessage: t("resolveEventBeforeNextTurn"),
-    company: {
-      cash: STARTING_CASH + startingBonus.extraCash,
-      debt: 0,
-      risk: 0.05,
-      revenueBonus: 0,
-      expenseBonus: 0,
-      businesses: [{ businessId: starter, level: 1 }],
-      stocks: []
-    },
-    macro: {
-      interestRate: 0.04,
-      inflation: 0.03,
-      demand: 1,
-      energyCost: 1,
-      creditAvailability: 1,
-      marketRisk: 0.05
-    },
+    company: configuration.company,
+    macro: configuration.macro,
     history: [
-      { turn: 1, title: t("runStarted"), body: t("startingAsset", { name: businessById(starter).name }) }
+      {
+        turn: 1,
+        title: t("runStarted"),
+        body: `${t("startingAsset", { name: businessById(starter).name })}. ${t("startingConfiguration", {
+          scenario: t(configuration.scenario.titleKey),
+          difficulty: t(configuration.difficulty.titleKey)
+        })}`
+      }
     ],
     activeModifiers: [],
     stockMarket: createInitialStockMarket()
   };
+  state.runSetupOpen = false;
   state.activeTab = "dashboard";
   state.marketView = "root";
   state.pendingActionType = null;
@@ -1014,6 +1098,11 @@ function render() {
     bindLanguageEvents();
     return;
   }
+  if (state.runSetupOpen || !state.run) {
+    ui.tabContent.innerHTML = renderRunSetupScreen();
+    bindTabEvents();
+    return;
+  }
   ui.tabContent.innerHTML = `${state.languageModalOpen ? renderLanguageModal() : ""}${renderActiveTab()}`;
   bindTabEvents();
 }
@@ -1022,7 +1111,19 @@ function renderHeader() {
   document.title = t("gameTitle");
   ui.eyebrow.textContent = t("gameTitle");
   ui.newRunButton.textContent = t("reset");
+  if (hasSelectedLanguage() && (state.runSetupOpen || !state.run)) {
+    ui.headerTitle.textContent = t("newRunSetup");
+    ui.turnLabel.textContent = t("chooseScenario");
+    ui.statusHint.textContent = t("newRunSetupDesc");
+    ui.nextTurnButton.style.display = "none";
+    ui.nextTurnButton.disabled = true;
+    ui.newRunButton.style.display = "none";
+    ui.statsGrid.innerHTML = "";
+    return;
+  }
+  ui.newRunButton.style.display = "";
   if (!state.run || !hasSelectedLanguage()) {
+    ui.newRunButton.style.display = "none";
     ui.headerTitle.textContent = t("currentRun");
     ui.turnLabel.textContent = t("gameTitle");
     ui.statusHint.textContent = t("chooseLanguage");
@@ -1056,7 +1157,7 @@ function renderHeader() {
 }
 
 function renderBottomNav() {
-  if (!hasSelectedLanguage()) {
+  if (!hasSelectedLanguage() || state.runSetupOpen || !state.run) {
     ui.bottomNav.innerHTML = "";
     return;
   }
@@ -1107,6 +1208,72 @@ function renderLanguageModal() {
   `;
 }
 
+function previewRunConfiguration() {
+  return createRunConfiguration({
+    scenarioId: state.selectedScenarioId,
+    difficultyId: state.selectedDifficultyId,
+    baseCash: STARTING_CASH,
+    metaExtraCash: metaStartingBonuses().extraCash,
+    stocks: state.stocks,
+    random: () => 0
+  });
+}
+
+function difficultyRewardLabel(difficultyId) {
+  if (difficultyId === "relaxed") return t("setupRewardReduced");
+  if (difficultyId === "hard") return t("setupRewardIncreased");
+  return t("setupRewardNormal");
+}
+
+function renderRunSetupScreen() {
+  const preview = previewRunConfiguration();
+  return `
+    <section class="run-setup-screen">
+      <div class="run-setup-intro">
+        <p class="eyebrow">${t("gameTitle")}</p>
+        <h2>${t("newRunSetup")}</h2>
+        <p>${t("newRunSetupDesc")}</p>
+      </div>
+
+      <div class="run-setup-section">
+        <div class="tab-header"><h2>${t("chooseScenario")}</h2></div>
+        <div class="setup-option-grid scenario-option-grid">
+          ${RUN_SCENARIOS.map((scenario) => `
+            <button class="setup-option-card ${state.selectedScenarioId === scenario.id ? "selected" : ""}" data-run-scenario="${scenario.id}" aria-pressed="${state.selectedScenarioId === scenario.id}">
+              <strong>${t(scenario.titleKey)}</strong>
+              <span>${t(scenario.descriptionKey)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="run-setup-section">
+        <div class="tab-header"><h2>${t("chooseDifficulty")}</h2></div>
+        <div class="setup-option-grid difficulty-option-grid">
+          ${RUN_DIFFICULTIES.map((difficulty) => `
+            <button class="setup-option-card ${state.selectedDifficultyId === difficulty.id ? "selected" : ""}" data-run-difficulty="${difficulty.id}" aria-pressed="${state.selectedDifficultyId === difficulty.id}">
+              <strong>${t(difficulty.titleKey)}</strong>
+              <span>${t(difficulty.descriptionKey)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+
+      <article class="setup-preview-card">
+        <div><span>${t("setupCash")}</span><strong>${money(preview.company.cash)}</strong></div>
+        <div><span>${t("setupDebt")}</span><strong>${money(preview.company.debt)}</strong></div>
+        <div><span>${t("setupRisk")}</span><strong>${percent(preview.company.risk)}</strong></div>
+        <div><span>${t("setupReward")}</span><strong>${difficultyRewardLabel(preview.difficulty.id)}</strong></div>
+      </article>
+
+      <div class="setup-actions">
+        <button class="primary-button" data-start-configured-run>${t("startConfiguredRun")}</button>
+        ${state.run ? `<button class="secondary-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
+      </div>
+    </section>
+  `;
+}
+
 function renderActiveTab() {
   if (state.activeTab === "meta") return renderMetaTab();
   if (state.activeTab === "runEnd") return renderRunEndScreen();
@@ -1121,6 +1288,8 @@ function renderDashboardTab() {
   const run = state.run;
   const regime = economyRegime();
   const macro = effectiveMacro();
+  const scenario = scenarioById(run.scenarioId);
+  const difficulty = difficultyById(run.difficultyId);
   return `
     <section class="tab-screen">
       <button class="dashboard-cta" data-dashboard-primary>
@@ -1129,6 +1298,10 @@ function renderDashboardTab() {
       </button>
       <div class="dashboard-secondary-actions">
         <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
+      </div>
+      <div class="run-configuration-tags">
+        ${tag(`${t("scenarioLabel")}: ${t(scenario.titleKey)}`)}
+        ${tag(`${t("difficultyLabel")}: ${t(difficulty.titleKey)}`, "accent")}
       </div>
       <article class="overview-card">
         <h3>${t("macroRegime")}</h3>
@@ -1585,6 +1758,16 @@ function runActionStatusText() {
 
 function bindTabEvents() {
   bindLanguageEvents();
+  ui.tabContent.querySelectorAll("[data-run-scenario]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedScenarioId = button.dataset.runScenario;
+    render();
+  }));
+  ui.tabContent.querySelectorAll("[data-run-difficulty]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedDifficultyId = button.dataset.runDifficulty;
+    render();
+  }));
+  ui.tabContent.querySelectorAll("[data-start-configured-run]").forEach((button) => button.addEventListener("click", startRun));
+  ui.tabContent.querySelectorAll("[data-cancel-run-setup]").forEach((button) => button.addEventListener("click", closeRunSetup));
   ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
   ui.tabContent.querySelectorAll("[data-dashboard-primary]").forEach((button) => button.addEventListener("click", () => {
     if (turnReady()) advanceTurn();
@@ -1612,7 +1795,7 @@ function bindTabEvents() {
   }));
   ui.tabContent.querySelectorAll("[data-meta-unlock]").forEach((button) => button.addEventListener("click", () => purchaseUnlock(button.dataset.metaUnlock)));
   ui.tabContent.querySelectorAll("[data-reset-meta]").forEach((button) => button.addEventListener("click", resetMetaProgression));
-  ui.tabContent.querySelectorAll("[data-new-run]").forEach((button) => button.addEventListener("click", startRun));
+  ui.tabContent.querySelectorAll("[data-new-run]").forEach((button) => button.addEventListener("click", openRunSetup));
   ui.tabContent.querySelectorAll("[data-back-dashboard]").forEach((button) => button.addEventListener("click", backToDashboard));
   ui.tabContent.querySelectorAll("[data-choice]").forEach((button) => button.addEventListener("click", () => resolveEventChoice(Number(button.dataset.choice))));
   ui.tabContent.querySelectorAll("[data-play-card]").forEach((button) => button.addEventListener("click", () => playCard(button.dataset.playCard)));
@@ -2870,7 +3053,8 @@ function currentMaxTurns(targetRun = state.run) {
 }
 
 function debtPressureThreshold(run) {
-  return Math.max(10000 + metaStartingBonuses().debtThresholdBonus, run.company.cash * 4);
+  const baseThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, run.company.cash * 4);
+  return applyDifficultyToDebtThreshold(baseThreshold, run.difficultyId);
 }
 
 function summarizeRun(run) {
@@ -2892,7 +3076,7 @@ function calculateKnowledgeReward(run) {
   reward += Math.floor(Math.max(0, summary.valuation) / 25000);
   if (summary.turnReached >= currentMaxTurns(run)) reward += 3;
   if (summary.valuation > 150000) reward += 5;
-  return reward;
+  return applyDifficultyToKnowledgeReward(reward, run.difficultyId);
 }
 
 function claimRunReward(run) {
@@ -3075,7 +3259,8 @@ function simulateSingleRun() {
       }
     }
 
-    const debtPressure = sim.company.debt > Math.max(10000 + metaStartingBonuses().debtThresholdBonus, sim.company.cash * 4);
+    const simulationThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, sim.company.cash * 4);
+    const debtPressure = sim.company.debt > applyDifficultyToDebtThreshold(simulationThreshold, sim.difficultyId);
     const cashBankruptcy = sim.company.cash < -5000;
     const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < sim.company.risk;
     if (cashBankruptcy || debtCollapse) {

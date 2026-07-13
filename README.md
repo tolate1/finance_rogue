@@ -45,6 +45,7 @@ npm run check
 - PNG bottom-nav icons
 - persistent prestige progression
 - automatic recovery of an unfinished run
+- three starting scenarios and three difficulty levels
 
 ## Roadmap status
 

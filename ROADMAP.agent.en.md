@@ -40,6 +40,8 @@ Acceptance checks:
 
 Goal: stop duplicating economy behavior across UI, simulation, and the Python prototype.
 
+The browser build now includes three starting scenarios and three difficulty levels. Their configuration lives in `src/engine/run-config.js`; keep future run setup rules in that module instead of returning them to UI code.
+
 Recommended module boundaries:
 
 - `src/engine/state.js` — run creation, schema version, migrations.
