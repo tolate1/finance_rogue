@@ -1597,17 +1597,19 @@ function renderHeader() {
   const run = state.run;
   const report = calculateReport();
   const dashboardMode = state.activeTab === "dashboard";
-  ui.headerTitle.textContent = dashboardMode ? t("gameTab") : tabTitle();
+  const tableMode = dashboardMode || state.pendingActionType === "buy_asset";
+  ui.appHeader.classList.toggle("play-header", tableMode);
+  ui.headerTitle.textContent = tableMode ? t("gameTab") : tabTitle();
   ui.turnLabel.textContent = run.finished
     ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
     : t("currentRoundStatus", { turn: run.turn, maxTurns: currentMaxTurns() });
   ui.statusHint.textContent = primaryFlowStatus(run);
   ui.nextTurnButton.textContent = t("continueRound");
   ui.nextTurnButton.disabled = run.finished;
-  ui.nextTurnButton.style.display = dashboardMode || run.finished ? "none" : "";
+  ui.nextTurnButton.style.display = tableMode || run.finished ? "none" : "";
   ui.nextTurnButton.classList.toggle("flow-ready", getTurnPhase(run) === TURN_PHASES.FINISH);
   ui.turnGuide.innerHTML = run.finished ? "" : renderTurnGuide(run);
-  ui.statsGrid.innerHTML = dashboardMode
+  ui.statsGrid.innerHTML = tableMode
     ? [
       [t("cash"), money(run.company.cash)],
       [t("profit"), money(report.profit)],
@@ -1624,6 +1626,8 @@ function renderBottomNav() {
     return;
   }
   ui.bottomNav.hidden = false;
+  const tableMode = state.activeTab === "dashboard" || state.pendingActionType === "buy_asset";
+  ui.bottomNav.classList.toggle("play-bottom-nav", tableMode);
   if (isTutorialRound()) {
     const item = NAV_ITEMS[0];
     ui.bottomNav.classList.add("tutorial-bottom-nav");
@@ -1778,29 +1782,14 @@ function renderActiveTab() {
 
 function renderDashboardTab() {
   const run = state.run;
-  const regime = economyRegime();
-  const scenario = scenarioById(run.scenarioId);
-  const difficulty = difficultyById(run.difficultyId);
   const phase = getTurnPhase(run);
   return `
-    <section class="tab-screen game-screen">
+    <section class="tab-screen game-screen play-table-screen phase-${phase}">
       ${run.tabsJustUnlocked ? `<article class="unlock-banner"><span>✓</span><div><strong>${t("tabsUnlocked")}</strong><p>${t("tabsUnlockedText")}</p></div></article>` : ""}
       ${isTutorialRound() ? renderTutorialTask(phase) : ""}
       ${phase === TURN_PHASES.EVENT ? renderEventStage() : ""}
       ${phase === TURN_PHASES.ACTION ? renderActionStage() : ""}
       ${phase === TURN_PHASES.FINISH ? renderRoundResultStage() : ""}
-      ${isTutorialRound() ? "" : `<aside class="game-context-card">
-        <div>
-          <span>${t("macroRegime")}</span>
-          <strong>${regime.name}</strong>
-          <small>${regime.description}</small>
-        </div>
-        <div class="run-configuration-tags">
-          ${tag(t(scenario.titleKey))}
-          ${tag(t(difficulty.titleKey), "accent")}
-        </div>
-        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
-      </aside>`}
     </section>
   `;
 }
@@ -1932,7 +1921,7 @@ function renderEventStage() {
         <h3>${t("chooseResponse")}</h3>
         <p>${t("tapCardToChoose")}</p>
       </div>
-      <div class="decision-card-list">
+      <div class="decision-card-list table-choice-hand">
         ${event.choices.map(renderEventChoiceCard).join("")}
       </div>
     </div>
@@ -1982,6 +1971,9 @@ function renderActionStage() {
   const categories = actionCategories();
   const activeCategory = categories.find((item) => item.id === state.selectedActionType);
   if (activeCategory) {
+    const actionItems = actionItemsForCurrentCategory();
+    const itemCount = actionItems.length;
+    const densityClass = itemCount > 6 ? "option-count-many" : itemCount > 3 ? "option-count-crowded" : "";
     return `
       <div class="game-stage action-detail-stage">
         <button class="screen-back-button" data-action-back>← ${t("backToGame")}</button>
@@ -1990,8 +1982,8 @@ function renderActionStage() {
           <div><h2>${activeCategory.label}</h2><p>${activeCategory.hint}</p></div>
         </div>
         ${renderLastChoiceSummary()}
-        <div class="decision-card-list action-option-list">
-          ${actionItemsForCurrentCategory().join("")}
+        <div class="decision-card-list action-option-list ${densityClass}" style="--option-columns:${Math.max(1, Math.min(itemCount, 3))}; --option-count:${itemCount}">
+          ${actionItems.join("")}
         </div>
       </div>
     `;
@@ -2003,7 +1995,7 @@ function renderActionStage() {
         <div><h2>${t("actionStageTitle")}</h2><p>${t("actionStageHint")}</p></div>
       </div>
       ${renderLastChoiceSummary()}
-      <div class="action-type-grid">
+      <div class="action-type-grid" style="--action-count:${categories.length}">
         ${categories.map((category, index) => {
           const availability = actionCategoryState(category.id);
           return `
@@ -2328,6 +2320,7 @@ function renderPortfolioTab() {
 }
 
 function renderMarketTab() {
+  if (state.pendingActionType === "buy_asset") return renderMarketActionTable();
   const marketTiles = [
     { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "./assets/icons/market.webp" },
     { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "./assets/icons/portfolio.webp" },
@@ -2372,6 +2365,58 @@ function renderMarketTab() {
       `}
       ${state.activeStockId ? renderStockDetailSheet() : ""}
     </section>
+  `;
+}
+
+function currentMarketActionOffers() {
+  const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
+  return (state.run.marketOfferIds || [])
+    .map(businessById)
+    .filter((business) => business && !owned.has(business.id));
+}
+
+function renderMarketActionTable() {
+  const offers = currentMarketActionOffers();
+  return `
+    <section class="tab-screen market-play-screen play-table-screen">
+      <div class="market-play-toolbar">
+        <button class="screen-back-button" data-back-game>← ${t("backToGame")}</button>
+        <div>
+          <small>${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</small>
+          <strong>${t("turnActionBuyOneAsset")}</strong>
+        </div>
+        <span><small>${t("availableCash")}</small><strong>${money(state.run.company.cash)}</strong></span>
+      </div>
+      ${state.run.newlyDiscoveredIndustries?.length ? `<div class="market-unlock-chip">✦ ${state.run.newlyDiscoveredIndustries.map((industry) => t("newSectorOpened", { sector: industryName(industry) })).join(" · ")}</div>` : ""}
+      <div class="market-table-heading">
+        <div><h2>${t("currentOffers")}</h2><p>${t("simpleBuyHint")}</p></div>
+        <strong>${offers.length}/${MARKET_OFFER_COUNT}</strong>
+      </div>
+      <div class="market-deal-hand" style="--deal-count:${Math.max(1, offers.length)}">
+        ${offers.length ? offers.map(renderMarketActionCard).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderMarketActionCard(business, index) {
+  const projection = businessPurchaseProjection(business);
+  return `
+    <button class="market-table-card motion-card" style="--card-index:${index}" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>
+      ${businessVisualMarkup(business)}
+      <span class="market-table-card-copy">
+        <small>${industryName(business.industry)}</small>
+        <strong>${businessName(business)}</strong>
+      </span>
+      <span class="market-table-price">${money(business.cost)}</span>
+      <span class="market-table-metrics">
+        <span><small>${t("profitAdded")}</small><strong class="${projection.profitGain >= 0 ? "positive" : "negative"}">${signedMoney(projection.profitGain)}</strong></span>
+        <span><small>${t("cashAfterPurchase")}</small><strong>${money(projection.cashAfter)}</strong></span>
+        <span><small>${t("risk")}</small><strong>${percent(business.risk)}</strong></span>
+      </span>
+      <span class="market-table-payback">${projection.paybackTurns ? t("paysBackIn", { turns: projection.paybackTurns }) : t("noPaybackNow")}</span>
+      <span class="card-select-label">${canTakeAction(business.cost) ? `${t("buy")} →` : t("insufficientFunds")}</span>
+    </button>
   `;
 }
 
@@ -2502,7 +2547,7 @@ function bindTabEvents() {
     if (actionType === "buy") {
       state.pendingActionType = "buy_asset";
       state.selectedActionType = null;
-      state.marketView = isTutorialRound() ? "businesses" : "root";
+      state.marketView = "businesses";
       state.activeTab = "market";
       render();
       return;
