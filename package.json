@@ -9,7 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test",
     "check:python": "python -m py_compile finance_roguelike.py",
-    "check": "node --check app.js && node --check src/persistence.js && node --check src/engine/run-config.js && node --check src/engine/economy.js && node --check src/ui/turn-flow.js && npm run check:python && npm test"
+    "check": "node --check app.js && node --check src/persistence.js && node --check src/engine/run-config.js && node --check src/engine/economy.js && node --check src/engine/market-offers.js && node --check src/ui/turn-flow.js && npm run check:python && npm test"
   },
   "engines": {
     "node": ">=22"
