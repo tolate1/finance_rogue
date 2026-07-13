@@ -2925,7 +2925,7 @@ body {
   padding: 22px 18px max(28px, env(safe-area-inset-bottom));
 }
 
-.bottom-nav:empty {
+.bottom-nav[hidden] {
   display: none;
   padding: 0;
   border: 0;

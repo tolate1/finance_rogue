@@ -1619,9 +1619,11 @@ function renderHeader() {
 
 function renderBottomNav() {
   if (!hasSelectedLanguage() || state.runSetupOpen || !state.run) {
+    ui.bottomNav.hidden = true;
     ui.bottomNav.innerHTML = "";
     return;
   }
+  ui.bottomNav.hidden = false;
   if (isTutorialRound()) {
     const item = NAV_ITEMS[0];
     ui.bottomNav.classList.add("tutorial-bottom-nav");
