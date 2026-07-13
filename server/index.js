@@ -1,9 +1,8 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const clientRoot = resolve(fileURLToPath(new URL("../client/", import.meta.url)));
+const clientRoot = resolve(process.cwd(), "dist/client");
 const fallbackFile = join(clientRoot, "index.html");
 const contentTypes = {
   ".css": "text/css; charset=utf-8",
