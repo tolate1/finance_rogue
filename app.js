@@ -41,6 +41,29 @@ const META_UNLOCKS = [
   { id: "unlock_extended_run", titleKey: "unlockExtendedRun", descriptionKey: "unlockExtendedRunDesc", cost: 18, type: "run_bonus", category: "meta", payload: { extraTurns: 2 }, repeatable: true, maxLevel: 5, costScaling: 1.25 }
 ];
 
+const EVENT_PRESENTATIONS = {
+  rate_hike: ["monetary", "categoryMonetary", "down"],
+  rate_cut: ["monetary", "categoryMonetary", "up"],
+  inflation_jump: ["prices", "categoryPrices", "up"],
+  demand_slump: ["consumer", "categoryConsumer", "down"],
+  consumer_boom: ["consumer", "categoryConsumer", "up"],
+  energy_spike: ["energy", "categoryEnergy", "up"],
+  energy_relief: ["energy", "categoryEnergy", "down"],
+  cheap_credit: ["monetary", "categoryMonetary", "up"],
+  credit_crunch: ["monetary", "categoryMonetary", "down"],
+  market_panic: ["markets", "categoryMarkets", "down"],
+  viral_trend: ["technology", "categoryTechnology", "up"],
+  supply_shock: ["supply", "categorySupply", "down"],
+  new_fee: ["regulation", "categoryRegulation", "down"],
+  tax_audit: ["regulation", "categoryRegulation", "down"],
+  labor_shortage: ["labor", "categoryLabor", "down"],
+  tech_breakthrough: ["technology", "categoryTechnology", "up"],
+  rent_crisis: ["property", "categoryProperty", "down"],
+  construction_boom: ["property", "categoryProperty", "up"],
+  online_sales_growth: ["technology", "categoryTechnology", "up"],
+  recession: ["markets", "categoryMarkets", "down"]
+};
+
 const translations = {
   en: {
     gameTitle: "Finance Roguelike",
@@ -433,6 +456,25 @@ const translations = {
     currentEffectLabel: "Current effect",
     nextEffectLabel: "Next level",
     costLabel: "Cost",
+    marketSignal: "Market signal",
+    financialStatement: "Financial statement",
+    strategyLabel: "Strategy",
+    strategyGrowth: "Growth",
+    strategyDefense: "Defense",
+    strategyLiquidity: "Liquidity",
+    strategyLeverage: "Leverage",
+    strategyEfficiency: "Efficiency",
+    strategyBalanced: "Balanced",
+    categoryConsumer: "Consumer",
+    categoryMonetary: "Rates & credit",
+    categoryPrices: "Prices",
+    categoryEnergy: "Energy",
+    categoryMarkets: "Markets",
+    categorySupply: "Supply chain",
+    categoryRegulation: "Regulation",
+    categoryLabor: "Labor",
+    categoryTechnology: "Technology",
+    categoryProperty: "Property",
     statusLabel: "Status",
     levelProgressLabel: "Level",
     repeatableLabel: "Repeatable",
@@ -862,6 +904,25 @@ const translations = {
     currentEffectLabel: "Текущий эффект",
     nextEffectLabel: "Следующий уровень",
     costLabel: "Стоимость",
+    marketSignal: "Рыночный сигнал",
+    financialStatement: "Финансовый отчёт",
+    strategyLabel: "Стратегия",
+    strategyGrowth: "Рост",
+    strategyDefense: "Защита",
+    strategyLiquidity: "Ликвидность",
+    strategyLeverage: "Заёмный рост",
+    strategyEfficiency: "Эффективность",
+    strategyBalanced: "Баланс",
+    categoryConsumer: "Потребители",
+    categoryMonetary: "Ставки и кредит",
+    categoryPrices: "Цены",
+    categoryEnergy: "Энергия",
+    categoryMarkets: "Рынки",
+    categorySupply: "Поставки",
+    categoryRegulation: "Регулирование",
+    categoryLabor: "Рынок труда",
+    categoryTechnology: "Технологии",
+    categoryProperty: "Недвижимость",
     statusLabel: "Статус",
     levelProgressLabel: "Уровень",
     repeatableLabel: "Повторяемое",
@@ -1450,8 +1511,90 @@ function renderDashboardTab() {
   `;
 }
 
+function visualIcon(type) {
+  const paths = {
+    consumer: '<path d="M6.5 8.5h11l-1 11h-9l-1-11Z"/><path d="M9 9V6.5a3 3 0 0 1 6 0V9"/>',
+    monetary: '<path d="M3.5 9h17L12 4 3.5 9Z"/><path d="M5 19h14M6.5 10.5v6.5M10.2 10.5v6.5M13.8 10.5v6.5M17.5 10.5v6.5"/>',
+    prices: '<circle cx="9" cy="9" r="4.5"/><circle cx="15" cy="15" r="4.5"/><path d="M9 6.8v4.4M7.8 8h2.4M15 12.8v4.4M13.8 14h2.4"/>',
+    energy: '<path d="M13.5 2.5 5.5 13h6l-1 8.5L18.5 11h-6l1-8.5Z"/>',
+    markets: '<path d="M4 18 9 12l4 3 7-9"/><path d="M15.5 6H20v4.5"/><path d="M4 21h16"/>',
+    growth: '<path d="M4 18 9 13l4 3 7-9"/><path d="M15.5 7H20v4.5"/>',
+    supply: '<path d="M3.5 7.5h10v9h-10zM13.5 11h3l3 3v2.5h-6z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
+    regulation: '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 15h6"/>',
+    labor: '<circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.3"/><path d="M3.5 19c.4-4 2.3-6 5.5-6s5.1 2 5.5 6M14 14c3.7-.3 5.7 1.4 6 5"/>',
+    technology: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 9h6v6H9zM9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M18.5 9h3M2.5 15h3M18.5 15h3"/>',
+    property: '<path d="M4 20V8l6-3v15M10 20V3l10 4v13M7 11h1M7 14h1M13 8h2M17 9h1M13 12h2M17 13h1M13 16h2M17 17h1M2.5 20h19"/>',
+    defense: '<path d="M12 3 19 6v5c0 4.5-2.5 7.8-7 10-4.5-2.2-7-5.5-7-10V6l7-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
+    liquidity: '<path d="M4 7h14a2 2 0 0 1 2 2v9H4z"/><path d="M4 7V5h12v2M15 12h5"/><circle cx="16" cy="14.5" r=".7"/>',
+    leverage: '<path d="M3.5 9h17L12 4 3.5 9Z"/><path d="M6 11v6M10 11v6M14 11v6M18 11v6M4 20h16"/>',
+    efficiency: '<path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h7M15 17h5"/><circle cx="16" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="17" r="2"/>',
+    balanced: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/>'
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[type] || paths.balanced}</svg>`;
+}
+
+function eventPresentation(event) {
+  const [theme, categoryKey, trend] = EVENT_PRESENTATIONS[event.id] || ["markets", "categoryMarkets", "up"];
+  return { theme, category: t(categoryKey), trend };
+}
+
+function renderEventVisual(event) {
+  const presentation = eventPresentation(event);
+  const chartPath = presentation.trend === "down"
+    ? "M8 22 C24 12 34 18 48 28 S76 40 92 31 S118 48 142 61"
+    : "M8 62 C24 54 34 58 48 45 S76 42 92 31 S118 25 142 10";
+  return `
+    <div class="event-visual event-visual--${presentation.theme}" aria-hidden="true">
+      <span class="event-visual-grid"></span>
+      <span class="event-visual-icon">${visualIcon(presentation.theme)}</span>
+      <span class="event-visual-copy"><small>${t("marketSignal")}</small><strong>${presentation.category}</strong></span>
+      <svg class="event-visual-chart" viewBox="0 0 150 72" preserveAspectRatio="none">
+        <path d="${chartPath}"></path>
+      </svg>
+    </div>
+  `;
+}
+
+function choicePresentation(choice) {
+  const temporary = choice.temporary_effects || {};
+  if ((choice.debt || 0) > 0) return { type: "leverage", label: t("strategyLeverage") };
+  if ((choice.risk || 0) < 0 || (choice.debt || 0) < 0 || (temporary.risk || 0) < 0) return { type: "defense", label: t("strategyDefense") };
+  if ((choice.expense_bonus || 0) < 0 || (temporary.expense_bonus || 0) < 0) return { type: "efficiency", label: t("strategyEfficiency") };
+  if ((choice.revenue_bonus || 0) > 0 || (temporary.revenue_bonus || 0) > 0) return { type: "growth", label: t("strategyGrowth") };
+  if ((choice.cash || 0) > 0) return { type: "liquidity", label: t("strategyLiquidity") };
+  return { type: "balanced", label: t("strategyBalanced") };
+}
+
+function riskLevel(choice) {
+  if ((choice.risk || 0) >= 0.04) return "high";
+  if ((choice.risk || 0) > 0) return "medium";
+  return "low";
+}
+
+function businessVisualMarkup(business) {
+  const themeByIndustry = {
+    retail: "consumer",
+    it: "technology",
+    logistics: "supply",
+    manufacturing: "efficiency",
+    energy: "energy",
+    real_estate: "property",
+    media: "markets"
+  };
+  const theme = themeByIndustry[business.industry] || "markets";
+  const code = business.id.split("_").map((part) => part[0]).join("").slice(0, 3).toUpperCase();
+  return `
+    <div class="business-card-visual business-card-visual--${theme}" aria-hidden="true">
+      <span class="business-visual-icon">${visualIcon(theme)}</span>
+      <span class="business-visual-copy"><small>${t("industryLabel")}</small><strong>${industryName(business.industry)}</strong></span>
+      <span class="business-visual-code">${code}</span>
+    </div>
+  `;
+}
+
 function renderEventStage() {
   const event = state.run.currentEvent;
+  const presentation = eventPresentation(event);
   const eventEffect = describeEffects(event)
     .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
   return `
@@ -1460,11 +1603,17 @@ function renderEventStage() {
         <span class="stage-number">1</span>
         <div><h2>${t("eventStageTitle")}</h2><p>${t("eventStageHint")}</p></div>
       </div>
-      <article class="event-hero-card">
-        <span class="event-card-kicker">${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</span>
-        <h2>${event.title}</h2>
-        <p>${event.text}</p>
-        ${eventEffect ? `<div class="event-impact"><span>${t("eventImpact")}</span><strong>${eventEffect}</strong></div>` : ""}
+      <article class="event-hero-card event-theme--${presentation.theme}">
+        <div class="event-dossier-meta">
+          <span>${t("eventStageTitle")} · ${presentation.category}</span>
+          <strong>${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</strong>
+        </div>
+        ${renderEventVisual(event)}
+        <div class="event-dossier-copy">
+          <h2>${event.title}</h2>
+          <p>${event.text}</p>
+          ${eventEffect ? `<div class="event-impact"><span>${t("eventImpact")}</span><strong>${eventEffect}</strong></div>` : ""}
+        </div>
       </article>
       <div class="choice-section-heading">
         <h3>${t("chooseResponse")}</h3>
@@ -1479,14 +1628,14 @@ function renderEventStage() {
 
 function actionCategories() {
   const categories = [
-    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.webp" },
-    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.webp" },
-    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), icon: "./assets/icons/dashboard.webp" },
-    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), icon: "./assets/icons/decisions.webp" },
-    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), icon: "./assets/icons/economy.webp" }
+    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), kicker: t("market"), tone: "market", icon: "./assets/icons/market.webp" },
+    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), kicker: t("portfolio"), tone: "portfolio", icon: "./assets/icons/portfolio.webp" },
+    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), kicker: t("cash"), tone: "liquidity", icon: "./assets/icons/dashboard.webp" },
+    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), kicker: t("actionCards"), tone: "cards", icon: "./assets/icons/decisions.webp" },
+    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), kicker: t("strategyDefense"), tone: "defense", icon: "./assets/icons/economy.webp" }
   ];
   if (state.run.company.debt > 0) {
-    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), icon: "./assets/icons/economy.webp" });
+    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), kicker: t("debt"), tone: "debt", icon: "./assets/icons/economy.webp" });
   }
   return categories;
 }
@@ -1535,13 +1684,17 @@ function renderActionStage() {
         <div><h2>${t("actionStageTitle")}</h2><p>${t("actionStageHint")}</p></div>
       </div>
       <div class="action-type-grid">
-        ${categories.map((category) => {
+        ${categories.map((category, index) => {
           const availability = actionCategoryState(category.id);
           return `
-            <button class="action-type-button ${availability.disabled ? "unavailable" : ""}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
-              <span class="action-icon-wrap"><img src="${category.icon}" alt="" class="action-type-icon"></span>
+            <button class="action-type-button action-tone--${category.tone} ${availability.disabled ? "unavailable" : ""}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
+              <span class="action-card-visual">
+                <span class="action-icon-wrap"><img src="${category.icon}" alt="" class="action-type-icon"></span>
+                <span class="action-card-index">0${index + 1}</span>
+              </span>
+              <small class="action-card-kicker">${category.kicker}</small>
               <strong>${category.label}</strong>
-              <span>${availability.reason || category.hint}</span>
+              <span class="action-card-description">${availability.reason || category.hint}</span>
               <em>${availability.disabled ? "—" : "→"}</em>
             </button>
           `;
@@ -1558,9 +1711,20 @@ function renderRoundResultStage() {
   return `
     <div class="game-stage result-stage">
       <article class="round-result-card">
-        <div class="result-check">✓</div>
-        <span class="event-card-kicker">${t("finishStep")}</span>
-        <h2>${t("roundResultTitle", { turn: state.run.turn })}</h2>
+        <div class="result-dossier-heading">
+          <div>
+            <span class="event-card-kicker">${t("financialStatement")}</span>
+            <h2>${t("roundResultTitle", { turn: state.run.turn })}</h2>
+          </div>
+          <div class="result-check">✓</div>
+        </div>
+        <div class="result-mini-visual" aria-hidden="true">
+          <span style="--bar-height: 46%"></span>
+          <span style="--bar-height: 62%"></span>
+          <span style="--bar-height: 54%"></span>
+          <span style="--bar-height: ${result.profit >= 0 ? "84%" : "30%"}"></span>
+          <svg viewBox="0 0 180 64" preserveAspectRatio="none"><path d="M4 52 C28 44 40 50 62 34 S95 42 116 24 S148 28 176 8"></path></svg>
+        </div>
         <p>${t("roundResultSubtitle")}</p>
         <div class="settlement-list">
           <div><span>${t("operatingRevenue")}</span><strong class="positive">+${money(result.revenue)}</strong></div>
@@ -1725,13 +1889,26 @@ function renderEventChoiceCard(choice, index) {
   const effectText = describeEffects(choice)
     .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
   const selected = state.run.selectedChoiceId === choice.title;
+  const presentation = choicePresentation(choice);
+  const hasCost = (choice.cash || 0) < 0;
+  const cost = hasCost ? money(Math.abs(choice.cash)) : t("noCost");
   return `
-    <button class="choice-card decision-option-card ${selected ? "selected" : ""}" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>
-      <span class="panel-head">
-        <strong>${choice.title}</strong>
-        ${statusChip(riskLabel(choice), riskTone(choice))}
+    <button class="choice-card decision-option-card choice-strategy--${presentation.type} ${selected ? "selected" : ""}" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>
+      <span class="choice-card-layout">
+        <span class="choice-visual">
+          <span class="choice-visual-icon">${visualIcon(presentation.type)}</span>
+          <small>${t("strategyLabel")}</small>
+          <strong>${presentation.label}</strong>
+        </span>
+        <span class="choice-card-copy">
+          <span class="panel-head">
+            <strong>${choice.title}</strong>
+            <span class="risk-badge risk-badge--${riskLevel(choice)}">${t("riskLabelTitle")} · ${riskLabel(choice)}</span>
+          </span>
+          <span class="choice-description">${decisionDescription(choice)}</span>
+          <span class="choice-cost ${hasCost ? "is-cost" : "is-free"}"><small>${t("costLabel")}</small><strong>${cost}</strong></span>
+        </span>
       </span>
-      <span class="choice-description">${decisionDescription(choice)}</span>
       <span class="choice-effect"><small>${t("effectLabel")}</small><strong>${effectText || t("strategicShift")}</strong></span>
       <span class="card-select-label">${selected ? t("selected") : `${t("chooseOption")} →`}</span>
     </button>
@@ -2459,6 +2636,7 @@ function renderOwnedBusinessCard(owned) {
   const cost = upgradeCost(owned);
   return `
     <article class="business-card">
+      ${businessVisualMarkup(business)}
       <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
       <h3>${business.name}</h3>
       <p>${businessBlurb(business)}</p>
@@ -2552,6 +2730,7 @@ function renderMarketGroup(group) {
       <div class="market-grid">
         ${group.items.map((business) => `
           <article class="business-card">
+            ${businessVisualMarkup(business)}
             <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(riskBucketLabel(business.risk))}</div>
             <h3>${business.name}</h3>
             <p>${businessBlurb(business)}</p>
