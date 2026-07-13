@@ -45,7 +45,8 @@ npm run check
 - industry data validation
 - bankruptcy check
 - playable browser UI
-- persistent three-step round guide: event, action, finish round
+- unified card-first game screen for event, action, and round result
+- vertical tap targets instead of nested horizontal carousels
 - first-launch language selection
 - RU/EN localization
 - mobile-optimized WebP icons and company logos
@@ -66,7 +67,7 @@ Done:
 - simple economy formula
 - debt, interest, risk, valuation
 - MVP-sized first content set
-- tab-based browser UI
+- four-section mobile navigation with full-screen action drill-downs
 - language select and RU/EN translations
 - temporary turn-based modifiers
 - stocks, dividends, and market cycles
@@ -75,7 +76,7 @@ Done:
 - GitHub Actions CI
 - canonical calculations for revenue, expenses, interest, dividends, valuation, and insolvency
 - public mobile beta deployment
-- guided round flow with a contextual primary action on every game screen
+- guided round flow with vertical choice cards and a projected settlement card
 
 Next:
 

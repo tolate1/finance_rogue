@@ -18,6 +18,7 @@ import {
 import {
   TURN_PHASES,
   getRecommendedTab,
+  getRoundResultSummary,
   getTurnPhase,
   getTurnStepStates
 } from "./src/ui/turn-flow.js";
@@ -53,6 +54,7 @@ const translations = {
     debt: "Debt",
     valuation: "Valuation",
     dashboard: "Dashboard",
+    gameTab: "Game",
     decisions: "Decisions",
     portfolio: "Portfolio",
     market: "Market",
@@ -62,14 +64,39 @@ const translations = {
     currentRoundStatus: "Round {turn} of {maxTurns}",
     flowEventButton: "1. Resolve event",
     flowActionButton: "2. Choose action",
-    flowFinishButton: "Finish round {turn}",
-    finishStep: "Finish",
+    flowFinishButton: "Round {turn} result",
+    finishStep: "Result",
     eventStepBrief: "Choose outcome",
     actionStepBrief: "Make one move",
-    finishStepBrief: "Collect result",
+    finishStepBrief: "Review settlement",
     roundExplainerTitle: "How a round works",
     roundExplainerText: "Resolve one event, then take one action. Finish the round to collect profit, move the market, and receive a new event.",
-    finishRoundHint: "Your action is complete. Finish the round to collect the result.",
+    finishRoundHint: "Your action is complete. Review the settlement and continue.",
+    continueRound: "Continue round",
+    eventStageTitle: "Event",
+    eventStageHint: "Read the situation and choose one response.",
+    eventImpact: "Market impact",
+    chooseResponse: "Choose a response",
+    tapCardToChoose: "Tap a card to lock this decision.",
+    actionStageTitle: "Choose one action",
+    actionStageHint: "You can make exactly one move before the round ends.",
+    backToGame: "Back to game",
+    roundResultTitle: "Round {turn} result",
+    roundResultSubtitle: "Projected settlement from your current assets and decisions.",
+    operatingRevenue: "Operating revenue",
+    operatingExpenses: "Operating expenses",
+    interestPaid: "Debt interest",
+    dividendsReceived: "Dividends",
+    projectedCash: "Cash after settlement",
+    startNextRound: "Start round {turn}",
+    completeRun: "Complete the run",
+    noUpgradesAvailable: "No businesses can be upgraded right now.",
+    lastBusinessLocked: "Your last business cannot be sold.",
+    noCardsAvailable: "No action cards are available.",
+    insufficientFunds: "Not enough cash for this choice.",
+    holdCash: "Hold cash",
+    holdCashHint: "Skip expansion and preserve liquidity this round.",
+    heldCash: "Cash preserved. No capital was deployed.",
     quickStartRun: "Start with selected settings",
     recommendedStep: "Next",
     reset: "Reset",
@@ -455,6 +482,7 @@ const translations = {
     debt: "Долг",
     valuation: "Оценка",
     dashboard: "Обзор",
+    gameTab: "Игра",
     decisions: "Решения",
     portfolio: "Портфель",
     market: "Рынок",
@@ -464,14 +492,39 @@ const translations = {
     currentRoundStatus: "Раунд {turn} из {maxTurns}",
     flowEventButton: "1. Решить событие",
     flowActionButton: "2. Выбрать действие",
-    flowFinishButton: "Завершить раунд {turn}",
-    finishStep: "Завершить",
+    flowFinishButton: "Итог раунда {turn}",
+    finishStep: "Итог",
     eventStepBrief: "Выбрать исход",
     actionStepBrief: "Сделать один ход",
-    finishStepBrief: "Получить результат",
+    finishStepBrief: "Проверить расчёт",
     roundExplainerTitle: "Как проходит раунд",
     roundExplainerText: "Сначала решите одно событие, затем совершите одно действие. Завершите раунд — начислится прибыль, изменится рынок и появится новое событие.",
-    finishRoundHint: "Действие выполнено. Завершите раунд, чтобы получить результат.",
+    finishRoundHint: "Действие выполнено. Проверьте расчёт и переходите дальше.",
+    continueRound: "Продолжить раунд",
+    eventStageTitle: "Событие",
+    eventStageHint: "Изучите ситуацию и выберите один вариант.",
+    eventImpact: "Влияние на рынок",
+    chooseResponse: "Выберите решение",
+    tapCardToChoose: "Нажмите на карточку, чтобы зафиксировать выбор.",
+    actionStageTitle: "Выберите одно действие",
+    actionStageHint: "До конца раунда можно совершить ровно одно действие.",
+    backToGame: "Назад в игру",
+    roundResultTitle: "Итог раунда {turn}",
+    roundResultSubtitle: "Прогноз расчёта по текущим активам и принятым решениям.",
+    operatingRevenue: "Операционный доход",
+    operatingExpenses: "Операционные расходы",
+    interestPaid: "Проценты по долгу",
+    dividendsReceived: "Дивиденды",
+    projectedCash: "Деньги после расчёта",
+    startNextRound: "Начать раунд {turn}",
+    completeRun: "Завершить партию",
+    noUpgradesAvailable: "Сейчас нет бизнесов, которые можно улучшить.",
+    lastBusinessLocked: "Последний бизнес нельзя продать.",
+    noCardsAvailable: "Нет доступных карт действий.",
+    insufficientFunds: "Недостаточно денег для этого выбора.",
+    holdCash: "Сохранить деньги",
+    holdCashHint: "Не расширяться и сохранить ликвидность в этом раунде.",
+    heldCash: "Деньги сохранены. Капитал не был потрачен.",
     quickStartRun: "Начать с выбранными настройками",
     recommendedStep: "Дальше",
     reset: "Сброс",
@@ -874,7 +927,6 @@ const state = {
   activeStockPointIndex: null,
   stockBuyPercent: 0,
   stockSellPercent: 0,
-  decisionCarouselIndex: {}
 };
 
 const ui = {
@@ -891,8 +943,7 @@ const ui = {
 };
 
 const NAV_ITEMS = [
-  { id: "dashboard", labelKey: "dashboard", icon: "./assets/icons/dashboard.webp" },
-  { id: "decisions", labelKey: "decisions", icon: "./assets/icons/decisions.webp" },
+  { id: "dashboard", labelKey: "gameTab", icon: "./assets/icons/decisions.webp" },
   { id: "portfolio", labelKey: "portfolio", icon: "./assets/icons/portfolio.webp" },
   { id: "market", labelKey: "market", icon: "./assets/icons/market.webp" },
   { id: "economy", labelKey: "economy", icon: "./assets/icons/economy.webp" }
@@ -1002,10 +1053,11 @@ function closeLanguageModal() {
   render();
 }
 
-function backToDecisionsTab() {
-  state.activeTab = "decisions";
+function backToGameTab() {
+  state.activeTab = "dashboard";
   state.marketView = "root";
-  if (state.pendingActionType !== "buy_asset") state.pendingActionType = null;
+  state.pendingActionType = null;
+  state.selectedActionType = null;
   render();
 }
 
@@ -1147,14 +1199,6 @@ function render() {
   bindTabEvents();
 }
 
-function primaryFlowLabel(run) {
-  const phase = getTurnPhase(run);
-  if (phase === TURN_PHASES.EVENT) return t("flowEventButton");
-  if (phase === TURN_PHASES.ACTION) return t("flowActionButton");
-  if (phase === TURN_PHASES.FINISH) return t("flowFinishButton", { turn: run.turn });
-  return t("runComplete");
-}
-
 function primaryFlowStatus(run) {
   const phase = getTurnPhase(run);
   if (phase === TURN_PHASES.EVENT) return t("resolveEventBeforeNextTurn");
@@ -1165,13 +1209,9 @@ function primaryFlowStatus(run) {
 
 function handlePrimaryFlowAction() {
   if (!state.run || state.run.finished) return;
-  const phase = getTurnPhase(state.run);
-  if (phase === TURN_PHASES.FINISH) {
-    advanceTurn();
-    return;
-  }
-  state.activeTab = "decisions";
+  state.activeTab = "dashboard";
   state.marketView = "root";
+  state.pendingActionType = null;
   render();
 }
 
@@ -1222,16 +1262,16 @@ function renderHeader() {
   }
 
   const run = state.run;
-  const report = run.currentReport || calculateReport();
+  const report = calculateReport();
   const dashboardMode = state.activeTab === "dashboard";
-  ui.headerTitle.textContent = dashboardMode ? t("currentRun") : tabTitle();
+  ui.headerTitle.textContent = dashboardMode ? t("gameTab") : tabTitle();
   ui.turnLabel.textContent = run.finished
     ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
     : t("currentRoundStatus", { turn: run.turn, maxTurns: currentMaxTurns() });
   ui.statusHint.textContent = primaryFlowStatus(run);
-  ui.nextTurnButton.textContent = primaryFlowLabel(run);
+  ui.nextTurnButton.textContent = t("continueRound");
   ui.nextTurnButton.disabled = run.finished;
-  ui.nextTurnButton.style.display = "";
+  ui.nextTurnButton.style.display = dashboardMode || run.finished ? "none" : "";
   ui.nextTurnButton.classList.toggle("flow-ready", getTurnPhase(run) === TURN_PHASES.FINISH);
   ui.turnGuide.innerHTML = run.finished ? "" : renderTurnGuide(run);
   ui.statsGrid.innerHTML = dashboardMode
@@ -1262,6 +1302,9 @@ function renderBottomNav() {
   ui.bottomNav.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeTab = button.dataset.tab;
+      if (state.activeTab === "dashboard") {
+        state.pendingActionType = null;
+      }
       render();
     });
   });
@@ -1371,7 +1414,6 @@ function renderActiveTab() {
   if (state.activeTab === "meta") return renderMetaTab();
   if (state.activeTab === "runEnd") return renderRunEndScreen();
   if (state.activeTab === "dashboard") return renderDashboardTab();
-  if (state.activeTab === "decisions") return renderDecisionsTab();
   if (state.activeTab === "portfolio") return renderPortfolioTab();
   if (state.activeTab === "market") return renderMarketTab();
   return renderEconomyTab();
@@ -1380,40 +1422,156 @@ function renderActiveTab() {
 function renderDashboardTab() {
   const run = state.run;
   const regime = economyRegime();
-  const macro = effectiveMacro();
   const scenario = scenarioById(run.scenarioId);
   const difficulty = difficultyById(run.difficultyId);
+  const phase = getTurnPhase(run);
   return `
-    <section class="tab-screen">
-      <button class="dashboard-cta" data-dashboard-primary>
-        <strong>${primaryFlowLabel(run)} →</strong>
-        <span>${primaryFlowStatus(run)}</span>
-      </button>
-      ${run.turn <= 2 ? `
-        <article class="round-explainer">
-          <strong>${t("roundExplainerTitle")}</strong>
-          <p>${t("roundExplainerText")}</p>
-        </article>
-      ` : ""}
-      <div class="dashboard-secondary-actions">
-        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
-      </div>
-      <div class="run-configuration-tags">
-        ${tag(`${t("scenarioLabel")}: ${t(scenario.titleKey)}`)}
-        ${tag(`${t("difficultyLabel")}: ${t(difficulty.titleKey)}`, "accent")}
-      </div>
-      <article class="overview-card">
-        <h3>${t("macroRegime")}</h3>
-        <p>${regime.description}</p>
-        <div class="macro-strip">
-          ${macroPill(t("rate"), percent(macro.interestRate))}
-          ${macroPill(t("inflation"), percent(macro.inflation))}
-          ${macroPill(t("demand"), macro.demand.toFixed(2))}
-          ${macroPill(t("energyCost"), macro.energyCost.toFixed(2))}
-          ${macroPill(t("creditAvailability"), macro.creditAvailability.toFixed(2))}
+    <section class="tab-screen game-screen">
+      ${phase === TURN_PHASES.EVENT ? renderEventStage() : ""}
+      ${phase === TURN_PHASES.ACTION ? renderActionStage() : ""}
+      ${phase === TURN_PHASES.FINISH ? renderRoundResultStage() : ""}
+      <aside class="game-context-card">
+        <div>
+          <span>${t("macroRegime")}</span>
+          <strong>${regime.name}</strong>
+          <small>${regime.description}</small>
         </div>
-      </article>
+        <div class="run-configuration-tags">
+          ${tag(t(scenario.titleKey))}
+          ${tag(t(difficulty.titleKey), "accent")}
+        </div>
+        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
+      </aside>
     </section>
+  `;
+}
+
+function renderEventStage() {
+  const event = state.run.currentEvent;
+  const eventEffect = describeEffects(event)
+    .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
+  return `
+    <div class="game-stage event-stage">
+      <div class="stage-heading">
+        <span class="stage-number">1</span>
+        <div><h2>${t("eventStageTitle")}</h2><p>${t("eventStageHint")}</p></div>
+      </div>
+      <article class="event-hero-card">
+        <span class="event-card-kicker">${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</span>
+        <h2>${event.title}</h2>
+        <p>${event.text}</p>
+        ${eventEffect ? `<div class="event-impact"><span>${t("eventImpact")}</span><strong>${eventEffect}</strong></div>` : ""}
+      </article>
+      <div class="choice-section-heading">
+        <h3>${t("chooseResponse")}</h3>
+        <p>${t("tapCardToChoose")}</p>
+      </div>
+      <div class="decision-card-list">
+        ${event.choices.map(renderEventChoiceCard).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function actionCategories() {
+  const categories = [
+    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.webp" },
+    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.webp" },
+    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), icon: "./assets/icons/dashboard.webp" },
+    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), icon: "./assets/icons/decisions.webp" },
+    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), icon: "./assets/icons/economy.webp" }
+  ];
+  if (state.run.company.debt > 0) {
+    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), icon: "./assets/icons/economy.webp" });
+  }
+  return categories;
+}
+
+function actionCategoryState(id) {
+  const cash = state.run.company.cash;
+  if (id === "upgrade") {
+    const upgradeable = state.run.company.businesses.filter((owned) => owned.level < businessById(owned.businessId).max_level);
+    if (!upgradeable.length) return { disabled: true, reason: t("noUpgradesAvailable") };
+    if (!upgradeable.some((owned) => upgradeCost(owned) <= cash)) return { disabled: true, reason: t("insufficientFunds") };
+  }
+  if (id === "sell" && state.run.company.businesses.length <= 1) {
+    return { disabled: true, reason: t("lastBusinessLocked") };
+  }
+  if (id === "cards") {
+    if (!state.run.currentCards.length) return { disabled: true, reason: t("noCardsAvailable") };
+    if (!state.run.currentCards.some((card) => (card.cost || 0) <= cash)) return { disabled: true, reason: t("insufficientFunds") };
+  }
+  if (id === "repay" && (!state.run.company.debt || cash <= 0)) {
+    return { disabled: true, reason: t("insufficientFunds") };
+  }
+  return { disabled: false, reason: "" };
+}
+
+function renderActionStage() {
+  const categories = actionCategories();
+  const activeCategory = categories.find((item) => item.id === state.selectedActionType);
+  if (activeCategory) {
+    return `
+      <div class="game-stage action-detail-stage">
+        <button class="screen-back-button" data-action-back>← ${t("backToGame")}</button>
+        <div class="stage-heading">
+          <span class="stage-number">2</span>
+          <div><h2>${activeCategory.label}</h2><p>${activeCategory.hint}</p></div>
+        </div>
+        <div class="decision-card-list action-option-list">
+          ${actionItemsForCurrentCategory().join("")}
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="game-stage action-stage">
+      <div class="stage-heading">
+        <span class="stage-number">2</span>
+        <div><h2>${t("actionStageTitle")}</h2><p>${t("actionStageHint")}</p></div>
+      </div>
+      <div class="action-type-grid">
+        ${categories.map((category) => {
+          const availability = actionCategoryState(category.id);
+          return `
+            <button class="action-type-button ${availability.disabled ? "unavailable" : ""}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
+              <span class="action-icon-wrap"><img src="${category.icon}" alt="" class="action-type-icon"></span>
+              <strong>${category.label}</strong>
+              <span>${availability.reason || category.hint}</span>
+              <em>${availability.disabled ? "—" : "→"}</em>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderRoundResultStage() {
+  const report = calculateReport();
+  const result = getRoundResultSummary(report, state.run.company.cash);
+  const lastRound = state.run.turn >= currentMaxTurns();
+  return `
+    <div class="game-stage result-stage">
+      <article class="round-result-card">
+        <div class="result-check">✓</div>
+        <span class="event-card-kicker">${t("finishStep")}</span>
+        <h2>${t("roundResultTitle", { turn: state.run.turn })}</h2>
+        <p>${t("roundResultSubtitle")}</p>
+        <div class="settlement-list">
+          <div><span>${t("operatingRevenue")}</span><strong class="positive">+${money(result.revenue)}</strong></div>
+          <div><span>${t("operatingExpenses")}</span><strong class="negative">−${money(result.expenses)}</strong></div>
+          <div><span>${t("interestPaid")}</span><strong class="negative">−${money(result.interest)}</strong></div>
+          <div><span>${t("dividendsReceived")}</span><strong class="positive">+${money(result.dividends)}</strong></div>
+        </div>
+        <div class="result-profit-row">
+          <span>${t("profit")}</span>
+          <strong class="${result.profit >= 0 ? "positive" : "negative"}">${signedMoney(result.profit)}</strong>
+        </div>
+        <div class="projected-cash-row"><span>${t("projectedCash")}</span><strong>${money(result.projectedCash)}</strong></div>
+        <button class="primary-button result-next-button" data-finish-turn>${lastRound ? t("completeRun") : t("startNextRound", { turn: state.run.turn + 1 })} →</button>
+      </article>
+    </div>
   `;
 }
 
@@ -1564,47 +1722,21 @@ function renderEventChoiceCard(choice, index) {
     .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
   const selected = state.run.selectedChoiceId === choice.title;
   return `
-    <article class="choice-card ${selected ? "selected" : ""}">
-      <div class="panel-head">
+    <button class="choice-card decision-option-card ${selected ? "selected" : ""}" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>
+      <span class="panel-head">
         <strong>${choice.title}</strong>
         ${statusChip(riskLabel(choice), riskTone(choice))}
-      </div>
-      <p>${decisionDescription(choice)}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${effectText || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(choice)}</strong></div>
-      </div>
-      <button class="business-button" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>${selected ? t("selected") : t("chooseOption")}</button>
-    </article>
+      </span>
+      <span class="choice-description">${decisionDescription(choice)}</span>
+      <span class="choice-effect"><small>${t("effectLabel")}</small><strong>${effectText || t("strategicShift")}</strong></span>
+      <span class="card-select-label">${selected ? t("selected") : `${t("chooseOption")} →`}</span>
+    </button>
   `;
-}
-
-function renderDecisionCardCarousel(id, items, slideRenderer, hint = "") {
-  if (!items.length) return "";
-  const activeIndex = Math.max(0, Math.min(state.decisionCarouselIndex[id] || 0, items.length - 1));
-  return `
-    <div class="choice-carousel ${items.length === 1 ? "single" : ""}" data-carousel="${id}">
-      <div class="choice-carousel-track" data-carousel-track="${id}">
-        ${items.map((item, index) => `<div class="choice-carousel-slide" data-carousel-slide="${id}" data-carousel-index="${index}">${slideRenderer(item, index)}</div>`).join("")}
-      </div>
-      ${items.length > 1 ? `<p class="carousel-hint">${hint || t("swipeMoreOptions")}</p>` : ""}
-      ${items.length > 1 ? `<div class="carousel-dots">${items.map((_, index) => `<button class="carousel-dot ${index === activeIndex ? "active" : ""}" data-carousel-dot="${id}" data-carousel-index="${index}" aria-label="${index + 1}"></button>`).join("")}</div>` : ""}
-    </div>
-  `;
-}
-
-function renderActionCategoryContent() {
-  return actionItemsForCurrentCategory().join("");
 }
 
 function actionItemsForCurrentCategory() {
   if (!state.run.eventResolved) {
     return [`<div class="empty-state">${t("actionPanelLocked")}</div>`];
-  }
-  if (state.selectedActionType === "buy") {
-    const groups = groupedMarketBusinesses().filter((group) => !group.locked);
-    const items = groups.flatMap((group) => group.items).slice(0, 6);
-    return items.length ? items.map(renderDecisionBuyCard) : [`<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`];
   }
   if (state.selectedActionType === "upgrade") {
     const items = state.run.company.businesses.filter((owned) => owned.level < businessById(owned.businessId).max_level);
@@ -1623,10 +1755,6 @@ function actionItemsForCurrentCategory() {
   return [];
 }
 
-function renderDebtRepayCards() {
-  return debtRepayCardItems().join("");
-}
-
 function debtRepayCardItems() {
   const debt = state.run.company.debt;
   if (debt <= 0) return [`<div class="empty-state">${t("debtCleared")}</div>`];
@@ -1636,67 +1764,17 @@ function debtRepayCardItems() {
     { id: "all", label: t("repayAll"), amount: repaymentAmount(1) }
   ].filter((item) => item.amount > 0);
   return options.map((item) => `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("debt")} ${money(state.run.company.debt)}`, "accent")}${tag(`${t("cash")} ${money(state.run.company.cash)}`)}</div>
-      <h3>${item.label}</h3>
-      <p>${t("repayDebtHint")}</p>
-      <div class="business-metrics">
-        <div><span>${t("debtPayment")}</span><strong>${money(item.amount)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${signedPercent(-Math.min(0.03, item.amount / 100000))}</strong></div>
-      </div>
-      <button class="business-button" data-repay-debt="${item.id}" ${canTakeAction(item.amount) ? "" : "disabled"}>${item.label}</button>
-    </article>
+    <button class="selectable-action-card" data-repay-debt="${item.id}" ${canTakeAction(item.amount) ? "" : "disabled"}>
+      <span class="tag-row">${tag(`${t("debt")} ${money(state.run.company.debt)}`, "accent")}${tag(`${t("cash")} ${money(state.run.company.cash)}`)}</span>
+      <strong class="selectable-card-title">${item.label}</strong>
+      <span class="selectable-card-description">${t("repayDebtHint")}</span>
+      <span class="selectable-card-metrics">
+        <span><small>${t("debtPayment")}</small><strong>${money(item.amount)}</strong></span>
+        <span><small>${t("risk")}</small><strong>${signedPercent(-Math.min(0.03, item.amount / 100000))}</strong></span>
+      </span>
+      <span class="card-select-label">${item.label} →</span>
+    </button>
   `);
-}
-
-function renderDecisionsTab() {
-  const run = state.run;
-  const event = run.currentEvent;
-  const categories = [
-    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.webp" },
-    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.webp" },
-    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), icon: "./assets/icons/dashboard.webp" },
-    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), icon: "./assets/icons/decisions.webp" }
-  ];
-  if (run.company.debt > 0) {
-    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), icon: "./assets/icons/economy.webp" });
-  }
-  return `
-    <section class="tab-screen">
-      <div class="decision-subheader">
-        <span>${t("cashShort")}: ${money(run.company.cash)}</span>
-        <span>${t("turnShort")} ${Math.min(run.turn, currentMaxTurns())}/${currentMaxTurns()}</span>
-        ${statusChip(compactStatusChip())}
-      </div>
-      ${!run.eventResolved ? renderDecisionCardCarousel("event-choices", event.choices, renderEventChoiceCard, t("swipeMoreOptions")) : ``}
-      ${run.eventResolved && !run.pendingActionDone ? `
-        <article class="overview-card">
-          <h3>${t("turnAction")}</h3>
-          <p>${state.selectedActionType ? (categories.find((item) => item.id === state.selectedActionType)?.hint || "") : t("chooseActionType")}</p>
-          ${state.selectedActionType
-            ? `<div class="action-toolbar"><button class="secondary-button" data-action-back>${t("back")}</button></div>`
-            : `<div class="action-type-grid">${categories.map((category) => `
-                <button class="action-type-button" data-action-type="${category.id}">
-                  <img src="${category.icon}" alt="${category.label}" class="action-type-icon">
-                  <strong>${category.label}</strong>
-                  <span>${category.hint}</span>
-                </button>
-              `).join("")}</div>`
-          }
-        </article>
-      ` : ""}
-      ${run.eventResolved && !run.pendingActionDone && state.selectedActionType ? `
-        ${renderDecisionCardCarousel(`action-${state.selectedActionType}`, actionItemsForCurrentCategory(), (item) => item, t("swipeMoreOptions"))}
-      ` : ""}
-      ${run.pendingActionDone ? `
-        <article class="finish-round-card">
-          <h3>${t("turnReadyToAdvance")}</h3>
-          <p>${t("finishRoundHint")}</p>
-          <button class="primary-button" data-finish-turn>${t("flowFinishButton", { turn: run.turn })} →</button>
-        </article>
-      ` : ""}
-    </section>
-  `;
 }
 
 function renderPortfolioTab() {
@@ -1742,6 +1820,7 @@ function renderMarketTab() {
       : true);
   return `
     <section class="tab-screen">
+      ${state.pendingActionType === "buy_asset" ? `<button class="screen-back-button" data-back-game>← ${t("backToGame")}</button>` : ""}
       ${state.pendingActionType === "buy_asset" ? `<article class="overview-card market-action-banner"><h3>${t("turnActionBuyOneAsset")}</h3><p>${runActionStatusText()}</p></article>` : ""}
       ${categoryView ? `<div class="market-back-row"><button class="dashboard-cta market-back-button" data-market-root><strong>${t("backToMarket")}</strong></button></div>` : ""}
       ${state.marketView === "root" ? `
@@ -1761,7 +1840,6 @@ function renderMarketTab() {
       ` : state.marketView === "stocks" ? renderStockMarket() : `
         <div class="portfolio-grid">${groups.length ? groups.map(renderMarketGroup).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}</div>
       `}
-      ${state.pendingActionType === "buy_asset" && state.run.pendingActionDone ? `<div class="market-back-row"><button class="business-button" data-back-decisions>${t("backToDecisions")}</button></div>` : ""}
       ${state.activeStockId ? renderStockDetailSheet() : ""}
     </section>
   `;
@@ -1842,12 +1920,13 @@ function bindTabEvents() {
   ui.tabContent.querySelectorAll("[data-start-configured-run]").forEach((button) => button.addEventListener("click", startRun));
   ui.tabContent.querySelectorAll("[data-cancel-run-setup]").forEach((button) => button.addEventListener("click", closeRunSetup));
   ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
-  ui.tabContent.querySelectorAll("[data-dashboard-primary]").forEach((button) => button.addEventListener("click", () => {
-    handlePrimaryFlowAction();
-  }));
   ui.tabContent.querySelectorAll("[data-finish-turn]").forEach((button) => button.addEventListener("click", advanceTurn));
   ui.tabContent.querySelectorAll("[data-action-type]").forEach((button) => button.addEventListener("click", () => {
     const actionType = button.dataset.actionType;
+    if (actionType === "hold") {
+      finalizeTurnAction(t("heldCash"));
+      return;
+    }
     if (actionType === "buy") {
       state.pendingActionType = "buy_asset";
       state.selectedActionType = null;
@@ -1879,7 +1958,7 @@ function bindTabEvents() {
   ui.tabContent.querySelectorAll("[data-market-view]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketView; render(); }));
   ui.tabContent.querySelectorAll("[data-market-category]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketCategory; render(); }));
   ui.tabContent.querySelectorAll("[data-market-root]").forEach((button) => button.addEventListener("click", () => { state.marketView = "root"; render(); }));
-  ui.tabContent.querySelectorAll("[data-back-decisions]").forEach((button) => button.addEventListener("click", backToDecisionsTab));
+  ui.tabContent.querySelectorAll("[data-back-game]").forEach((button) => button.addEventListener("click", backToGameTab));
   ui.tabContent.querySelectorAll("[data-open-stock]").forEach((button) => button.addEventListener("click", () => openStockSheet(button.dataset.openStock)));
   ui.tabContent.querySelectorAll("[data-close-stock-sheet]").forEach((button) => button.addEventListener("click", closeStockSheet));
   ui.tabContent.querySelectorAll("[data-stock-trade-mode]").forEach((button) => button.addEventListener("click", () => {
@@ -1894,7 +1973,6 @@ function bindTabEvents() {
   }));
   ui.tabContent.querySelectorAll("[data-buy-stock]").forEach((button) => button.addEventListener("click", () => buyStock(button.dataset.buyStock)));
   ui.tabContent.querySelectorAll("[data-sell-stock]").forEach((button) => button.addEventListener("click", () => sellStock(button.dataset.sellStock)));
-  bindCarouselInteractions();
   bindTradeBars();
 }
 
@@ -1902,71 +1980,6 @@ function bindLanguageEvents() {
   ui.tabContent.querySelectorAll("[data-language]").forEach((button) => button.addEventListener("click", () => setLanguage(button.dataset.language)));
   ui.tabContent.querySelectorAll("[data-open-language]").forEach((button) => button.addEventListener("click", openLanguageModal));
   ui.tabContent.querySelectorAll("[data-close-language]").forEach((button) => button.addEventListener("click", closeLanguageModal));
-}
-
-function bindCarouselInteractions() {
-  ui.tabContent.querySelectorAll("[data-carousel-track]").forEach((carousel) => {
-    const carouselId = carousel.dataset.carouselTrack;
-    const slides = carousel.querySelectorAll(`[data-carousel-slide="${carouselId}"]`);
-    const gap = 14;
-    const syncDots = () => {
-      if (!slides.length) return;
-      const slideWidth = slides[0].getBoundingClientRect().width + gap;
-      const index = Math.max(0, Math.min(slides.length - 1, Math.round(carousel.scrollLeft / Math.max(1, slideWidth))));
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((dot, dotIndex) => {
-        dot.classList.toggle("active", dotIndex === index);
-      });
-    };
-
-    syncDots();
-    carousel.addEventListener("wheel", (event) => {
-      if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-        event.preventDefault();
-        carousel.scrollLeft += event.deltaY;
-      }
-    }, { passive: false });
-
-    let isDown = false;
-    let startX = 0;
-    let startLeft = 0;
-
-    carousel.addEventListener("mousedown", (event) => {
-      isDown = true;
-      startX = event.pageX;
-      startLeft = carousel.scrollLeft;
-      carousel.classList.add("dragging");
-    });
-    window.addEventListener("mouseup", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mouseleave", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mousemove", (event) => {
-      if (!isDown) return;
-      event.preventDefault();
-      carousel.scrollLeft = startLeft - (event.pageX - startX);
-    });
-    carousel.addEventListener("scroll", syncDots, { passive: true });
-  });
-
-  ui.tabContent.querySelectorAll("[data-carousel-dot]").forEach((dot) => {
-    dot.addEventListener("click", () => {
-      const carouselId = dot.dataset.carouselDot;
-      const index = Number(dot.dataset.carouselIndex || 0);
-      const track = ui.tabContent.querySelector(`[data-carousel-track="${carouselId}"]`);
-      const slide = track?.querySelector(`[data-carousel-slide="${carouselId}"][data-carousel-index="${index}"]`);
-      if (!track || !slide) return;
-      track.scrollTo({ left: slide.offsetLeft - 20, behavior: "smooth" });
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((item, dotIndex) => {
-        item.classList.toggle("active", dotIndex === index);
-      });
-    });
-  });
 }
 
 function resolveEventChoice(choiceIndex) {
@@ -1980,7 +1993,7 @@ function resolveEventChoice(choiceIndex) {
   run.statusMessage = t("decisionLocked");
   run.history.unshift({ turn: run.turn, title: run.currentEvent.title, body: `${t("choiceSelected")}: ${choice.title}` });
   state.selectedActionType = null;
-  state.activeTab = "decisions";
+  state.activeTab = "dashboard";
   saveCurrentRun();
   render();
 }
@@ -2004,7 +2017,7 @@ function buyBusiness(businessId) {
   run.company.cash -= business.cost;
   run.company.businesses.push({ businessId, level: 1 });
   if (state.pendingActionType === "buy_asset") {
-    finalizeTurnAction(`${t("assetPurchased")}. ${t("turnActionCompletedLabel")}.`, { activeTab: "market" });
+    finalizeTurnAction(`${t("assetPurchased")}. ${t("turnActionCompletedLabel")}.`);
     return;
   }
   finalizeTurnAction(t("boughtBusiness", { name: business.name }));
@@ -2096,6 +2109,8 @@ function finalizeTurnAction(message, options = {}) {
   state.selectedTradeMode = null;
   state.stockBuyPercent = 0;
   state.stockSellPercent = 0;
+  state.pendingActionType = null;
+  run.currentReport = calculateReport();
   state.activeTab = options.activeTab || "dashboard";
   if (options.marketView) state.marketView = options.marketView;
   saveCurrentRun();
@@ -2457,38 +2472,21 @@ function renderOwnedBusinessCard(owned) {
   `;
 }
 
-function renderDecisionBuyCard(business) {
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(industryName(business.industry))}${tag(riskBucketLabel(business.risk))}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${percent(business.risk)}</strong></div>
-        <div><span>${t("synergyHooks")}</span><strong>${synergyHooks(business.id)}</strong></div>
-        <div><span>${t("macroSensitivity")}</span><strong>${macroSensitivity(business)}</strong></div>
-      </div>
-      <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buyAsset")}</button>
-    </article>
-  `;
-}
-
 function renderDecisionUpgradeCard(owned) {
   const business = businessById(owned.businessId);
   const upgradePrice = upgradeCost(owned);
   const revenueGain = Math.round(business.revenue * 0.45);
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("upgrade")}</span><strong>${money(upgradePrice)}</strong></div>
-        <div><span>${t("revenue")}</span><strong>+${money(revenueGain)}</strong></div>
-      </div>
-      <button class="business-button" data-upgrade="${business.id}" ${canTakeAction(upgradePrice) ? "" : "disabled"}>${t("upgradeAsset")}</button>
-    </article>
+    <button class="selectable-action-card" data-upgrade="${business.id}" ${canTakeAction(upgradePrice) ? "" : "disabled"}>
+      <span class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</span>
+      <strong class="selectable-card-title">${business.name}</strong>
+      <span class="selectable-card-description">${businessBlurb(business)}</span>
+      <span class="selectable-card-metrics">
+        <span><small>${t("upgrade")}</small><strong>${money(upgradePrice)}</strong></span>
+        <span><small>${t("revenue")}</small><strong class="positive">+${money(revenueGain)}</strong></span>
+      </span>
+      <span class="card-select-label">${t("upgradeAsset")} →</span>
+    </button>
   `;
 }
 
@@ -2496,31 +2494,28 @@ function renderDecisionSellCard(owned) {
   const business = businessById(owned.businessId);
   const saleValue = Math.round(business.cost * (0.55 + owned.level * 0.15));
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("sell")}</span><strong>${money(saleValue)}</strong></div>
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-      </div>
-      <button class="business-button" data-sell="${business.id}" ${canTakeAction(0) ? "" : "disabled"}>${t("sellAsset")}</button>
-    </article>
+    <button class="selectable-action-card" data-sell="${business.id}" ${canTakeAction(0) ? "" : "disabled"}>
+      <span class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</span>
+      <strong class="selectable-card-title">${business.name}</strong>
+      <span class="selectable-card-description">${businessBlurb(business)}</span>
+      <span class="selectable-card-metrics">
+        <span><small>${t("sell")}</small><strong>${money(saleValue)}</strong></span>
+        <span><small>${t("expectedProfit")}</small><strong>${money(business.revenue - business.expense)}</strong></span>
+      </span>
+      <span class="card-select-label">${t("sellAsset")} →</span>
+    </button>
   `;
 }
 
 function renderDecisionCardPlay(card) {
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(card.cost ? `${t("buy")} ${money(card.cost)}` : t("noCost"), "accent")}</div>
-      <h3>${card.title}</h3>
-      <p>${card.text}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${describeEffects(card) || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(card)}</strong></div>
-      </div>
-      <button class="business-button" data-play-card="${card.id}" ${canTakeAction(card.cost || 0) ? "" : "disabled"}>${t("playCardAction")}</button>
-    </article>
+    <button class="selectable-action-card" data-play-card="${card.id}" ${canTakeAction(card.cost || 0) ? "" : "disabled"}>
+      <span class="tag-row">${tag(card.cost ? `${t("buy")} ${money(card.cost)}` : t("noCost"), "accent")}${tag(riskLabel(card))}</span>
+      <strong class="selectable-card-title">${card.title}</strong>
+      <span class="selectable-card-description">${card.text}</span>
+      <span class="choice-effect"><small>${t("effectLabel")}</small><strong>${describeEffects(card) || t("strategicShift")}</strong></span>
+      <span class="card-select-label">${t("playCardAction")} →</span>
+    </button>
   `;
 }
 
@@ -2954,14 +2949,9 @@ function describeModifier(modifier) {
   return `${modifier.label}: ${formatTemporaryEffects(modifier.effects)} (${modifier.remainingTurns}t)`;
 }
 
-function headerActions() {
-  return "";
-}
-
 function tabTitle() {
   const map = {
-    dashboard: t("dashboard"),
-    decisions: t("decisions"),
+    dashboard: t("gameTab"),
     portfolio: t("portfolio"),
     market: t("market"),
     economy: t("economy"),
@@ -2969,21 +2959,6 @@ function tabTitle() {
     runEnd: t("runEndTitle")
   };
   return map[state.activeTab] || t("gameTitle");
-}
-
-function compactStatusChip() {
-  if (!state.run.eventResolved && ["decisions", "portfolio", "market"].includes(state.activeTab)) {
-    return t("eventNeedsDecision");
-  }
-  if (state.activeTab === "decisions") {
-    if (!state.run.eventResolved) return t("eventNeedsDecision");
-    if (!state.run.pendingActionDone) return t("chooseAction");
-    return t("turnReadyToAdvance");
-  }
-  if (state.activeTab === "portfolio") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("portfolioReady");
-  if (state.activeTab === "market") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("marketReady");
-  if (state.activeTab === "economy") return t("economyWatch");
-  return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("active");
 }
 
 function statusChip(text, tone = "") {

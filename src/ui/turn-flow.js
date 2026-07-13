@@ -32,8 +32,19 @@ export function getTurnStepStates(run) {
 }
 
 export function getRecommendedTab(run) {
-  const phase = getTurnPhase(run);
-  return phase === TURN_PHASES.EVENT || phase === TURN_PHASES.ACTION
-    ? "decisions"
-    : "dashboard";
+  return "dashboard";
+}
+
+export function getRoundResultSummary(report, cash) {
+  const safeReport = report || {};
+  const profit = Number(safeReport.profit || 0);
+  return {
+    revenue: Number(safeReport.revenue || 0),
+    expenses: Number(safeReport.expenses || 0),
+    interest: Number(safeReport.interest || 0),
+    dividends: Number(safeReport.dividends || 0),
+    profit,
+    valuation: Number(safeReport.valuation || 0),
+    projectedCash: Number(cash || 0) + Math.round(profit),
+  };
 }

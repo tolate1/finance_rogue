@@ -44,7 +44,7 @@ The browser build now includes three starting scenarios and three difficulty lev
 
 Revenue, expenses, interest, dividends, asset value, valuation, macro modifiers, debt thresholds, and insolvency now live in `src/engine/economy.js`. Live play and the simulator both call this module. Do not duplicate these formulas in UI or simulation code.
 
-Round guidance now lives in `src/ui/turn-flow.js`. It provides the canonical UI phase, three-step state, and recommended tab for the current run. Keep future navigation prompts aligned with this module instead of recreating phase checks in individual renderers.
+Round guidance now lives in `src/ui/turn-flow.js`. It provides the canonical UI phase, three-step state, recommended game tab, and projected settlement summary. Keep future navigation prompts and result cards aligned with this module instead of recreating phase checks in individual renderers.
 
 Recommended module boundaries:
 
@@ -81,4 +81,4 @@ The simulator must include stocks, dividends, synergies, selling, upgrading, deb
 
 ## Beta milestone
 
-The public build now has a persistent event → action → finish guide, contextual primary CTA, early-round explanation, and static HTTPS deployment. Before the wider beta, finish interactive onboarding, action previews, mobile/accessibility QA, PWA support, save migrations, graceful loading errors, and a feedback path. Analytics require a separate product/privacy decision and are not implied by this roadmap.
+The public build now has one card-first game screen for event → action → result, four-section navigation, vertical choice lists without nested carousels, projected settlement feedback, and static HTTPS deployment. Before the wider beta, finish interactive onboarding, pre-confirmation action previews, mobile/accessibility QA, PWA support, save migrations, graceful loading errors, and a feedback path. Analytics require a separate product/privacy decision and are not implied by this roadmap.
