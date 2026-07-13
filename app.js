@@ -205,10 +205,12 @@ const translations = {
     dashboard: "Dashboard",
     gameTab: "Game",
     decisions: "Decisions",
-    portfolio: "Portfolio",
+    portfolio: "Assets",
     market: "Market",
     stocks: "Stocks",
     economy: "Economy",
+    cashNow: "Cash now",
+    profitAfterChoice: "Profit after choice",
     nextTurn: "Next",
     currentRoundStatus: "Round {turn} of {maxTurns}",
     flowEventButton: "1. Resolve event",
@@ -697,10 +699,12 @@ const translations = {
     dashboard: "Обзор",
     gameTab: "Игра",
     decisions: "Решения",
-    portfolio: "Мои активы",
+    portfolio: "Активы",
     market: "Рынок",
     stocks: "Акции",
-    economy: "Условия рынка",
+    economy: "Экономика",
+    cashNow: "Деньги сейчас",
+    profitAfterChoice: "Прибыль после выбора",
     nextTurn: "Следующий",
     currentRoundStatus: "Раунд {turn} из {maxTurns}",
     flowEventButton: "1. Решить событие",
@@ -1613,8 +1617,7 @@ function renderHeader() {
     ? [
       [t("cash"), money(run.company.cash)],
       [t("profit"), money(report.profit)],
-      [t("debt"), money(run.company.debt)],
-      [t("valuation"), money(report.valuation)]
+      [t("debt"), money(run.company.debt)]
     ].map(([label, value]) => `<div class="stat-tile"><span>${label}</span><strong>${value}</strong></div>`).join("")
     : "";
 }
@@ -1906,10 +1909,7 @@ function renderEventStage() {
         <div><h2>${t("eventStageTitle")}</h2><p>${t("eventStageHint")}</p></div>
       </div>
       <article class="event-hero-card event-theme--${presentation.theme}">
-        <div class="event-dossier-meta">
-          <span>${t("eventStageTitle")} · ${presentation.category}</span>
-          <strong>${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</strong>
-        </div>
+        <div class="event-dossier-meta event-dossier-meta--single"><span>${presentation.category}</span></div>
         ${renderEventVisual(event)}
         <div class="event-dossier-copy">
           <h2>${eventTitle(event)}</h2>
@@ -2002,9 +2002,7 @@ function renderActionStage() {
             <button class="action-type-button motion-card action-tone--${category.tone} ${availability.disabled ? "unavailable" : ""}" style="--card-index:${index}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
               <span class="action-card-visual">
                 <span class="action-icon-wrap"><img src="${category.icon}" alt="" class="action-type-icon"></span>
-                <span class="action-card-index">0${index + 1}</span>
               </span>
-              <small class="action-card-kicker">${category.kicker}</small>
               <strong>${category.label}</strong>
               <span class="action-card-description">${availability.reason || category.hint}</span>
               <em>${availability.disabled ? "—" : "→"}</em>
@@ -2213,13 +2211,18 @@ function renderRunEndScreen() {
 }
 
 function renderEventChoiceCard(choice, index) {
-  const effectText = describeEffects(choice)
-    .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
   const selected = state.run.selectedChoiceId === choice.title;
   const presentation = choicePresentation(choice);
-  const hasCost = (choice.cash || 0) < 0;
-  const cost = hasCost ? money(Math.abs(choice.cash)) : t("noCost");
   const projection = eventChoiceProjection(choice);
+  const cashDelta = choice.cash || 0;
+  const debtDelta = choice.debt || 0;
+  const riskDelta = (choice.risk || 0) + (choice.temporary_effects?.risk || 0);
+  const riskTone = riskDelta >= 0.04 ? "high" : riskDelta > 0 ? "medium" : "low";
+  const impactRows = [
+    cashDelta ? `<span class="choice-impact-row"><small>${t("cashNow")}</small><strong class="${cashDelta >= 0 ? "positive" : "negative"}">${signedMoney(cashDelta)}</strong></span>` : "",
+    `<span class="choice-impact-row choice-impact-row--profit"><small>${t("profitAfterChoice")}</small><strong>${money(projection.profitBefore)} <b>→</b> ${money(projection.profitAfter)}</strong></span>`,
+    debtDelta ? `<span class="choice-impact-row"><small>${t("debt")}</small><strong class="${debtDelta <= 0 ? "positive" : "negative"}">${signedMoney(debtDelta)}</strong></span>` : ""
+  ].filter(Boolean).join("");
   return `
     <button class="choice-card decision-option-card motion-card choice-strategy--${presentation.type} ${selected ? "selected" : ""}" style="--card-index:${index}" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>
       <span class="choice-card-layout">
@@ -2231,18 +2234,16 @@ function renderEventChoiceCard(choice, index) {
         <span class="choice-card-copy">
           <span class="panel-head">
             <strong>${choiceTitle(choice)}</strong>
-            <span class="risk-badge risk-badge--${riskLevel(choice)}">${t("riskLabelTitle")} · ${riskLabel(choice)}</span>
+            <span class="choice-meta-row">
+              ${choice.duration_turns ? `<span class="duration-badge">${t("lastsTurns", { turns: choice.duration_turns })}</span>` : ""}
+              ${riskDelta ? `<span class="risk-badge risk-badge--${riskTone}">${t("riskLabelTitle")} ${signedPercent(riskDelta)}</span>` : ""}
+            </span>
           </span>
           <span class="choice-description">${decisionDescription(choice)}</span>
-          <span class="choice-cost ${hasCost ? "is-cost" : "is-free"}"><small>${t("costLabel")}</small><strong>${cost}</strong></span>
         </span>
       </span>
-      <span class="choice-effect"><small>${t("effectLabel")}</small><strong>${effectText || t("strategicShift")}</strong></span>
-      <span class="choice-forecast">
-        <span><small>${t("cash")}</small><strong>${money(state.run.company.cash)} → ${money(projection.cashAfter)}</strong></span>
-        <span><small>${t("profitPerRound")}</small><strong>${money(projection.profitBefore)} → ${money(projection.profitAfter)}</strong></span>
-      </span>
-      <span class="card-select-label">${selected ? t("selected") : `${t("chooseOption")} →`}</span>
+      <span class="choice-impact-list">${impactRows}</span>
+      <span class="card-select-label">${selected ? t("selected") : `${t("select")} →`}</span>
     </button>
   `;
 }
@@ -2408,11 +2409,9 @@ function renderMarketActionCard(business, index) {
         <small>${industryName(business.industry)}</small>
         <strong>${businessName(business)}</strong>
       </span>
-      <span class="market-table-price">${money(business.cost)}</span>
+      <span class="market-table-price-row"><span class="market-table-price"><small>${t("costLabel")}</small>${money(business.cost)}</span><span class="market-table-risk">${t("riskLabelTitle")} ${percent(business.risk)}</span></span>
       <span class="market-table-metrics">
         <span><small>${t("profitAdded")}</small><strong class="${projection.profitGain >= 0 ? "positive" : "negative"}">${signedMoney(projection.profitGain)}</strong></span>
-        <span><small>${t("cashAfterPurchase")}</small><strong>${money(projection.cashAfter)}</strong></span>
-        <span><small>${t("risk")}</small><strong>${percent(business.risk)}</strong></span>
       </span>
       <span class="market-table-payback">${projection.paybackTurns ? t("paysBackIn", { turns: projection.paybackTurns }) : t("noPaybackNow")}</span>
       <span class="card-select-label">${canTakeAction(business.cost) ? `${t("buy")} →` : t("insufficientFunds")}</span>
@@ -2633,7 +2632,7 @@ function resolveEventChoice(choiceIndex) {
   });
   state.transitionLocked = true;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  window.setTimeout(() => commitEventChoice(choiceIndex), reducedMotion ? 0 : 280);
+  window.setTimeout(() => commitEventChoice(choiceIndex), reducedMotion ? 0 : 420);
 }
 
 function commitEventChoice(choiceIndex) {
