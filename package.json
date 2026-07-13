@@ -4,11 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
     "test": "node --test",
     "check:python": "python -m py_compile finance_roguelike.py",
     "check": "node --check app.js && node --check src/persistence.js && node --check src/engine/run-config.js && npm run check:python && npm test"
   },
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "vite": "^8.1.4"
   }
 }
