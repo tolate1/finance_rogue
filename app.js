@@ -8,6 +8,13 @@ import {
   difficultyById,
   scenarioById
 } from "./src/engine/run-config.js";
+import {
+  assessSolvency,
+  calculateBaseDebtThreshold,
+  calculateEconomyReport,
+  calculateEffectiveMacro,
+  sumModifierEffects
+} from "./src/engine/economy.js";
 
 const MAX_TURNS = 10;
 const STARTING_CASH = 12000;
@@ -2045,10 +2052,13 @@ function advanceTurn() {
 
 function checkGameEnd() {
   const run = state.run;
-  const debtPressure = run.company.debt > debtPressureThreshold(run);
-  const cashBankruptcy = run.company.cash < -5000;
-  const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < run.company.risk;
-  const bankrupt = cashBankruptcy || debtCollapse;
+  const { cashBankruptcy, debtCollapse, bankrupt } = assessSolvency({
+    cash: run.company.cash,
+    debt: run.company.debt,
+    risk: run.company.risk,
+    debtThreshold: debtPressureThreshold(run),
+    randomValue: Math.random()
+  });
   const maxed = run.turn > currentMaxTurns();
   if (bankrupt || maxed) {
     run.finished = true;
@@ -2075,49 +2085,23 @@ function calculateReport() {
   const run = state.run;
   const temporary = activeTemporaryTotals();
   const macro = effectiveMacro();
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of run.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    const demandFactor = 1 + ((macro.demand - 1) * business.demand_sensitivity);
-    const inflationRevenue = 1 + macro.inflation * 0.7;
-    const inflationExpense = 1 + macro.inflation;
-    const energyFactor = 1 + ((macro.energyCost - 1) * business.energy_use);
-    revenue += business.revenue * levelMultiplier * demandFactor * inflationRevenue;
-    expenses += business.expense * levelMultiplier * Math.max(0.5, energyFactor) * inflationExpense;
-  }
   const synergy = activeSynergyBonus();
-  revenue *= 1 + run.company.revenueBonus + temporary.revenue_bonus + synergy.revenue;
-  expenses *= Math.max(0.2, 1 + run.company.expenseBonus + temporary.expense_bonus + synergy.expense);
-  const effectiveRisk = clamp(run.company.risk + temporary.risk, 0.01, 0.95);
-  const interest = run.company.debt * macro.interestRate;
-  const dividends = stockDividends();
-  const profit = revenue - expenses - interest + dividends;
-  const valuation = run.company.cash + assetValue() + stockHoldingsValue() + Math.max(0, profit * 8) - run.company.debt;
-  return { revenue, expenses, interest, profit, valuation, effectiveRisk, dividends };
-}
-
-function assetValue() {
-  return state.run.company.businesses.reduce((sum, owned) => {
-    const business = businessById(owned.businessId);
-    return sum + business.cost * (1 + owned.level * 0.25);
-  }, 0);
-}
-
-function stockHoldingsValue() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    return sum + (listing ? listing.price * holding.shares : 0);
-  }, 0);
-}
-
-function stockDividends() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    if (!listing) return sum;
-    return sum + (listing.price * holding.shares * (listing.dividend_yield || 0));
-  }, 0);
+  return calculateEconomyReport({
+    company: run.company,
+    macro,
+    businesses: run.company.businesses.map((owned) => ({
+      definition: businessById(owned.businessId),
+      level: owned.level
+    })),
+    stocks: run.company.stocks
+      .map((holding) => ({
+        definition: stockById(holding.stockId),
+        shares: holding.shares
+      }))
+      .filter((position) => position.definition),
+    modifierTotals: temporary,
+    synergyBonus: synergy
+  });
 }
 
 function createInitialStockMarket() {
@@ -2879,25 +2863,11 @@ function describeEffects(source) {
 }
 
 function activeTemporaryTotals() {
-  return state.run.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) {
-      acc[key] = (acc[key] || 0) + value;
-    }
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
+  return sumModifierEffects(state.run.activeModifiers);
 }
 
 function effectiveMacro() {
-  const base = state.run.macro;
-  const temporary = activeTemporaryTotals();
-  return {
-    interestRate: Math.max(0.01, base.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, base.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, base.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, base.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, base.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, base.marketRisk + (temporary.market_risk || 0))
-  };
+  return calculateEffectiveMacro(state.run.macro, activeTemporaryTotals());
 }
 
 function tickModifiers() {
@@ -3053,7 +3023,10 @@ function currentMaxTurns(targetRun = state.run) {
 }
 
 function debtPressureThreshold(run) {
-  const baseThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, run.company.cash * 4);
+  const baseThreshold = calculateBaseDebtThreshold(
+    run.company.cash,
+    metaStartingBonuses().debtThresholdBonus
+  );
   return applyDifficultyToDebtThreshold(baseThreshold, run.difficultyId);
 }
 
@@ -3259,11 +3232,18 @@ function simulateSingleRun() {
       }
     }
 
-    const simulationThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, sim.company.cash * 4);
-    const debtPressure = sim.company.debt > applyDifficultyToDebtThreshold(simulationThreshold, sim.difficultyId);
-    const cashBankruptcy = sim.company.cash < -5000;
-    const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < sim.company.risk;
-    if (cashBankruptcy || debtCollapse) {
+    const simulationThreshold = calculateBaseDebtThreshold(
+      sim.company.cash,
+      metaStartingBonuses().debtThresholdBonus
+    );
+    const { cashBankruptcy, debtCollapse, bankrupt } = assessSolvency({
+      cash: sim.company.cash,
+      debt: sim.company.debt,
+      risk: sim.company.risk,
+      debtThreshold: applyDifficultyToDebtThreshold(simulationThreshold, sim.difficultyId),
+      randomValue: Math.random()
+    });
+    if (bankrupt) {
       const finalReport = simulationReport(sim);
       return { reason: debtCollapse ? "debt_collapse" : "bankruptcy", turnReached: sim.turn, cash: sim.company.cash, debt: sim.company.debt, valuation: finalReport.valuation };
     }
@@ -3276,32 +3256,18 @@ function simulateSingleRun() {
 }
 
 function simulationReport(sim) {
-  const temporary = sim.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) acc[key] = (acc[key] || 0) + value;
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
-  const macro = {
-    interestRate: Math.max(0.01, sim.macro.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, sim.macro.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, sim.macro.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, sim.macro.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, sim.macro.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, sim.macro.marketRisk + (temporary.market_risk || 0))
-  };
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of sim.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    revenue += business.revenue * levelMultiplier * (1 + ((macro.demand - 1) * business.demand_sensitivity)) * (1 + macro.inflation * 0.7);
-    expenses += business.expense * levelMultiplier * Math.max(0.5, 1 + ((macro.energyCost - 1) * business.energy_use)) * (1 + macro.inflation);
-  }
-  revenue *= 1 + sim.company.revenueBonus + temporary.revenue_bonus;
-  expenses *= Math.max(0.2, 1 + sim.company.expenseBonus + temporary.expense_bonus);
-  const interest = sim.company.debt * macro.interestRate;
-  const profit = revenue - expenses - interest;
-  const assetTotal = sim.company.businesses.reduce((sum, owned) => sum + businessById(owned.businessId).cost * (1 + owned.level * 0.25), 0);
-  return { profit, valuation: sim.company.cash + assetTotal + Math.max(0, profit * 8) - sim.company.debt };
+  const temporary = sumModifierEffects(sim.activeModifiers);
+  return calculateEconomyReport({
+    company: sim.company,
+    macro: calculateEffectiveMacro(sim.macro, temporary),
+    businesses: sim.company.businesses.map((owned) => ({
+      definition: businessById(owned.businessId),
+      level: owned.level
+    })),
+    stocks: [],
+    modifierTotals: temporary,
+    synergyBonus: {}
+  });
 }
 
 function simulationApplyEffects(sim, source) {

@@ -10,13 +10,18 @@ python finance_roguelike.py
 
 ## Web UI
 
-Run a local static server in the project root, then open `index.html`.
+Install dependencies and start the Vite development server:
 
 ```bash
-python -m http.server 4173
+npm install
+npm run dev
 ```
 
-Open `http://localhost:4173`. The browser version is the primary playable build.
+The browser version is the primary playable build.
+
+Public beta:
+
+https://finance-rogue-tolate1-play.perky-squid-7719.chatgpt.site
 
 ## Checks
 
@@ -42,14 +47,16 @@ npm run check
 - playable browser UI
 - first-launch language selection
 - RU/EN localization
-- PNG bottom-nav icons
+- mobile-optimized WebP icons and company logos
 - persistent prestige progression
 - automatic recovery of an unfinished run
 - three starting scenarios and three difficulty levels
+- shared economy engine for live play and simulation
+- public HTTPS production deployment
 
 ## Roadmap status
 
-Current stage: reliability foundation for the first public beta.
+Current stage: canonical game engine for the first public beta.
 
 Done:
 
@@ -65,13 +72,15 @@ Done:
 - meta progression and persistent unlocks
 - automated persistence and content-integrity tests
 - GitHub Actions CI
+- canonical calculations for revenue, expenses, interest, dividends, valuation, and insolvency
+- public mobile beta deployment
 
 Next:
 
-- extract one canonical game engine from the UI
+- continue extracting actions, events, stocks, and seeded randomness into the canonical engine
 - make the simulator match all live game mechanics
 - run the first measured balance pass
 - improve onboarding and mobile feedback
-- publish the first installable beta
+- add PWA installation support and graceful loading errors
 
 See [ROADMAP.user.ru.md](ROADMAP.user.ru.md) for goals, acceptance criteria, and the detailed delivery order.

@@ -16,7 +16,7 @@ Build a stable mobile-first browser beta in which players manage businesses, sto
 6. Update the user roadmap and README whenever shipped scope changes.
 7. Do not add content before validating its references and basic economy values.
 
-## Current milestone: reliability foundation
+## Completed milestone: reliability foundation
 
 Goal: protect player progress and make all future changes automatically verifiable.
 
@@ -42,6 +42,8 @@ Goal: stop duplicating economy behavior across UI, simulation, and the Python pr
 
 The browser build now includes three starting scenarios and three difficulty levels. Their configuration lives in `src/engine/run-config.js`; keep future run setup rules in that module instead of returning them to UI code.
 
+Revenue, expenses, interest, dividends, asset value, valuation, macro modifiers, debt thresholds, and insolvency now live in `src/engine/economy.js`. Live play and the simulator both call this module. Do not duplicate these formulas in UI or simulation code.
+
 Recommended module boundaries:
 
 - `src/engine/state.js` — run creation, schema version, migrations.
@@ -56,8 +58,8 @@ Recommended module boundaries:
 
 Extraction order:
 
-1. Economy pure functions and tests.
-2. Seeded random source.
+1. [x] Economy pure functions and tests.
+2. [ ] Seeded random source.
 3. Event/effect functions.
 4. Business and stock actions.
 5. Simulation migration.
