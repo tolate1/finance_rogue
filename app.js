@@ -1,7 +1,10 @@
-﻿const MAX_TURNS = 10;
+﻿import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
+
+const MAX_TURNS = 10;
 const STARTING_CASH = 12000;
 const LANGUAGE_KEY = "financeRoguelike.language";
 const META_KEY = "financeRoguelike.meta";
+const RUN_KEY = "financeRoguelike.currentRun";
 const STARTING_UNLOCKED_INDUSTRIES = ["retail", "it", "logistics", "manufacturing"];
 const ADVANCED_FINANCE_CARD_IDS = ["fixed_rate", "bridge_loan", "repay_package", "refinance"];
 const META_UNLOCKS = [
@@ -105,6 +108,7 @@ const translations = {
     chooseLanguageLater: "Change language without resetting the current run.",
     actionCompleted: "Action completed",
     runStarted: "Run started",
+    runRestored: "Saved run restored",
     choiceSelected: "Choice selected",
     boughtBusiness: "Bought {name}",
     upgradedBusiness: "Upgraded {name} to L{level}",
@@ -465,6 +469,7 @@ const translations = {
     chooseLanguageLater: "Сменить язык без сброса текущей партии.",
     actionCompleted: "Действие выполнено",
     runStarted: "Партия началась",
+    runRestored: "Сохранённая партия восстановлена",
     choiceSelected: "Выбран вариант",
     boughtBusiness: "Куплен {name}",
     upgradedBusiness: "{name} улучшен до ур. {level}",
@@ -810,7 +815,7 @@ async function boot() {
 
   renderBottomNav();
   if (hasSelectedLanguage()) {
-    startRun();
+    if (!restoreSavedRun()) startRun();
   } else {
     render();
   }
@@ -900,7 +905,32 @@ function nextRunMaxTurns() {
   return MAX_TURNS + (unlockLevel("unlock_extended_run") * 2);
 }
 
+function restoreSavedRun() {
+  const savedRun = loadRunState(localStorage, RUN_KEY);
+  if (!savedRun) return false;
+  state.run = savedRun;
+  state.activeTab = "dashboard";
+  state.marketView = "root";
+  state.pendingActionType = null;
+  state.selectedActionType = null;
+  state.selectedActionItem = null;
+  state.activeStockId = null;
+  state.selectedTradeMode = null;
+  state.stockBuyPercent = 0;
+  state.stockSellPercent = 0;
+  state.run.statusMessage = t("runRestored");
+  if (!state.run.currentReport) state.run.currentReport = calculateReport();
+  render();
+  return true;
+}
+
+function saveCurrentRun() {
+  if (!state.run || state.run.finished) return false;
+  return saveRunState(localStorage, RUN_KEY, state.run);
+}
+
 function startRun() {
+  clearRunState(localStorage, RUN_KEY);
   const starter = sample(["coffee_shop", "mini_market", "mobile_studio"]);
   const startingBonus = metaStartingBonuses();
   state.run = {
@@ -972,6 +1002,7 @@ function beginTurn() {
   run.statusMessage = t("resolveEventBeforeNextTurn");
   state.pendingActionType = null;
   state.marketView = "root";
+  saveCurrentRun();
   render();
 }
 
@@ -1697,6 +1728,7 @@ function resolveEventChoice(choiceIndex) {
   run.history.unshift({ turn: run.turn, title: run.currentEvent.title, body: `${t("choiceSelected")}: ${choice.title}` });
   state.selectedActionType = null;
   state.activeTab = "decisions";
+  saveCurrentRun();
   render();
 }
 
@@ -1813,6 +1845,7 @@ function finalizeTurnAction(message, options = {}) {
   state.stockSellPercent = 0;
   state.activeTab = options.activeTab || "dashboard";
   if (options.marketView) state.marketView = options.marketView;
+  saveCurrentRun();
   render();
 }
 
@@ -1841,6 +1874,7 @@ function checkGameEnd() {
     run.resultSummary = summarizeRun(run);
     run.knowledgeEarned = calculateKnowledgeReward(run);
     claimRunReward(run);
+    clearRunState(localStorage, RUN_KEY);
     run.history.unshift({
       turn: Math.min(run.turn, currentMaxTurns()),
       title: t("runComplete"),
@@ -2809,6 +2843,7 @@ function purchaseUnlock(unlockId) {
   state.meta.purchasedUnlockIds = uniqueList(state.meta.purchasedUnlockIds);
   saveMetaProgression();
   if (state.run) state.run.statusMessage = `${t("unlockPurchased")}: ${t(unlock.titleKey)}`;
+  saveCurrentRun();
   render();
 }
 
@@ -3180,4 +3215,3 @@ function clamp(value, min, max) {
 function sample(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
-
