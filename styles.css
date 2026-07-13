@@ -73,6 +73,10 @@ button:focus-visible {
   border-bottom: 1px solid var(--line);
 }
 
+.app-header.onboarding-header-hidden {
+  display: none;
+}
+
 .header-top,
 .run-bar,
 .stat-tile,

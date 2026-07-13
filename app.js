@@ -45,6 +45,7 @@ const translations = {
   en: {
     gameTitle: "Finance Roguelike",
     chooseLanguage: "Choose language",
+    languageWelcome: "Choose a language to start your first run.",
     russian: "Russian",
     english: "English",
     currentRun: "Current Run",
@@ -473,6 +474,7 @@ const translations = {
   ru: {
     gameTitle: "Finance Roguelike",
     chooseLanguage: "Выберите язык",
+    languageWelcome: "Выберите язык, чтобы начать первую партию.",
     russian: "Русский",
     english: "English",
     currentRun: "Текущая партия",
@@ -930,6 +932,7 @@ const state = {
 };
 
 const ui = {
+  appHeader: document.querySelector(".app-header"),
   eyebrow: document.querySelector(".eyebrow"),
   headerTitle: document.querySelector(".header-top h1"),
   newRunButton: document.getElementById("new-run-button"),
@@ -1234,6 +1237,7 @@ function renderTurnGuide(run) {
 
 function renderHeader() {
   document.title = t("gameTitle");
+  ui.appHeader.classList.toggle("onboarding-header-hidden", !hasSelectedLanguage());
   ui.eyebrow.textContent = t("gameTitle");
   ui.newRunButton.textContent = t("reset");
   if (hasSelectedLanguage() && (state.runSetupOpen || !state.run)) {
@@ -1316,7 +1320,7 @@ function renderLanguageSelectScreen() {
       <div class="language-card">
         <p class="eyebrow">${t("gameTitle")}</p>
         <h2>${t("chooseLanguage")}</h2>
-        <p>${t("chooseLanguageLater")}</p>
+        <p>${t("languageWelcome")}</p>
         <div class="language-actions">
           <button class="language-button primary" data-language="ru">${translations.ru.russian}</button>
           <button class="language-button" data-language="en">${translations.en.english}</button>
