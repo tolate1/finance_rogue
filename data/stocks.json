@@ -11,7 +11,7 @@
     "cycle_bias": "consumer",
     "peRatio": 31.8,
     "description": "Large-scale online retail and marketplace infrastructure.",
-    "logo": "./assets/company-logos/amazone-retail.png"
+    "logo": "./assets/company-logos/amazone-retail.webp"
   },
   {
     "id": "fedbox_logistics",
@@ -25,7 +25,7 @@
     "cycle_bias": "balanced",
     "peRatio": 18.6,
     "description": "Delivery, warehouses, and freight operations.",
-    "logo": "./assets/company-logos/fedbox-logistics.png"
+    "logo": "./assets/company-logos/fedbox-logistics.webp"
   },
   {
     "id": "aplix_systems",
@@ -39,7 +39,7 @@
     "cycle_bias": "growth",
     "peRatio": 42.3,
     "description": "Devices, software, and AI platform revenue.",
-    "logo": "./assets/company-logos/aplix-systems.png"
+    "logo": "./assets/company-logos/aplix-systems.webp"
   },
   {
     "id": "tessla_motors",
@@ -53,7 +53,7 @@
     "cycle_bias": "growth",
     "peRatio": 24.7,
     "description": "Factories, advanced equipment, and industrial electrification.",
-    "logo": "./assets/company-logos/tessla-motors.png"
+    "logo": "./assets/company-logos/tessla-motors.webp"
   },
   {
     "id": "exon_energy",
@@ -67,7 +67,7 @@
     "cycle_bias": "inflation",
     "peRatio": 12.9,
     "description": "Oil, gas, and large-scale energy supply.",
-    "logo": "./assets/company-logos/exon-energy.png"
+    "logo": "./assets/company-logos/exon-energy.webp"
   },
   {
     "id": "netstream_media",
@@ -81,7 +81,7 @@
     "cycle_bias": "consumer",
     "peRatio": 27.5,
     "description": "Streaming, content, and ad-backed media network.",
-    "logo": "./assets/company-logos/netstream-media.png"
+    "logo": "./assets/company-logos/netstream-media.webp"
   },
   {
     "id": "blackstone_capital",
@@ -95,6 +95,6 @@
     "cycle_bias": "rates",
     "peRatio": 16.8,
     "description": "Investment fund and capital allocation platform.",
-    "logo": "./assets/company-logos/blackstone-capital.png"
+    "logo": "./assets/company-logos/blackstone-capital.webp"
   }
 ]

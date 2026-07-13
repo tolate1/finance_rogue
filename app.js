@@ -1,3402 +1,117 @@
-ï»¿import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
-import {
-  RUN_DIFFICULTIES,
-  RUN_SCENARIOS,
-  applyDifficultyToDebtThreshold,
-  applyDifficultyToKnowledgeReward,
-  createRunConfiguration,
-  difficultyById,
-  scenarioById
-} from "./src/engine/run-config.js";
-
-const MAX_TURNS = 10;
-const STARTING_CASH = 12000;
-const LANGUAGE_KEY = "financeRoguelike.language";
-const META_KEY = "financeRoguelike.meta";
-const RUN_KEY = "financeRoguelike.currentRun";
-const STARTING_UNLOCKED_INDUSTRIES = ["retail", "it", "logistics", "manufacturing"];
-const ADVANCED_FINANCE_CARD_IDS = ["fixed_rate", "bridge_loan", "repay_package", "refinance"];
-const META_UNLOCKS = [
-  { id: "unlock_real_estate", titleKey: "unlockRealEstate", descriptionKey: "unlockRealEstateDesc", cost: 10, type: "industry", category: "real_estate", payload: { industry: "real_estate" } },
-  { id: "unlock_media", titleKey: "unlockMedia", descriptionKey: "unlockMediaDesc", cost: 12, type: "industry", category: "business", payload: { industry: "media" } },
-  { id: "unlock_advanced_finance_cards", titleKey: "unlockAdvancedFinanceCards", descriptionKey: "unlockAdvancedFinanceCardsDesc", cost: 15, type: "cards", category: "economy", payload: { cards: ADVANCED_FINANCE_CARD_IDS } },
-  { id: "unlock_energy_sector", titleKey: "unlockEnergySector", descriptionKey: "unlockEnergySectorDesc", cost: 18, type: "industry", category: "business", payload: { industry: "energy" } },
-  { id: "unlock_extra_cash", titleKey: "unlockExtraCash", descriptionKey: "unlockExtraCashDesc", cost: 20, type: "starting_bonus", category: "start_bonus", payload: { extraCash: 5000 } },
-  { id: "unlock_lower_debt_risk", titleKey: "unlockLowerDebtRisk", descriptionKey: "unlockLowerDebtRiskDesc", cost: 25, type: "starting_bonus", category: "economy", payload: { debtThresholdBonus: 5000 } },
-  { id: "unlock_synergy_scanner", titleKey: "unlockSynergyScanner", descriptionKey: "unlockSynergyScannerDesc", cost: 12, type: "feature", category: "assets", payload: { synergyScanner: true } },
-  { id: "unlock_extended_run", titleKey: "unlockExtendedRun", descriptionKey: "unlockExtendedRunDesc", cost: 18, type: "run_bonus", category: "meta", payload: { extraTurns: 2 }, repeatable: true, maxLevel: 5, costScaling: 1.25 }
-];
-
-const translations = {
-  en: {
-    gameTitle: "Finance Roguelike",
-    chooseLanguage: "Choose language",
-    russian: "Russian",
-    english: "English",
-    currentRun: "Current Run",
-    turn: "Turn",
-    cash: "Cash",
-    profit: "Profit",
-    debt: "Debt",
-    valuation: "Valuation",
-    dashboard: "Dashboard",
-    decisions: "Decisions",
-    portfolio: "Portfolio",
-    market: "Market",
-    stocks: "Stocks",
-    economy: "Economy",
-    nextTurn: "Next",
-    reset: "Reset",
-    language: "Language",
-    resolveEventBeforeNextTurn: "Resolve the event before next turn",
-    eventPending: "Event pending",
-    actionPending: "Action pending",
-    currentTurnStatus: "Turn {turn} of {maxTurns}",
-    runFinishedAtTurn: "Run finished at turn {turn}",
-    dashboardSubtitle: "Overview only. This screen explains the run at a glance.",
-    decisionsSubtitle: "Resolve the current event here. One event choice only.",
-    portfolioSubtitle: "Owned assets, upgrades, and synergy progress.",
-    marketSubtitle: "Buy new businesses here. Market stays separate from overview.",
-    economySubtitle: "Macro regime, recent history, and sector hints.",
-    whatNeedsAttention: "What needs attention now",
-    runComplete: "Run complete",
-    eventResolved: "Event resolved",
-    eventPendingShort: "Event pending",
-    actionDone: "Action done",
-    actionPendingShort: "Action pending",
-    macroRegime: "Macro Regime",
-    runSnapshot: "Run Snapshot",
-    currentEvent: "Current Event",
-    actionCards: "Action Cards",
-    temporaryEffects: "Temporary Effects",
-    activeSynergies: "Active Synergies",
-    almostReady: "Almost ready",
-    noActiveSynergies: "No active synergies yet.",
-    noBusinessesMatchFilter: "No businesses match this filter.",
-    noBusinessesMatchMarketFilter: "No businesses match this market filter.",
-    all: "All",
-    allIndustries: "All Industries",
-    allRisk: "All Risk",
-    lowRisk: "Low Risk",
-    midRisk: "Mid Risk",
-    highRisk: "High Risk",
-    tech: "Tech",
-    realEstate: "Real Estate",
-    industry: "Industry",
-    energy: "Energy",
-    retail: "Retail",
-    finance: "Finance",
-    media: "Media",
-    logistics: "Logistics",
-    offers: "offers",
-    level: "Level",
-    revenue: "Revenue",
-    expenses: "Expenses",
-    risk: "Risk",
-    upgrade: "Upgrade",
-    sell: "Sell",
-    buy: "Buy",
-    expectedProfit: "Expected Profit",
-    macroSensitivity: "Macro Sensitivity",
-    synergyHooks: "Synergy Hooks",
-    industryLabel: "Industry",
-    recentEvents: "Recent Events",
-    whoWinsAndLoses: "Who wins and loses",
-    positive: "Positive",
-    negative: "Negative",
-    noCost: "No cost",
-    strategicShift: "Strategic shift",
-    lower: "Lower",
-    neutral: "Neutral",
-    medium: "Medium",
-    high: "High",
-    decisionLocked: "Decision locked. Take one move, then advance.",
-    nextTurnReady: "Next Turn is ready.",
-    resolveEventThenAction: "Resolve the event before taking an action.",
-    chooseAction: "Pick one action below.",
-    chooseLanguageLater: "Change language without resetting the current run.",
-    actionCompleted: "Action completed",
-    runStarted: "Run started",
-    runRestored: "Saved run restored",
-    choiceSelected: "Choice selected",
-    boughtBusiness: "Bought {name}",
-    upgradedBusiness: "Upgraded {name} to L{level}",
-    soldBusiness: "Sold {name} for {value}",
-    cardPlayed: "Card played: {name}",
-    runEndedInsolvency: "Run ended in insolvency.",
-    runCompletedSuccessfully: "Run completed successfully.",
-    finalValuation: "Final valuation: {value}",
-    debtPressureBrokeCompany: "Debt pressure broke the company.",
-    startingAsset: "Starting asset: {name}",
-    noLongDashboard: "No long dashboard. One active tab at a time.",
-    cashBuffer: "Cash buffer {cash}, debt load {debt}, projected turn profit {profit}.",
-    changeLanguage: "Change language",
-    close: "Close",
-    rate: "Interest Rate",
-    inflation: "Inflation",
-    demand: "Demand",
-    energyCost: "Energy Cost",
-    creditAvailability: "Credit Availability",
-    marketRisk: "Market Risk",
-    balancedExpansion: "Balanced Expansion",
-    balancedExpansionDesc: "No strong macro stress. Portfolio construction matters most.",
-    energyCrisis: "Energy Crisis",
-    energyCrisisDesc: "Energy and transport margins are under pressure.",
-    highRateSqueeze: "High Rate Squeeze",
-    highRateSqueezeDesc: "Capital is expensive and debt-heavy growth gets punished.",
-    inflationShock: "Inflation Shock",
-    inflationShockDesc: "Topline rises, but cost control matters even more.",
-    recession: "Recession",
-    recessionDesc: "Consumers slow down and cash discipline matters.",
-    cheapCreditBoom: "Cheap Credit Boom",
-    cheapCreditBoomDesc: "Expansion is cheap and aggressive scaling works.",
-    growthPlays: "growth plays",
-    idleCash: "idle cash",
-    slowOperators: "slow operators",
-    diversifiedPortfolios: "diversified portfolios",
-    synergyStacks: "synergy stacks",
-    singleAssetRuns: "single-asset runs",
-    leveragedExpansion: "leveraged expansion",
-    pricingPower: "pricing power",
-    efficientOperators: "efficient operators",
-    cashLabel: "cash",
-    defensiveBusinesses: "defensive businesses",
-    realEstateBusinesses: "real estate",
-    speculativeAssets: "speculative assets",
-    transport: "logistics",
-    manufacturingBusinesses: "manufacturing",
-    consumerBusiness: "Consumer-facing business with demand exposure.",
-    scalableUpside: "Scalable digital upside with higher volatility.",
-    infrastructurePlay: "Infrastructure play with energy sensitivity.",
-    defensiveAsset: "Defensive asset against cost shocks.",
-    audienceBusiness: "Audience business with fast swings.",
-    longDurationAsset: "Long-duration asset tied to rates.",
-    standalone: "Standalone",
-    rates: "rates",
-    balanced: "balanced",
-    lowRiskBucket: "Low risk",
-    midRiskBucket: "Mid risk",
-    highRiskBucket: "High risk",
-    rateInsightLow: "Funding remains manageable.",
-    rateInsightHigh: "Debt-heavy growth is under pressure.",
-    inflationInsightLow: "Inflation is not the main threat.",
-    inflationInsightHigh: "Pricing helps, but costs climb faster.",
-    demandInsightLow: "Consumers are pulling back.",
-    demandInsightHigh: "Demand still supports expansion.",
-    energyInsightLow: "Operating costs stay contained.",
-    energyInsightHigh: "Transport and factories lose margin.",
-    creditInsightLow: "Credit is selective.",
-    creditInsightHigh: "Expansion financing is accessible.",
-    marketRiskInsightLow: "Background volatility is moderate.",
-    marketRiskInsightHigh: "Risky lines can collapse quickly.",
-    metaProgress: "Prestige",
-    knowledge: "Knowledge",
-    knowledgeEarned: "Knowledge Earned",
-    completedRuns: "Completed Runs",
-    bestValuation: "Best Valuation",
-    bestTurnReached: "Best Turn Reached",
-    turnReached: "Turn Reached",
-    unlock: "Unlock",
-    locked: "Locked",
-    unlocked: "Unlocked",
-    newRun: "New Run",
-    backToDashboard: "Back to Dashboard",
-    runEndTitle: "Run Complete",
-    completedAllTurns: "Completed all turns",
-    bankruptcy: "Bankruptcy",
-    debtCollapse: "Debt Collapse",
-    unlockInMetaProgression: "Unlock in Meta Progression",
-    metaSubtitle: "Persistent progress between runs. Spend knowledge on new sectors and bonuses.",
-    runEndSubtitle: "This reward is granted once per completed run.",
-    finalCash: "Final Cash",
-    finalDebt: "Final Debt",
-    finalProfit: "Final Profit",
-    finalValuationLabel: "Final Valuation",
-    completionReason: "Completion Reason",
-    resetMeta: "Reset Meta",
-    resetMetaConfirm: "Meta progression reset.",
-    noUnlocksYet: "No unlocks purchased yet.",
-    availableUnlocks: "Available Unlocks",
-    purchasedUnlocks: "Purchased Unlocks",
-    rewardAlreadyClaimed: "Reward already claimed.",
-    unlockPurchased: "Unlock purchased",
-    notEnoughKnowledge: "Not enough Knowledge.",
-    unlockRealEstate: "Unlock Real Estate",
-    unlockRealEstateDesc: "Unlocks real estate businesses in Market.",
-    unlockMedia: "Unlock Media",
-    unlockMediaDesc: "Unlocks media businesses in Market.",
-    unlockAdvancedFinanceCards: "Unlock Advanced Finance Cards",
-    unlockAdvancedFinanceCardsDesc: "Adds debt, rates, and refinancing decision cards.",
-    unlockEnergySector: "Unlock Energy Sector",
-    unlockEnergySectorDesc: "Unlocks energy businesses in Market.",
-    unlockExtraCash: "Starting Bonus: Extra Cash",
-    unlockExtraCashDesc: "New runs start with +$5,000 cash.",
-    unlockLowerDebtRisk: "Starting Bonus: Lower Debt Risk",
-    unlockLowerDebtRiskDesc: "Debt pressure threshold becomes slightly safer.",
-    unlockSynergyScanner: "Unlock Synergy Scanner",
-    unlockSynergyScannerDesc: "Portfolio shows almost-complete synergies more clearly.",
-    unlockExtendedRun: "Extended Mandate",
-    unlockExtendedRunDesc: "New runs last 2 extra turns.",
-    metaUnlockedContent: "Unlocked Content",
-    devValidationPassed: "Game data validation passed.",
-    highOutputAsset: "High-output operator with heavy cost exposure.",
-    resolveEventThenChooseAction: "Resolve the event first, then choose one action.",
-    turnProgress: "Turn Progress",
-    eventStep: "Event",
-    actionStep: "Action",
-    completed: "Completed",
-    active: "Active",
-    pending: "Pending",
-    actionSelected: "Action selected",
-    actionNotSelected: "Action not selected",
-    nextTurnLocked: "Next Turn locked",
-    turnReadyToAdvance: "Turn ready to advance",
-    currentEventPanel: "Current Event",
-    turnAction: "Turn Action",
-    effectLabel: "Effect",
-    riskLabelTitle: "Risk",
-    select: "Select",
-    chooseCategory: "Choose one action category.",
-    buyAsset: "Buy Asset",
-    upgradeAsset: "Upgrade Asset",
-    sellAsset: "Sell Asset",
-    playCardAction: "Play Card",
-    eventResolvedPanel: "Event resolved",
-    actionPanelLocked: "Action unlocks after the event choice.",
-    actionCategoryBuyHint: "Pick one new business to add this turn.",
-    actionCategoryUpgradeHint: "Upgrade one owned business this turn.",
-    actionCategorySellHint: "Sell one owned business for liquidity.",
-    actionCategoryCardsHint: "Play one decision card this turn.",
-    turnShort: "Turn",
-    cashShort: "Cash",
-    marketReady: "Can buy 1 asset",
-    portfolioReady: "Can manage assets",
-    economyWatch: "Macro watch",
-    eventNeedsDecision: "Event unresolved",
-    swipeMoreOptions: "Swipe to see more options",
-    selected: "Selected",
-    chooseOption: "Choose option",
-    eventCompleted: "Event completed",
-    actionActiveLabel: "Action active",
-    lastsTurns: "for {turns} turns",
-    resolveEventCta: "Resolve Event",
-    openDecisions: "Open Decisions",
-    chooseActionType: "Choose one action type.",
-    back: "Back",
-    repayDebt: "Repay Debt",
-    repayDebtHint: "Use cash to reduce debt and risk.",
-    repayQuarter: "Repay 25%",
-    repayHalf: "Repay 50%",
-    repayAll: "Repay All",
-    debtCleared: "Debt cleared",
-    debtPayment: "Debt payment"
-    ,
-    marketBusinesses: "Private Assets",
-    marketStocks: "Stock Market",
-    businessesCategory: "Businesses",
-    realEstateCategory: "Real Estate",
-    stockMarketCategory: "Stock Market",
-    businessesCategoryDesc: "Buy companies and scale operating income.",
-    realEstateCategoryDesc: "Buy properties for steady passive income.",
-    stockMarketCategoryDesc: "Trade public equities and manage positions.",
-    chooseAssetType: "Choose asset type",
-    backToMarket: "Back to market",
-    turnActionBuyOneAsset: "Turn action: buy one asset",
-    assetPurchased: "Asset purchased",
-    turnActionCompletedLabel: "Turn action completed",
-    backToDecisions: "Back to Decisions",
-    actionAlreadyCompleted: "Action already completed",
-    shares: "Shares",
-    price: "Price",
-    sector: "Sector",
-    buyShares: "Buy Shares",
-    sellShares: "Sell Shares",
-    stockCycle: "Market Cycle",
-    momentum: "Momentum",
-    dividend: "Dividend",
-    availableCash: "Available Cash",
-    yourPosition: "Your Position",
-    buyPower: "Buy Power",
-    sellPosition: "Sell Position",
-    maxBuy: "Max buy",
-    maxSell: "Max sell",
-    boughtShares: "Bought {count} shares",
-    soldShares: "Sold {count} shares",
-    tapOrDrag: "Tap or drag to choose amount",
-    openChart: "Open chart",
-    ownedShares: "Owned: {count}",
-    thisTurn: "this turn",
-    valueLabel: "Value",
-    amountLabel: "Amount",
-    stockDetails: "Stock details",
-    noPosition: "No position yet.",
-    closeSheet: "Close",
-    chartRange: "Price range",
-    averagePrice: "Avg. cost",
-    turnChange: "Turn change",
-    repayDebtTile: "Debt Desk",
-    positionValue: "Position value",
-    profitLoss: "Profit / loss",
-    dividendIncome: "Dividend income",
-    dividendPerTurn: "Per turn",
-    dividendIncomePerTurn: "Dividend income: {value} this turn",
-    noDividendIncome: "This stock does not pay dividends",
-    peRatioLabel: "P/E",
-    valuationLabel: "Valuation",
-    cheapValuation: "Cheap",
-    fairValuation: "Fair",
-    expensiveValuation: "Expensive",
-    confirmBuy: "Confirm buy",
-    confirmSell: "Confirm sell",
-    dragToChooseAmount: "Drag to choose amount",
-    lastIterations: "Last 100 iterations",
-    growthStock: "Growth",
-    dividendStock: "Dividend",
-    stockTypeLabel: "Type",
-    dividendYieldLabel: "Dividend yield",
-    priceHistoryEmpty: "No price history yet.",
-    turnLabelShort: "Turn",
-    currentPriceLabel: "Current price",
-    allFilter: "All",
-    availableFilter: "Available",
-    purchasedFilter: "Purchased",
-    assetsCategory: "Assets",
-    businessCategory: "Business",
-    realEstateCategoryShort: "Real Estate",
-    marketCategoryShort: "Market",
-    economyCategoryShort: "Economy",
-    startCategoryShort: "Start",
-    metaCategoryShort: "Meta",
-    statusClosed: "Closed",
-    statusAvailable: "Available",
-    statusOpened: "Opened",
-    statusUpgradable: "Upgradable",
-    statusMax: "Max",
-    statusNoKnowledge: "Not enough Knowledge",
-    upgradeAction: "Upgrade",
-    unavailableAction: "Unavailable",
-    maxAction: "Max.",
-    currentEffectLabel: "Current effect",
-    nextEffectLabel: "Next level",
-    costLabel: "Cost",
-    statusLabel: "Status",
-    levelProgressLabel: "Level",
-    repeatableLabel: "Repeatable",
-    nextRunLengthLabel: "Next run length",
-    confirmResetMeta: "Reset all prestige progress?",
-    noMetaItemsMatchFilter: "No prestige upgrades match this filter.",
-    stockRising: "Stock rising",
-    stockFalling: "Stock falling",
-    stockNeutral: "Neutral",
-    newRunSetup: "New Run",
-    newRunSetupDesc: "Choose the opening position and how much pressure the run should apply.",
-    chooseScenario: "Starting scenario",
-    chooseDifficulty: "Difficulty",
-    startConfiguredRun: "Start run",
-    cancelSetup: "Keep current run",
-    scenarioLabel: "Scenario",
-    difficultyLabel: "Difficulty",
-    scenarioBalancedTitle: "Balanced Start",
-    scenarioBalancedDesc: "A classic opening with one random operating business and no debt.",
-    scenarioLeveragedTitle: "Leveraged Growth",
-    scenarioLeveragedDesc: "Start with a SaaS business, extra liquidity, and dangerous debt pressure.",
-    scenarioTraderTitle: "Market Trader",
-    scenarioTraderDesc: "Start with a tech business and an Aplix stock position in a more volatile market.",
-    difficultyRelaxedTitle: "Relaxed",
-    difficultyRelaxedDesc: "More cash, lower risk, and a safer debt threshold. Prestige rewards are reduced.",
-    difficultyNormalTitle: "Normal",
-    difficultyNormalDesc: "The intended balance for the main game.",
-    difficultyHardTitle: "Hard",
-    difficultyHardDesc: "Less cash, higher risk, and faster debt collapse. Prestige rewards are increased.",
-    setupCash: "Starting cash",
-    setupDebt: "Starting debt",
-    setupRisk: "Starting risk",
-    setupReward: "Prestige reward",
-    setupRewardReduced: "Ã—0.75",
-    setupRewardNormal: "Ã—1.00",
-    setupRewardIncreased: "Ã—1.25",
-    startingConfiguration: "{scenario} Â· {difficulty}"
-  },
-  ru: {
-    gameTitle: "Finance Roguelike",
-    chooseLanguage: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ ÑĞ·Ñ‹Ğº",
-    russian: "Ğ ÑƒÑÑĞºĞ¸Ğ¹",
-    english: "English",
-    currentRun: "Ğ¢ĞµĞºÑƒÑ‰Ğ°Ñ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ",
-    turn: "Ğ¥Ğ¾Ğ´",
-    cash: "Ğ”ĞµĞ½ÑŒĞ³Ğ¸",
-    profit: "ĞŸÑ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ",
-    debt: "Ğ”Ğ¾Ğ»Ğ³",
-    valuation: "ĞÑ†ĞµĞ½ĞºĞ°",
-    dashboard: "ĞĞ±Ğ·Ğ¾Ñ€",
-    decisions: "Ğ ĞµÑˆĞµĞ½Ğ¸Ñ",
-    portfolio: "ĞŸĞ¾Ñ€Ñ‚Ñ„ĞµĞ»ÑŒ",
-    market: "Ğ Ñ‹Ğ½Ğ¾Ğº",
-    stocks: "ĞĞºÑ†Ğ¸Ğ¸",
-    economy: "Ğ­ĞºĞ¾Ğ½Ğ¾Ğ¼Ğ¸ĞºĞ°",
-    nextTurn: "Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹",
-    reset: "Ğ¡Ğ±Ñ€Ğ¾Ñ",
-    language: "Ğ¯Ğ·Ñ‹Ğº",
-    resolveEventBeforeNextTurn: "Ğ ĞµÑˆĞ¸Ñ‚Ğµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ğ¿ĞµÑ€ĞµĞ´ ÑĞ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¼ Ñ…Ğ¾Ğ´Ğ¾Ğ¼",
-    eventPending: "Ğ¡Ğ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ğ½Ğµ Ñ€ĞµÑˆĞµĞ½Ğ¾",
-    actionPending: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ½Ğµ Ğ²Ñ‹Ğ±Ñ€Ğ°Ğ½Ğ¾",
-    currentTurnStatus: "Ğ¥Ğ¾Ğ´ {turn} Ğ¸Ğ· {maxTurns}",
-    runFinishedAtTurn: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ° Ğ½Ğ° Ñ…Ğ¾Ğ´Ñƒ {turn}",
-    dashboardSubtitle: "Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ¾Ğ±Ğ·Ğ¾Ñ€. Ğ­Ñ‚Ğ¾Ñ‚ ÑĞºÑ€Ğ°Ğ½ Ğ¾Ğ±ÑŠÑÑĞ½ÑĞµÑ‚ ÑĞ¾ÑÑ‚Ğ¾ÑĞ½Ğ¸Ğµ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸ Ñ Ğ¿ĞµÑ€Ğ²Ğ¾Ğ³Ğ¾ Ğ²Ğ·Ğ³Ğ»ÑĞ´Ğ°.",
-    decisionsSubtitle: "Ğ—Ğ´ĞµÑÑŒ Ñ€ĞµÑˆĞ°ĞµÑ‚ÑÑ Ñ‚ĞµĞºÑƒÑ‰ĞµĞµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ. Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ¾Ğ´Ğ¸Ğ½ Ğ²Ñ‹Ğ±Ğ¾Ñ€ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ñ.",
-    portfolioSubtitle: "Ğ’Ğ°ÑˆĞ¸ Ğ°ĞºÑ‚Ğ¸Ğ²Ñ‹, ÑƒĞ»ÑƒÑ‡ÑˆĞµĞ½Ğ¸Ñ Ğ¸ Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑ ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¹.",
-    marketSubtitle: "ĞŸĞ¾ĞºÑƒĞ¿ĞºĞ° Ğ½Ğ¾Ğ²Ñ‹Ñ… Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ². Ğ Ñ‹Ğ½Ğ¾Ğº Ğ¾Ñ‚Ğ´ĞµĞ»ĞµĞ½ Ğ¾Ñ‚ Ğ¾Ğ±Ğ·Ğ¾Ñ€Ğ°.",
-    economySubtitle: "ĞœĞ°ĞºÑ€Ğ¾-Ñ€ĞµĞ¶Ğ¸Ğ¼, Ğ¸ÑÑ‚Ğ¾Ñ€Ğ¸Ñ Ğ¸ Ğ¿Ğ¾Ğ´ÑĞºĞ°Ğ·ĞºĞ¸ Ğ¿Ğ¾ ÑĞµĞºÑ‚Ğ¾Ñ€Ğ°Ğ¼.",
-    whatNeedsAttention: "Ğ§Ñ‚Ğ¾ Ğ²Ğ°Ğ¶Ğ½Ğ¾ Ğ¿Ñ€ÑĞ¼Ğ¾ ÑĞµĞ¹Ñ‡Ğ°Ñ",
-    runComplete: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ°",
-    eventResolved: "Ğ¡Ğ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ñ€ĞµÑˆĞµĞ½Ğ¾",
-    eventPendingShort: "Ğ¡Ğ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ğ½Ğµ Ñ€ĞµÑˆĞµĞ½Ğ¾",
-    actionDone: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ ÑĞ´ĞµĞ»Ğ°Ğ½Ğ¾",
-    actionPendingShort: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ½Ğµ Ğ²Ñ‹Ğ±Ñ€Ğ°Ğ½Ğ¾",
-    macroRegime: "ĞœĞ°ĞºÑ€Ğ¾-Ñ€ĞµĞ¶Ğ¸Ğ¼",
-    runSnapshot: "Ğ¡Ğ½Ğ¸Ğ¼Ğ¾Ğº Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸",
-    currentEvent: "Ğ¢ĞµĞºÑƒÑ‰ĞµĞµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ",
-    actionCards: "ĞšĞ°Ñ€Ñ‚Ñ‹ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğ¹",
-    temporaryEffects: "Ğ’Ñ€ĞµĞ¼ĞµĞ½Ğ½Ñ‹Ğµ ÑÑ„Ñ„ĞµĞºÑ‚Ñ‹",
-    activeSynergies: "ĞĞºÑ‚Ğ¸Ğ²Ğ½Ñ‹Ğµ ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¸",
-    almostReady: "ĞŸĞ¾Ñ‡Ñ‚Ğ¸ ÑĞ¾Ğ±Ñ€Ğ°Ğ½Ğ¾",
-    noActiveSynergies: "ĞŸĞ¾ĞºĞ° Ğ½ĞµÑ‚ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ½Ñ‹Ñ… ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¹.",
-    noBusinessesMatchFilter: "ĞĞµÑ‚ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ² Ğ¿Ğ¾Ğ´ ÑÑ‚Ğ¾Ñ‚ Ñ„Ğ¸Ğ»ÑŒÑ‚Ñ€.",
-    noBusinessesMatchMarketFilter: "ĞĞµÑ‚ Ğ¿Ñ€ĞµĞ´Ğ»Ğ¾Ğ¶ĞµĞ½Ğ¸Ğ¹ Ğ¿Ğ¾Ğ´ ÑÑ‚Ğ¾Ñ‚ Ñ„Ğ¸Ğ»ÑŒÑ‚Ñ€ Ñ€Ñ‹Ğ½ĞºĞ°.",
-    all: "Ğ’ÑĞµ",
-    allIndustries: "Ğ’ÑĞµ Ğ¾Ñ‚Ñ€Ğ°ÑĞ»Ğ¸",
-    allRisk: "Ğ›ÑĞ±Ğ¾Ğ¹ Ñ€Ğ¸ÑĞº",
-    lowRisk: "ĞĞ¸Ğ·ĞºĞ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    midRisk: "Ğ¡Ñ€ĞµĞ´Ğ½Ğ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    highRisk: "Ğ’Ñ‹ÑĞ¾ĞºĞ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    tech: "Ğ¢ĞµÑ…",
-    realEstate: "ĞĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    industry: "ĞŸÑ€Ğ¾Ğ¼Ñ‹ÑˆĞ»ĞµĞ½Ğ½Ğ¾ÑÑ‚ÑŒ",
-    energy: "Ğ­Ğ½ĞµÑ€Ğ³Ğ¸Ñ",
-    retail: "Ğ Ğ¸Ñ‚ĞµĞ¹Ğ»",
-    finance: "Ğ¤Ğ¸Ğ½Ğ°Ğ½ÑÑ‹",
-    media: "ĞœĞµĞ´Ğ¸Ğ°",
-    logistics: "Ğ›Ğ¾Ğ³Ğ¸ÑÑ‚Ğ¸ĞºĞ°",
-    offers: "Ğ¿Ñ€ĞµĞ´Ğ»Ğ¾Ğ¶ĞµĞ½Ğ¸Ğ¹",
-    level: "Ğ£Ñ€Ğ¾Ğ²ĞµĞ½ÑŒ",
-    revenue: "Ğ”Ğ¾Ñ…Ğ¾Ğ´",
-    expenses: "Ğ Ğ°ÑÑ…Ğ¾Ğ´Ñ‹",
-    risk: "Ğ Ğ¸ÑĞº",
-    upgrade: "Ğ£Ğ»ÑƒÑ‡ÑˆĞ¸Ñ‚ÑŒ",
-    sell: "ĞŸÑ€Ğ¾Ğ´Ğ°Ñ‚ÑŒ",
-    buy: "ĞšÑƒĞ¿Ğ¸Ñ‚ÑŒ",
-    expectedProfit: "ĞĞ¶Ğ¸Ğ´Ğ°ĞµĞ¼Ğ°Ñ Ğ¿Ñ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ",
-    macroSensitivity: "Ğ§ÑƒĞ²ÑÑ‚Ğ²Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ¾ÑÑ‚ÑŒ Ğº Ğ¼Ğ°ĞºÑ€Ğ¾",
-    synergyHooks: "Ğ¡Ğ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¸",
-    industryLabel: "ĞÑ‚Ñ€Ğ°ÑĞ»ÑŒ",
-    recentEvents: "ĞŸĞ¾ÑĞ»ĞµĞ´Ğ½Ğ¸Ğµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ñ",
-    whoWinsAndLoses: "ĞšÑ‚Ğ¾ Ğ²Ñ‹Ğ¸Ğ³Ñ€Ñ‹Ğ²Ğ°ĞµÑ‚ Ğ¸ Ğ¿Ñ€Ğ¾Ğ¸Ğ³Ñ€Ñ‹Ğ²Ğ°ĞµÑ‚",
-    positive: "ĞŸĞ»ÑÑ",
-    negative: "ĞœĞ¸Ğ½ÑƒÑ",
-    noCost: "Ğ‘ĞµĞ· ÑÑ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚Ğ¸",
-    strategicShift: "Ğ¡Ñ‚Ñ€Ğ°Ñ‚ĞµĞ³Ğ¸Ñ‡ĞµÑĞºĞ¸Ğ¹ ÑĞ´Ğ²Ğ¸Ğ³",
-    lower: "ĞĞ¸Ğ¶Ğµ",
-    neutral: "ĞĞµĞ¹Ñ‚Ñ€Ğ°Ğ»ÑŒĞ½Ğ¾",
-    medium: "Ğ¡Ñ€ĞµĞ´Ğ½Ğ¸Ğ¹",
-    high: "Ğ’Ñ‹ÑĞ¾ĞºĞ¸Ğ¹",
-    decisionLocked: "Ğ’Ñ‹Ğ±Ğ¾Ñ€ Ğ·Ğ°Ñ„Ğ¸ĞºÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½. Ğ¡Ğ´ĞµĞ»Ğ°Ğ¹Ñ‚Ğµ Ğ¾Ğ´Ğ½Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ¸ Ğ¿ĞµÑ€ĞµÑ…Ğ¾Ğ´Ğ¸Ñ‚Ğµ Ğº ÑĞ»ĞµĞ´ÑƒÑÑ‰ĞµĞ¼Ñƒ Ñ…Ğ¾Ğ´Ñƒ.",
-    nextTurnReady: "Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹ Ñ…Ğ¾Ğ´ Ğ³Ğ¾Ñ‚Ğ¾Ğ².",
-    resolveEventThenAction: "Ğ ĞµÑˆĞ¸Ñ‚Ğµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ğ¿ĞµÑ€ĞµĞ´ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸ĞµĞ¼.",
-    chooseAction: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ½Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ½Ğ¸Ğ¶Ğµ.",
-    chooseLanguageLater: "Ğ¡Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑĞ·Ñ‹Ğº Ğ±ĞµĞ· ÑĞ±Ñ€Ğ¾ÑĞ° Ñ‚ĞµĞºÑƒÑ‰ĞµĞ¹ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸.",
-    actionCompleted: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    runStarted: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ Ğ½Ğ°Ñ‡Ğ°Ğ»Ğ°ÑÑŒ",
-    runRestored: "Ğ¡Ğ¾Ñ…Ñ€Ğ°Ğ½Ñ‘Ğ½Ğ½Ğ°Ñ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ Ğ²Ğ¾ÑÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ»ĞµĞ½Ğ°",
-    choiceSelected: "Ğ’Ñ‹Ğ±Ñ€Ğ°Ğ½ Ğ²Ğ°Ñ€Ğ¸Ğ°Ğ½Ñ‚",
-    boughtBusiness: "ĞšÑƒĞ¿Ğ»ĞµĞ½ {name}",
-    upgradedBusiness: "{name} ÑƒĞ»ÑƒÑ‡ÑˆĞµĞ½ Ğ´Ğ¾ ÑƒÑ€. {level}",
-    soldBusiness: "{name} Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ½ Ğ·Ğ° {value}",
-    cardPlayed: "Ğ Ğ°Ğ·Ñ‹Ğ³Ñ€Ğ°Ğ½Ğ° ĞºĞ°Ñ€Ñ‚Ğ°: {name}",
-    runEndedInsolvency: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ Ğ·Ğ°ĞºĞ¾Ğ½Ñ‡Ğ¸Ğ»Ğ°ÑÑŒ Ğ¸Ğ·-Ğ·Ğ° Ğ½ĞµĞ¿Ğ»Ğ°Ñ‚ĞµĞ¶ĞµÑĞ¿Ğ¾ÑĞ¾Ğ±Ğ½Ğ¾ÑÑ‚Ğ¸.",
-    runCompletedSuccessfully: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ ÑƒÑĞ¿ĞµÑˆĞ½Ğ¾ Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ°.",
-    finalValuation: "Ğ˜Ñ‚Ğ¾Ğ³Ğ¾Ğ²Ğ°Ñ Ğ¾Ñ†ĞµĞ½ĞºĞ°: {value}",
-    debtPressureBrokeCompany: "Ğ”Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğµ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ğµ ÑĞ»Ğ¾Ğ¼Ğ°Ğ»Ğ¾ ĞºĞ¾Ğ¼Ğ¿Ğ°Ğ½Ğ¸Ñ.",
-    startingAsset: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²Ñ‹Ğ¹ Ğ°ĞºÑ‚Ğ¸Ğ²: {name}",
-    noLongDashboard: "Ğ‘ĞµĞ· Ğ´Ğ»Ğ¸Ğ½Ğ½Ğ¾Ğ¹ Ğ¿Ñ€Ğ¾ĞºÑ€ÑƒÑ‚ĞºĞ¸. Ğ¢Ğ¾Ğ»ÑŒĞºĞ¾ Ğ¾Ğ´Ğ½Ğ° Ğ°ĞºÑ‚Ğ¸Ğ²Ğ½Ğ°Ñ Ğ²ĞºĞ»Ğ°Ğ´ĞºĞ°.",
-    cashBuffer: "ĞŸĞ¾Ğ´ÑƒÑˆĞºĞ° Ğ´ĞµĞ½ĞµĞ³ {cash}, Ğ´Ğ¾Ğ»Ğ³ {debt}, Ğ¿Ñ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ Ñ…Ğ¾Ğ´Ğ° {profit}.",
-    changeLanguage: "Ğ¡Ğ¼ĞµĞ½Ğ¸Ñ‚ÑŒ ÑĞ·Ñ‹Ğº",
-    close: "Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚ÑŒ",
-    rate: "Ğ¡Ñ‚Ğ°Ğ²ĞºĞ°",
-    inflation: "Ğ˜Ğ½Ñ„Ğ»ÑÑ†Ğ¸Ñ",
-    demand: "Ğ¡Ğ¿Ñ€Ğ¾Ñ",
-    energyCost: "Ğ¦ĞµĞ½Ğ° ÑĞ½ĞµÑ€Ğ³Ğ¸Ğ¸",
-    creditAvailability: "Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ÑÑ‚ÑŒ ĞºÑ€ĞµĞ´Ğ¸Ñ‚Ğ°",
-    marketRisk: "Ğ Ñ‹Ğ½Ğ¾Ñ‡Ğ½Ñ‹Ğ¹ Ñ€Ğ¸ÑĞº",
-    balancedExpansion: "Ğ¡Ğ±Ğ°Ğ»Ğ°Ğ½ÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ½Ñ‹Ğ¹ Ñ€Ğ¾ÑÑ‚",
-    balancedExpansionDesc: "Ğ¡Ğ¸Ğ»ÑŒĞ½Ğ¾Ğ³Ğ¾ Ğ¼Ğ°ĞºÑ€Ğ¾-ÑÑ‚Ñ€ĞµÑÑĞ° Ğ½ĞµÑ‚. Ğ’Ğ°Ğ¶Ğ½ĞµĞµ ÑĞ±Ğ¾Ñ€ĞºĞ° Ğ¿Ğ¾Ñ€Ñ‚Ñ„ĞµĞ»Ñ.",
-    energyCrisis: "Ğ­Ğ½ĞµÑ€Ğ³Ğ¾ĞºÑ€Ğ¸Ğ·Ğ¸Ñ",
-    energyCrisisDesc: "ĞœĞ°Ñ€Ğ¶Ğ° ÑĞ½ĞµÑ€Ğ³Ğ¸Ğ¸ Ğ¸ Ñ‚Ñ€Ğ°Ğ½ÑĞ¿Ğ¾Ñ€Ñ‚Ğ° Ğ¿Ğ¾Ğ´ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸ĞµĞ¼.",
-    highRateSqueeze: "Ğ”Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ğµ Ğ²Ñ‹ÑĞ¾ĞºĞ¸Ñ… ÑÑ‚Ğ°Ğ²Ğ¾Ğº",
-    highRateSqueezeDesc: "ĞšĞ°Ğ¿Ğ¸Ñ‚Ğ°Ğ» Ğ´Ğ¾Ñ€Ğ¾Ğ³Ğ¾Ğ¹, Ğ° Ñ€Ğ¾ÑÑ‚ Ğ½Ğ° Ğ´Ğ¾Ğ»Ğ³Ğµ Ğ½Ğ°ĞºĞ°Ğ·Ñ‹Ğ²Ğ°ĞµÑ‚ÑÑ.",
-    inflationShock: "Ğ˜Ğ½Ñ„Ğ»ÑÑ†Ğ¸Ğ¾Ğ½Ğ½Ñ‹Ğ¹ ÑˆĞ¾Ğº",
-    inflationShockDesc: "Ğ’Ñ‹Ñ€ÑƒÑ‡ĞºĞ° Ñ€Ğ°ÑÑ‚ĞµÑ‚, Ğ½Ğ¾ ĞºĞ¾Ğ½Ñ‚Ñ€Ğ¾Ğ»ÑŒ Ñ€Ğ°ÑÑ…Ğ¾Ğ´Ğ¾Ğ² ĞµÑ‰Ğµ Ğ²Ğ°Ğ¶Ğ½ĞµĞµ.",
-    recession: "Ğ ĞµÑ†ĞµÑÑĞ¸Ñ",
-    recessionDesc: "ĞŸĞ¾Ñ‚Ñ€ĞµĞ±Ğ¸Ñ‚ĞµĞ»Ğ¸ Ğ·Ğ°Ğ¼ĞµĞ´Ğ»ÑÑÑ‚ÑÑ, Ğ²Ğ°Ğ¶Ğ½Ğ° Ğ´Ğ¸ÑÑ†Ğ¸Ğ¿Ğ»Ğ¸Ğ½Ğ° Ğ¿Ğ¾ ĞºÑÑˆÑƒ.",
-    cheapCreditBoom: "Ğ‘ÑƒĞ¼ Ğ´ĞµÑˆĞµĞ²Ğ¾Ğ³Ğ¾ ĞºÑ€ĞµĞ´Ğ¸Ñ‚Ğ°",
-    cheapCreditBoomDesc: "Ğ Ğ°ÑÑˆĞ¸Ñ€ÑÑ‚ÑŒÑÑ Ğ´ĞµÑˆĞµĞ²Ğ¾, Ğ°Ğ³Ñ€ĞµÑÑĞ¸Ğ²Ğ½Ñ‹Ğ¹ Ñ€Ğ¾ÑÑ‚ Ñ€Ğ°Ğ±Ğ¾Ñ‚Ğ°ĞµÑ‚.",
-    growthPlays: "Ñ€Ğ¾ÑÑ‚Ğ¾Ğ²Ñ‹Ğµ Ğ°ĞºÑ‚Ğ¸Ğ²Ñ‹",
-    idleCash: "Ğ¿Ñ€Ğ¾ÑÑ‚Ğ¾Ğ¹ ĞºÑÑˆ",
-    slowOperators: "Ğ¼ĞµĞ´Ğ»ĞµĞ½Ğ½Ñ‹Ğµ Ğ¾Ğ¿ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€Ñ‹",
-    diversifiedPortfolios: "Ğ´Ğ¸Ğ²ĞµÑ€ÑĞ¸Ñ„Ğ¸Ñ†Ğ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ½Ñ‹Ğµ Ğ¿Ğ¾Ñ€Ñ‚Ñ„ĞµĞ»Ğ¸",
-    synergyStacks: "ÑĞ±Ğ¾Ñ€ĞºĞ¸ ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¹",
-    singleAssetRuns: "Ğ·Ğ°Ğ±ĞµĞ³Ğ¸ Ğ² Ğ¾Ğ´Ğ¸Ğ½ Ğ°ĞºÑ‚Ğ¸Ğ²",
-    leveragedExpansion: "Ñ€Ğ¾ÑÑ‚ Ğ½Ğ° Ğ´Ğ¾Ğ»Ğ³Ğµ",
-    pricingPower: "ÑĞ¸Ğ»ÑŒĞ½Ğ¾Ğµ Ñ†ĞµĞ½Ğ¾Ğ¾Ğ±Ñ€Ğ°Ğ·Ğ¾Ğ²Ğ°Ğ½Ğ¸Ğµ",
-    efficientOperators: "ÑÑ„Ñ„ĞµĞºÑ‚Ğ¸Ğ²Ğ½Ñ‹Ğµ Ğ¾Ğ¿ĞµÑ€Ğ°Ñ‚Ğ¾Ñ€Ñ‹",
-    cashLabel: "ĞºÑÑˆ",
-    defensiveBusinesses: "Ğ·Ğ°Ñ‰Ğ¸Ñ‚Ğ½Ñ‹Ğµ Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹",
-    realEstateBusinesses: "Ğ½ĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    speculativeAssets: "ÑĞ¿ĞµĞºÑƒĞ»ÑÑ‚Ğ¸Ğ²Ğ½Ñ‹Ğµ Ğ°ĞºÑ‚Ğ¸Ğ²Ñ‹",
-    transport: "Ğ»Ğ¾Ğ³Ğ¸ÑÑ‚Ğ¸ĞºĞ°",
-    manufacturingBusinesses: "Ğ¿Ñ€Ğ¾Ğ¸Ğ·Ğ²Ğ¾Ğ´ÑÑ‚Ğ²Ğ¾",
-    consumerBusiness: "ĞŸĞ¾Ñ‚Ñ€ĞµĞ±Ğ¸Ñ‚ĞµĞ»ÑŒÑĞºĞ¸Ğ¹ Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ñ Ğ·Ğ°Ğ²Ğ¸ÑĞ¸Ğ¼Ğ¾ÑÑ‚ÑŒÑ Ğ¾Ñ‚ ÑĞ¿Ñ€Ğ¾ÑĞ°.",
-    scalableUpside: "Ğ¦Ğ¸Ñ„Ñ€Ğ¾Ğ²Ğ¾Ğ¹ Ñ€Ğ¾ÑÑ‚ Ñ Ğ±Ğ¾Ğ»ĞµĞµ Ğ²Ñ‹ÑĞ¾ĞºĞ¾Ğ¹ Ğ²Ğ¾Ğ»Ğ°Ñ‚Ğ¸Ğ»ÑŒĞ½Ğ¾ÑÑ‚ÑŒÑ.",
-    infrastructurePlay: "Ğ˜Ğ½Ñ„Ñ€Ğ°ÑÑ‚Ñ€ÑƒĞºÑ‚ÑƒÑ€Ğ½Ñ‹Ğ¹ Ğ°ĞºÑ‚Ğ¸Ğ² Ñ Ñ‡ÑƒĞ²ÑÑ‚Ğ²Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ¾ÑÑ‚ÑŒÑ Ğº ÑĞ½ĞµÑ€Ğ³Ğ¸Ğ¸.",
-    defensiveAsset: "Ğ—Ğ°Ñ‰Ğ¸Ñ‚Ğ½Ñ‹Ğ¹ Ğ°ĞºÑ‚Ğ¸Ğ² Ğ¿Ñ€Ğ¾Ñ‚Ğ¸Ğ² ÑˆĞ¾ĞºĞ° Ğ·Ğ°Ñ‚Ñ€Ğ°Ñ‚.",
-    audienceBusiness: "ĞœĞµĞ´Ğ¸Ğ°-Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ñ Ğ±Ñ‹ÑÑ‚Ñ€Ñ‹Ğ¼Ğ¸ ĞºĞ¾Ğ»ĞµĞ±Ğ°Ğ½Ğ¸ÑĞ¼Ğ¸ Ğ°ÑƒĞ´Ğ¸Ñ‚Ğ¾Ñ€Ğ¸Ğ¸.",
-    longDurationAsset: "Ğ”Ğ»Ğ¸Ğ½Ğ½Ñ‹Ğ¹ Ğ°ĞºÑ‚Ğ¸Ğ², Ğ·Ğ°Ğ²ÑĞ·Ğ°Ğ½Ğ½Ñ‹Ğ¹ Ğ½Ğ° ÑÑ‚Ğ°Ğ²ĞºĞ°Ñ….",
-    standalone: "Ğ¡Ğ°Ğ¼Ğ¾ÑÑ‚Ğ¾ÑÑ‚ĞµĞ»ÑŒĞ½Ğ¾",
-    rates: "ÑÑ‚Ğ°Ğ²ĞºĞ¸",
-    balanced: "ÑĞ±Ğ°Ğ»Ğ°Ğ½ÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ½Ğ¾",
-    lowRiskBucket: "ĞĞ¸Ğ·ĞºĞ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    midRiskBucket: "Ğ¡Ñ€ĞµĞ´Ğ½Ğ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    highRiskBucket: "Ğ’Ñ‹ÑĞ¾ĞºĞ¸Ğ¹ Ñ€Ğ¸ÑĞº",
-    rateInsightLow: "Ğ¤Ğ¸Ğ½Ğ°Ğ½ÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ¸Ğµ Ğ¿Ğ¾ĞºĞ° Ğ¾ÑÑ‚Ğ°ĞµÑ‚ÑÑ ÑƒĞ¿Ñ€Ğ°Ğ²Ğ»ÑĞµĞ¼Ñ‹Ğ¼.",
-    rateInsightHigh: "Ğ Ğ¾ÑÑ‚ Ğ½Ğ° Ğ´Ğ¾Ğ»Ğ³Ğµ Ğ¿Ğ¾Ğ´ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸ĞµĞ¼.",
-    inflationInsightLow: "Ğ˜Ğ½Ñ„Ğ»ÑÑ†Ğ¸Ñ Ğ½Ğµ Ğ³Ğ»Ğ°Ğ²Ğ½Ñ‹Ğ¹ Ñ€Ğ¸ÑĞº.",
-    inflationInsightHigh: "Ğ¦ĞµĞ½Ñ‹ Ğ¿Ğ¾Ğ¼Ğ¾Ğ³Ğ°ÑÑ‚, Ğ½Ğ¾ Ñ€Ğ°ÑÑ…Ğ¾Ğ´Ñ‹ Ñ€Ğ°ÑÑ‚ÑƒÑ‚ Ğ±Ñ‹ÑÑ‚Ñ€ĞµĞµ.",
-    demandInsightLow: "ĞŸĞ¾Ñ‚Ñ€ĞµĞ±Ğ¸Ñ‚ĞµĞ»Ğ¸ ÑĞ¾ĞºÑ€Ğ°Ñ‰Ğ°ÑÑ‚ Ñ‚Ñ€Ğ°Ñ‚Ñ‹.",
-    demandInsightHigh: "Ğ¡Ğ¿Ñ€Ğ¾Ñ Ğ¿Ğ¾ĞºĞ° Ğ¿Ğ¾Ğ´Ğ´ĞµÑ€Ğ¶Ğ¸Ğ²Ğ°ĞµÑ‚ Ñ€Ğ¾ÑÑ‚.",
-    energyInsightLow: "ĞĞ¿ĞµÑ€Ğ°Ñ†Ğ¸Ğ¾Ğ½Ğ½Ñ‹Ğµ Ğ·Ğ°Ñ‚Ñ€Ğ°Ñ‚Ñ‹ Ğ¾ÑÑ‚Ğ°ÑÑ‚ÑÑ Ğ¿Ğ¾Ğ´ ĞºĞ¾Ğ½Ñ‚Ñ€Ğ¾Ğ»ĞµĞ¼.",
-    energyInsightHigh: "Ğ›Ğ¾Ğ³Ğ¸ÑÑ‚Ğ¸ĞºĞ° Ğ¸ Ñ„Ğ°Ğ±Ñ€Ğ¸ĞºĞ¸ Ñ‚ĞµÑ€ÑÑÑ‚ Ğ¼Ğ°Ñ€Ğ¶Ñƒ.",
-    creditInsightLow: "ĞšÑ€ĞµĞ´Ğ¸Ñ‚ Ğ²Ñ‹Ğ´Ğ°ÑÑ‚ Ğ¾ÑÑ‚Ğ¾Ñ€Ğ¾Ğ¶Ğ½Ğ¾.",
-    creditInsightHigh: "Ğ¤Ğ¸Ğ½Ğ°Ğ½ÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ¸Ğµ Ñ€Ğ°ÑÑˆĞ¸Ñ€ĞµĞ½Ğ¸Ñ Ğ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾.",
-    marketRiskInsightLow: "Ğ¤Ğ¾Ğ½Ğ¾Ğ²Ğ°Ñ Ğ²Ğ¾Ğ»Ğ°Ñ‚Ğ¸Ğ»ÑŒĞ½Ğ¾ÑÑ‚ÑŒ ÑƒĞ¼ĞµÑ€ĞµĞ½Ğ½Ğ°Ñ.",
-    marketRiskInsightHigh: "Ğ Ğ¸ÑĞºĞ¾Ğ²Ğ°Ğ½Ğ½Ñ‹Ğµ Ğ»Ğ¸Ğ½Ğ¸Ğ¸ Ğ¼Ğ¾Ğ³ÑƒÑ‚ Ñ€ĞµĞ·ĞºĞ¾ Ğ¿Ñ€Ğ¾ÑĞµÑÑ‚ÑŒ.",
-    metaProgress: "ĞŸÑ€ĞµÑÑ‚Ğ¸Ğ¶",
-    knowledge: "Ğ—Ğ½Ğ°Ğ½Ğ¸Ñ",
-    knowledgeEarned: "ĞŸĞ¾Ğ»ÑƒÑ‡ĞµĞ½Ğ¾ Ğ·Ğ½Ğ°Ğ½Ğ¸Ğ¹",
-    completedRuns: "Ğ—Ğ°Ğ²ĞµÑ€ÑˆÑ‘Ğ½Ğ½Ñ‹Ğµ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸",
-    bestValuation: "Ğ›ÑƒÑ‡ÑˆĞ°Ñ Ğ¾Ñ†ĞµĞ½ĞºĞ°",
-    bestTurnReached: "Ğ›ÑƒÑ‡ÑˆĞ¸Ğ¹ Ğ´Ğ¾ÑÑ‚Ğ¸Ğ³Ğ½ÑƒÑ‚Ñ‹Ğ¹ Ñ…Ğ¾Ğ´",
-    turnReached: "Ğ”Ğ¾ÑÑ‚Ğ¸Ğ³Ğ½ÑƒÑ‚Ñ‹Ğ¹ Ñ…Ğ¾Ğ´",
-    unlock: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ",
-    locked: "Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚Ğ¾",
-    unlocked: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ğ¾",
-    newRun: "ĞĞ¾Ğ²Ğ°Ñ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ",
-    backToDashboard: "ĞĞ°Ğ·Ğ°Ğ´ Ğº Ğ¾Ğ±Ğ·Ğ¾Ñ€Ñƒ",
-    runEndTitle: "ĞŸĞ°Ñ€Ñ‚Ğ¸Ñ Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ°",
-    completedAllTurns: "ĞŸÑ€Ğ¾Ğ¹Ğ´ĞµĞ½Ñ‹ Ğ²ÑĞµ Ñ…Ğ¾Ğ´Ñ‹",
-    bankruptcy: "Ğ‘Ğ°Ğ½ĞºÑ€Ğ¾Ñ‚ÑÑ‚Ğ²Ğ¾",
-    debtCollapse: "Ğ”Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğ¹ ĞºÑ€Ğ°Ñ…",
-    unlockInMetaProgression: "ĞÑ‚ĞºÑ€Ğ¾Ğ¹Ñ‚Ğµ Ğ² Ğ¼ĞµÑ‚Ğ°-Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑĞ¸Ğ¸",
-    metaSubtitle: "ĞŸĞ¾ÑÑ‚Ğ¾ÑĞ½Ğ½Ñ‹Ğ¹ Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑ Ğ¼ĞµĞ¶Ğ´Ñƒ Ğ¿Ğ°Ñ€Ñ‚Ğ¸ÑĞ¼Ğ¸. Ğ¢Ñ€Ğ°Ñ‚ÑŒÑ‚Ğµ Ğ·Ğ½Ğ°Ğ½Ğ¸Ñ Ğ½Ğ° Ğ½Ğ¾Ğ²Ñ‹Ğµ ÑĞµĞºÑ‚Ğ¾Ñ€Ñ‹ Ğ¸ Ğ±Ğ¾Ğ½ÑƒÑÑ‹.",
-    runEndSubtitle: "Ğ­Ñ‚Ğ° Ğ½Ğ°Ğ³Ñ€Ğ°Ğ´Ğ° Ğ²Ñ‹Ğ´Ğ°Ñ‘Ñ‚ÑÑ Ğ¾Ğ´Ğ¸Ğ½ Ñ€Ğ°Ğ· Ğ·Ğ° ĞºĞ°Ğ¶Ğ´ÑƒÑ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ.",
-    finalCash: "Ğ˜Ñ‚Ğ¾Ğ³Ğ¾Ğ²Ñ‹Ğµ Ğ´ĞµĞ½ÑŒĞ³Ğ¸",
-    finalDebt: "Ğ˜Ñ‚Ğ¾Ğ³Ğ¾Ğ²Ñ‹Ğ¹ Ğ´Ğ¾Ğ»Ğ³",
-    finalProfit: "Ğ˜Ñ‚Ğ¾Ğ³Ğ¾Ğ²Ğ°Ñ Ğ¿Ñ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ",
-    finalValuationLabel: "Ğ˜Ñ‚Ğ¾Ğ³Ğ¾Ğ²Ğ°Ñ Ğ¾Ñ†ĞµĞ½ĞºĞ°",
-    completionReason: "ĞŸÑ€Ğ¸Ñ‡Ğ¸Ğ½Ğ° Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ¸Ñ",
-    resetMeta: "Ğ¡Ğ±Ñ€Ğ¾ÑĞ¸Ñ‚ÑŒ Ğ¼ĞµÑ‚Ğ°-Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑ",
-    resetMetaConfirm: "ĞœĞµÑ‚Ğ°-Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑ ÑĞ±Ñ€Ğ¾ÑˆĞµĞ½.",
-    noUnlocksYet: "ĞŸĞ¾ĞºĞ° Ğ½ĞµÑ‚ ĞºÑƒĞ¿Ğ»ĞµĞ½Ğ½Ñ‹Ñ… Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ğ¸Ğ¹.",
-    availableUnlocks: "Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ñ‹Ğµ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ğ¸Ñ",
-    purchasedUnlocks: "ĞšÑƒĞ¿Ğ»ĞµĞ½Ğ½Ñ‹Ğµ Ğ¾Ñ‚ĞºÑ€Ñ‹Ñ‚Ğ¸Ñ",
-    rewardAlreadyClaimed: "ĞĞ°Ğ³Ñ€Ğ°Ğ´Ğ° ÑƒĞ¶Ğµ Ğ½Ğ°Ñ‡Ğ¸ÑĞ»ĞµĞ½Ğ°.",
-    unlockPurchased: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ğ¸Ğµ ĞºÑƒĞ¿Ğ»ĞµĞ½Ğ¾",
-    notEnoughKnowledge: "ĞĞµ Ñ…Ğ²Ğ°Ñ‚Ğ°ĞµÑ‚ Ğ—Ğ½Ğ°Ğ½Ğ¸Ğ¹.",
-    unlockRealEstate: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ Ğ½ĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    unlockRealEstateDesc: "ĞÑ‚ĞºÑ€Ñ‹Ğ²Ğ°ĞµÑ‚ Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹ Ğ½ĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚Ğ¸ Ğ½Ğ° Ñ€Ñ‹Ğ½ĞºĞµ.",
-    unlockMedia: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ Ğ¼ĞµĞ´Ğ¸Ğ°",
-    unlockMediaDesc: "ĞÑ‚ĞºÑ€Ñ‹Ğ²Ğ°ĞµÑ‚ Ğ¼ĞµĞ´Ğ¸Ğ°-Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹ Ğ½Ğ° Ñ€Ñ‹Ğ½ĞºĞµ.",
-    unlockAdvancedFinanceCards: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ Ğ¿Ñ€Ğ¾Ğ´Ğ²Ğ¸Ğ½ÑƒÑ‚Ñ‹Ğµ Ñ„Ğ¸Ğ½ĞºĞ°Ñ€Ñ‚Ñ‹",
-    unlockAdvancedFinanceCardsDesc: "Ğ”Ğ¾Ğ±Ğ°Ğ²Ğ»ÑĞµÑ‚ ĞºĞ°Ñ€Ñ‚Ñ‹ Ğ¿Ñ€Ğ¾ Ğ´Ğ¾Ğ»Ğ³, ÑÑ‚Ğ°Ğ²ĞºĞ¸ Ğ¸ refinance.",
-    unlockEnergySector: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ ÑĞ½ĞµÑ€Ğ³ĞµÑ‚Ğ¸ĞºÑƒ",
-    unlockEnergySectorDesc: "ĞÑ‚ĞºÑ€Ñ‹Ğ²Ğ°ĞµÑ‚ ÑĞ½ĞµÑ€Ğ³ĞµÑ‚Ğ¸Ñ‡ĞµÑĞºĞ¸Ğµ Ğ±Ğ¸Ğ·Ğ½ĞµÑÑ‹ Ğ½Ğ° Ñ€Ñ‹Ğ½ĞºĞµ.",
-    unlockExtraCash: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²Ñ‹Ğ¹ Ğ±Ğ¾Ğ½ÑƒÑ: Ğ´Ğ¾Ğ¿. ĞºÑÑˆ",
-    unlockExtraCashDesc: "ĞĞ¾Ğ²Ñ‹Ğµ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸ Ğ½Ğ°Ñ‡Ğ¸Ğ½Ğ°ÑÑ‚ÑÑ Ñ +$5,000.",
-    unlockLowerDebtRisk: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²Ñ‹Ğ¹ Ğ±Ğ¾Ğ½ÑƒÑ: Ğ½Ğ¸Ğ¶Ğµ Ğ´Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğ¹ Ñ€Ğ¸ÑĞº",
-    unlockLowerDebtRiskDesc: "ĞŸĞ¾Ñ€Ğ¾Ğ³ Ğ´Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğ³Ğ¾ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ñ ÑÑ‚Ğ°Ğ½Ğ¾Ğ²Ğ¸Ñ‚ÑÑ Ñ‡ÑƒÑ‚ÑŒ Ğ¼ÑĞ³Ñ‡Ğµ.",
-    unlockSynergyScanner: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ ÑĞºĞ°Ğ½ĞµÑ€ ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¹",
-    unlockSynergyScannerDesc: "ĞŸĞ¾Ñ€Ñ‚Ñ„ĞµĞ»ÑŒ Ğ»ÑƒÑ‡ÑˆĞµ Ğ¿Ğ¾ĞºĞ°Ğ·Ñ‹Ğ²Ğ°ĞµÑ‚ Ğ¿Ğ¾Ñ‡Ñ‚Ğ¸ ÑĞ¾Ğ±Ñ€Ğ°Ğ½Ğ½Ñ‹Ğµ ÑĞ¸Ğ½ĞµÑ€Ğ³Ğ¸Ğ¸.",
-    unlockExtendedRun: "Ğ Ğ°ÑÑˆĞ¸Ñ€Ğ¸Ñ‚ÑŒ Ğ¼Ğ°Ğ½Ğ´Ğ°Ñ‚",
-    unlockExtendedRunDesc: "ĞĞ¾Ğ²Ñ‹Ğµ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸ Ğ¸Ğ´ÑƒÑ‚ Ğ½Ğ° 2 Ñ…Ğ¾Ğ´Ğ° Ğ´Ğ¾Ğ»ÑŒÑˆĞµ.",
-    metaUnlockedContent: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ñ‹Ğ¹ ĞºĞ¾Ğ½Ñ‚ĞµĞ½Ñ‚",
-    devValidationPassed: "ĞŸÑ€Ğ¾Ğ²ĞµÑ€ĞºĞ° Ğ¸Ğ³Ñ€Ğ¾Ğ²Ñ‹Ñ… Ğ´Ğ°Ğ½Ğ½Ñ‹Ñ… Ğ¿Ñ€Ğ¾Ğ¹Ğ´ĞµĞ½Ğ°.",
-    highOutputAsset: "ĞŸÑ€Ğ¾Ğ¸Ğ·Ğ²Ğ¾Ğ´Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ñ‹Ğ¹ Ğ°ĞºÑ‚Ğ¸Ğ² Ñ Ğ²Ñ‹ÑĞ¾ĞºĞ¾Ğ¹ Ñ‡ÑƒĞ²ÑÑ‚Ğ²Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ¾ÑÑ‚ÑŒÑ Ğº Ğ·Ğ°Ñ‚Ñ€Ğ°Ñ‚Ğ°Ğ¼.",
-    resolveEventThenChooseAction: "Ğ¡Ğ½Ğ°Ñ‡Ğ°Ğ»Ğ° Ñ€ĞµÑˆĞ¸Ñ‚Ğµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ, Ğ·Ğ°Ñ‚ĞµĞ¼ Ğ²Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ½Ğ¾ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ.",
-    turnProgress: "ĞŸÑ€Ğ¾Ğ³Ñ€ĞµÑÑ Ñ…Ğ¾Ğ´Ğ°",
-    eventStep: "Ğ¡Ğ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ",
-    actionStep: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ",
-    completed: "Ğ’Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    active: "ĞĞºÑ‚Ğ¸Ğ²Ğ½Ğ¾",
-    pending: "ĞĞ¶Ğ¸Ğ´Ğ°Ğ½Ğ¸Ğµ",
-    actionSelected: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    actionNotSelected: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ½Ğµ Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    nextTurnLocked: "Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹ Ñ…Ğ¾Ğ´ Ğ½ĞµĞ´Ğ¾ÑÑ‚ÑƒĞ¿ĞµĞ½",
-    turnReadyToAdvance: "Ğ¥Ğ¾Ğ´ Ğ³Ğ¾Ñ‚Ğ¾Ğ² Ğº Ğ·Ğ°Ğ²ĞµÑ€ÑˆĞµĞ½Ğ¸Ñ",
-    currentEventPanel: "Ğ¢ĞµĞºÑƒÑ‰ĞµĞµ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ",
-    turnAction: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ñ…Ğ¾Ğ´Ğ°",
-    effectLabel: "Ğ­Ñ„Ñ„ĞµĞºÑ‚",
-    riskLabelTitle: "Ğ Ğ¸ÑĞº",
-    select: "Ğ’Ñ‹Ğ±Ñ€Ğ°Ñ‚ÑŒ",
-    chooseCategory: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ½Ñƒ ĞºĞ°Ñ‚ĞµĞ³Ğ¾Ñ€Ğ¸Ñ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ñ.",
-    buyAsset: "ĞšÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ°ĞºÑ‚Ğ¸Ğ²",
-    upgradeAsset: "Ğ£Ğ»ÑƒÑ‡ÑˆĞ¸Ñ‚ÑŒ Ğ°ĞºÑ‚Ğ¸Ğ²",
-    sellAsset: "ĞŸÑ€Ğ¾Ğ´Ğ°Ñ‚ÑŒ Ğ°ĞºÑ‚Ğ¸Ğ²",
-    playCardAction: "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ñ‚ÑŒ ĞºĞ°Ñ€Ñ‚Ñƒ",
-    eventResolvedPanel: "Ğ¡Ğ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ Ñ€ĞµÑˆĞµĞ½Ğ¾",
-    actionPanelLocked: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ğ¾Ñ‚ĞºÑ€Ğ¾ĞµÑ‚ÑÑ Ğ¿Ğ¾ÑĞ»Ğµ Ğ²Ñ‹Ğ±Ğ¾Ñ€Ğ° Ğ¿Ğ¾ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ñ.",
-    actionCategoryBuyHint: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ¸Ğ½ Ğ½Ğ¾Ğ²Ñ‹Ğ¹ Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ğ½Ğ° ÑÑ‚Ğ¾Ñ‚ Ñ…Ğ¾Ğ´.",
-    actionCategoryUpgradeHint: "Ğ£Ğ»ÑƒÑ‡ÑˆĞ¸Ñ‚Ğµ Ğ¾Ğ´Ğ¸Ğ½ ÑĞ²Ğ¾Ğ¹ Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ğ½Ğ° ÑÑ‚Ğ¾Ñ‚ Ñ…Ğ¾Ğ´.",
-    actionCategorySellHint: "ĞŸÑ€Ğ¾Ğ´Ğ°Ğ¹Ñ‚Ğµ Ğ¾Ğ´Ğ¸Ğ½ Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ğ´Ğ»Ñ Ğ»Ğ¸ĞºĞ²Ğ¸Ğ´Ğ½Ğ¾ÑÑ‚Ğ¸.",
-    actionCategoryCardsHint: "Ğ¡Ñ‹Ğ³Ñ€Ğ°Ğ¹Ñ‚Ğµ Ğ¾Ğ´Ğ½Ñƒ ĞºĞ°Ñ€Ñ‚Ñƒ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ñ Ğ½Ğ° ÑÑ‚Ğ¾Ñ‚ Ñ…Ğ¾Ğ´.",
-    turnShort: "Ğ¥Ğ¾Ğ´",
-    cashShort: "Ğ”ĞµĞ½ÑŒĞ³Ğ¸",
-    marketReady: "ĞœĞ¾Ğ¶Ğ½Ğ¾ ĞºÑƒĞ¿Ğ¸Ñ‚ÑŒ 1 Ğ°ĞºÑ‚Ğ¸Ğ²",
-    portfolioReady: "ĞœĞ¾Ğ¶Ğ½Ğ¾ ÑƒĞ¿Ñ€Ğ°Ğ²Ğ»ÑÑ‚ÑŒ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ°Ğ¼Ğ¸",
-    economyWatch: "ĞĞ°Ğ±Ğ»ÑĞ´ĞµĞ½Ğ¸Ğµ Ğ·Ğ° Ğ¼Ğ°ĞºÑ€Ğ¾",
-    eventNeedsDecision: "\u0421\u043e\u0431\u044b\u0442\u0438\u0435 \u043d\u0435 \u0440\u0435\u0448\u0435\u043d\u043e",
-    swipeMoreOptions: "\u0421\u0432\u0430\u0439\u043f\u043d\u0438\u0442\u0435, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u0434\u0440\u0443\u0433\u0438\u0435 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b",
-    selected: "\u0412\u044b\u0431\u0440\u0430\u043d\u043e",
-    chooseOption: "\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0432\u0430\u0440\u0438\u0430\u043d\u0442",
-    eventCompleted: "\u0421\u043e\u0431\u044b\u0442\u0438\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e",
-    actionActiveLabel: "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0430\u043a\u0442\u0438\u0432\u043d\u043e",
-    lastsTurns: "\u043d\u0430 {turns} \u0445\u043e\u0434\u0430",
-    resolveEventCta: "Ğ ĞµÑˆĞ¸Ñ‚ÑŒ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğµ",
-    openDecisions: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ Ñ€ĞµÑˆĞµĞ½Ğ¸Ñ",
-    chooseActionType: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ¸Ğ½ Ñ‚Ğ¸Ğ¿ Ğ´ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ñ.",
-    back: "ĞĞ°Ğ·Ğ°Ğ´",
-    repayDebt: "ĞŸĞ¾Ğ³Ğ°ÑĞ¸Ñ‚ÑŒ Ğ´Ğ¾Ğ»Ğ³",
-    repayDebtHint: "Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞ¹Ñ‚Ğµ Ğ´ĞµĞ½ÑŒĞ³Ğ¸, Ñ‡Ñ‚Ğ¾Ğ±Ñ‹ ÑĞ½Ğ¸Ğ·Ğ¸Ñ‚ÑŒ Ğ´Ğ¾Ğ»Ğ³ Ğ¸ Ñ€Ğ¸ÑĞº.",
-    repayQuarter: "ĞŸĞ¾Ğ³Ğ°ÑĞ¸Ñ‚ÑŒ 25%",
-    repayHalf: "ĞŸĞ¾Ğ³Ğ°ÑĞ¸Ñ‚ÑŒ 50%",
-    repayAll: "ĞŸĞ¾Ğ³Ğ°ÑĞ¸Ñ‚ÑŒ Ğ²ÑÑ‘",
-    debtCleared: "Ğ”Ğ¾Ğ»Ğ³ Ğ¿Ğ¾Ğ³Ğ°ÑˆĞµĞ½",
-    debtPayment: "ĞŸĞ»Ğ°Ñ‚Ñ‘Ğ¶ Ğ¿Ğ¾ Ğ´Ğ¾Ğ»Ğ³Ñƒ"
-    ,
-    marketBusinesses: "Ğ§Ğ°ÑÑ‚Ğ½Ñ‹Ğµ Ğ°ĞºÑ‚Ğ¸Ğ²Ñ‹",
-    marketStocks: "Ğ¤Ğ¾Ğ½Ğ´Ğ¾Ğ²Ñ‹Ğ¹ Ñ€Ñ‹Ğ½Ğ¾Ğº",
-    businessesCategory: "Ğ‘Ğ¸Ğ·Ğ½ĞµÑÑ‹",
-    realEstateCategory: "ĞĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    stockMarketCategory: "Ğ‘Ğ¸Ñ€Ğ¶Ğ°",
-    businessesCategoryDesc: "ĞŸĞ¾ĞºÑƒĞ¿Ğ°Ğ¹Ñ‚Ğµ ĞºĞ¾Ğ¼Ğ¿Ğ°Ğ½Ğ¸Ğ¸ Ğ¸ Ñ€Ğ°Ğ·Ğ²Ğ¸Ğ²Ğ°Ğ¹Ñ‚Ğµ Ğ´Ğ¾Ñ…Ğ¾Ğ´.",
-    realEstateCategoryDesc: "ĞŸĞ¾ĞºÑƒĞ¿Ğ°Ğ¹Ñ‚Ğµ Ğ¾Ğ±ÑŠĞµĞºÑ‚Ñ‹ Ñ Ğ¿Ğ°ÑÑĞ¸Ğ²Ğ½Ñ‹Ğ¼ Ğ´Ğ¾Ñ…Ğ¾Ğ´Ğ¾Ğ¼.",
-    stockMarketCategoryDesc: "ĞŸĞ¾ĞºÑƒĞ¿Ğ°Ğ¹Ñ‚Ğµ Ğ¸ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ²Ğ°Ğ¹Ñ‚Ğµ Ğ°ĞºÑ†Ğ¸Ğ¸.",
-    chooseAssetType: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ Ñ‚Ğ¸Ğ¿ Ğ°ĞºÑ‚Ğ¸Ğ²Ğ°",
-    backToMarket: "ĞĞ°Ğ·Ğ°Ğ´ Ğº Ñ€Ñ‹Ğ½ĞºÑƒ",
-    turnActionBuyOneAsset: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ñ…Ğ¾Ğ´Ğ°: ĞºÑƒĞ¿Ğ¸Ñ‚Ğµ Ğ¾Ğ´Ğ¸Ğ½ Ğ°ĞºÑ‚Ğ¸Ğ²",
-    assetPurchased: "ĞĞºÑ‚Ğ¸Ğ² ĞºÑƒĞ¿Ğ»ĞµĞ½",
-    turnActionCompletedLabel: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ Ñ…Ğ¾Ğ´Ğ° Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    backToDecisions: "Ğ’ĞµÑ€Ğ½ÑƒÑ‚ÑŒÑÑ Ğº Ñ€ĞµÑˆĞµĞ½Ğ¸ÑĞ¼",
-    actionAlreadyCompleted: "Ğ”ĞµĞ¹ÑÑ‚Ğ²Ğ¸Ğµ ÑƒĞ¶Ğµ Ğ²Ñ‹Ğ¿Ğ¾Ğ»Ğ½ĞµĞ½Ğ¾",
-    shares: "ĞĞºÑ†Ğ¸Ğ¸",
-    price: "Ğ¦ĞµĞ½Ğ°",
-    sector: "Ğ¡ĞµĞºÑ‚Ğ¾Ñ€",
-    buyShares: "ĞšÑƒĞ¿Ğ¸Ñ‚ÑŒ Ğ°ĞºÑ†Ğ¸Ğ¸",
-    sellShares: "ĞŸÑ€Ğ¾Ğ´Ğ°Ñ‚ÑŒ Ğ°ĞºÑ†Ğ¸Ğ¸",
-    stockCycle: "Ğ Ñ‹Ğ½Ğ¾Ñ‡Ğ½Ñ‹Ğ¹ Ñ†Ğ¸ĞºĞ»",
-    momentum: "Ğ˜Ğ¼Ğ¿ÑƒĞ»ÑŒÑ",
-    dividend: "Ğ”Ğ¸Ğ²Ğ¸Ğ´ĞµĞ½Ğ´",
-    availableCash: "Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾ Ğ´ĞµĞ½ĞµĞ³",
-    yourPosition: "Ğ’Ğ°ÑˆĞ° Ğ¿Ğ¾Ğ·Ğ¸Ñ†Ğ¸Ñ",
-    buyPower: "ĞŸĞ¾ĞºÑƒĞ¿Ğ°Ñ‚ĞµĞ»ÑŒĞ½Ğ°Ñ ÑĞ¸Ğ»Ğ°",
-    sellPosition: "ĞŸÑ€Ğ¾Ğ´Ğ°Ğ¶Ğ° Ğ¿Ğ¾Ğ·Ğ¸Ñ†Ğ¸Ğ¸",
-    maxBuy: "ĞœĞ°ĞºÑĞ¸Ğ¼ÑƒĞ¼ Ğ¿Ğ¾ĞºÑƒĞ¿ĞºĞ¸",
-    maxSell: "ĞœĞ°ĞºÑĞ¸Ğ¼ÑƒĞ¼ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ¶Ğ¸",
-    boughtShares: "ĞšÑƒĞ¿Ğ»ĞµĞ½Ğ¾ {count} Ğ°ĞºÑ†Ğ¸Ğ¹",
-    soldShares: "ĞŸÑ€Ğ¾Ğ´Ğ°Ğ½Ğ¾ {count} Ğ°ĞºÑ†Ğ¸Ğ¹",
-    tapOrDrag: "ĞĞ°Ğ¶Ğ¼Ğ¸Ñ‚Ğµ Ğ¸Ğ»Ğ¸ Ğ¿Ğ¾Ñ‚ÑĞ½Ğ¸Ñ‚Ğµ, Ñ‡Ñ‚Ğ¾Ğ±Ñ‹ Ğ²Ñ‹Ğ±Ñ€Ğ°Ñ‚ÑŒ ÑÑƒĞ¼Ğ¼Ñƒ",
-    openChart: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚ÑŒ Ğ³Ñ€Ğ°Ñ„Ğ¸Ğº",
-    ownedShares: "ĞĞºÑ†Ğ¸Ğ¹: {count}",
-    thisTurn: "Ğ·Ğ° Ñ…Ğ¾Ğ´",
-    valueLabel: "Ğ¡Ñ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    amountLabel: "Ğ¡ÑƒĞ¼Ğ¼Ğ°",
-    stockDetails: "Ğ”ĞµÑ‚Ğ°Ğ»Ğ¸ Ğ°ĞºÑ†Ğ¸Ğ¸",
-    noPosition: "ĞŸĞ¾Ğ·Ğ¸Ñ†Ğ¸Ğ¸ Ğ¿Ğ¾ĞºĞ° Ğ½ĞµÑ‚.",
-    closeSheet: "Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚ÑŒ",
-    chartRange: "Ğ”Ğ¸Ğ°Ğ¿Ğ°Ğ·Ğ¾Ğ½ Ñ†ĞµĞ½Ñ‹",
-    averagePrice: "Ğ¡Ñ€ĞµĞ´Ğ½ÑÑ Ñ†ĞµĞ½Ğ°",
-    turnChange: "Ğ˜Ğ·Ğ¼ĞµĞ½ĞµĞ½Ğ¸Ğµ Ğ·Ğ° Ñ…Ğ¾Ğ´",
-    repayDebtTile: "Ğ¡Ñ‚Ğ¾Ğ» Ğ´Ğ¾Ğ»Ğ³Ğ°",
-    positionValue: "Ğ¡Ñ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ Ğ¿Ğ¾Ğ·Ğ¸Ñ†Ğ¸Ğ¸",
-    profitLoss: "ĞŸÑ€Ğ¸Ğ±Ñ‹Ğ»ÑŒ / ÑƒĞ±Ñ‹Ñ‚Ğ¾Ğº",
-    dividendIncome: "Ğ”Ğ¾Ñ…Ğ¾Ğ´ Ñ Ğ´Ğ¸Ğ²Ğ¸Ğ´ĞµĞ½Ğ´Ğ¾Ğ²",
-    dividendPerTurn: "Ğ—Ğ° Ñ…Ğ¾Ğ´",
-    dividendIncomePerTurn: "Ğ”Ğ¾Ñ…Ğ¾Ğ´ Ñ Ğ´Ğ¸Ğ²Ğ¸Ğ´ĞµĞ½Ğ´Ğ¾Ğ²: {value} Ğ·Ğ° Ñ…Ğ¾Ğ´",
-    noDividendIncome: "Ğ­Ñ‚Ğ° Ğ°ĞºÑ†Ğ¸Ñ Ğ½Ğµ Ğ¿Ğ»Ğ°Ñ‚Ğ¸Ñ‚ Ğ´Ğ¸Ğ²Ğ¸Ğ´ĞµĞ½Ğ´Ñ‹",
-    peRatioLabel: "P/E",
-    valuationLabel: "ĞÑ†ĞµĞ½ĞºĞ°",
-    cheapValuation: "Ğ”ĞµÑˆĞµĞ²Ğ°Ñ",
-    fairValuation: "ĞĞ¾Ñ€Ğ¼Ğ°Ğ»ÑŒĞ½Ğ°Ñ",
-    expensiveValuation: "Ğ”Ğ¾Ñ€Ğ¾Ğ¶Ğµ Ñ€Ñ‹Ğ½ĞºĞ°",
-    confirmBuy: "ĞŸĞ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ´Ğ¸Ñ‚ÑŒ Ğ¿Ğ¾ĞºÑƒĞ¿ĞºÑƒ",
-    confirmSell: "ĞŸĞ¾Ğ´Ñ‚Ğ²ĞµÑ€Ğ´Ğ¸Ñ‚ÑŒ Ğ¿Ñ€Ğ¾Ğ´Ğ°Ğ¶Ñƒ",
-    dragToChooseAmount: "ĞŸĞ¾Ñ‚ÑĞ½Ğ¸Ñ‚Ğµ, Ñ‡Ñ‚Ğ¾Ğ±Ñ‹ Ğ²Ñ‹Ğ±Ñ€Ğ°Ñ‚ÑŒ ÑÑƒĞ¼Ğ¼Ñƒ",
-    lastIterations: "ĞŸĞ¾ÑĞ»ĞµĞ´Ğ½Ğ¸Ğµ 100 Ğ¸Ñ‚ĞµÑ€Ğ°Ñ†Ğ¸Ğ¹",
-    growthStock: "ĞĞºÑ†Ğ¸Ñ Ñ€Ğ¾ÑÑ‚Ğ°",
-    dividendStock: "Ğ”Ğ¸Ğ²Ğ¸Ğ´ĞµĞ½Ğ´Ğ½Ğ°Ñ",
-    stockTypeLabel: "Ğ¢Ğ¸Ğ¿",
-    dividendYieldLabel: "Ğ”Ğ¸Ğ². Ğ´Ğ¾Ñ…Ğ¾Ğ´Ğ½Ğ¾ÑÑ‚ÑŒ",
-    priceHistoryEmpty: "Ğ˜ÑÑ‚Ğ¾Ñ€Ğ¸Ñ Ñ†ĞµĞ½Ñ‹ Ğ¿Ğ¾ĞºĞ° Ğ½ĞµĞ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ°.",
-    turnLabelShort: "Ğ¥Ğ¾Ğ´",
-    currentPriceLabel: "Ğ¢ĞµĞºÑƒÑ‰Ğ°Ñ Ñ†ĞµĞ½Ğ°",
-    allFilter: "Ğ’ÑĞµ",
-    availableFilter: "Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ñ‹Ğµ",
-    purchasedFilter: "ĞšÑƒĞ¿Ğ»ĞµĞ½Ğ½Ñ‹Ğµ",
-    assetsCategory: "ĞĞºÑ‚Ğ¸Ğ²Ñ‹",
-    businessCategory: "Ğ‘Ğ¸Ğ·Ğ½ĞµÑ",
-    realEstateCategoryShort: "ĞĞµĞ´Ğ²Ğ¸Ğ¶Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    marketCategoryShort: "Ğ‘Ğ¸Ñ€Ğ¶Ğ°",
-    economyCategoryShort: "Ğ­ĞºĞ¾Ğ½Ğ¾Ğ¼Ğ¸ĞºĞ°",
-    startCategoryShort: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚",
-    metaCategoryShort: "ĞœĞµÑ‚Ğ°",
-    statusClosed: "Ğ—Ğ°ĞºÑ€Ñ‹Ñ‚Ğ¾",
-    statusAvailable: "Ğ”Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾",
-    statusOpened: "ĞÑ‚ĞºÑ€Ñ‹Ñ‚Ğ¾",
-    statusUpgradable: "Ğ£Ğ»ÑƒÑ‡ÑˆĞ°ĞµĞ¼Ğ¾",
-    statusMax: "ĞœĞ°ĞºÑ.",
-    statusNoKnowledge: "ĞĞµ Ñ…Ğ²Ğ°Ñ‚Ğ°ĞµÑ‚ Ğ·Ğ½Ğ°Ğ½Ğ¸Ğ¹",
-    upgradeAction: "Ğ£Ğ»ÑƒÑ‡ÑˆĞ¸Ñ‚ÑŒ",
-    unavailableAction: "ĞĞµĞ´Ğ¾ÑÑ‚ÑƒĞ¿Ğ½Ğ¾",
-    maxAction: "ĞœĞ°ĞºÑ.",
-    currentEffectLabel: "Ğ¢ĞµĞºÑƒÑ‰Ğ¸Ğ¹ ÑÑ„Ñ„ĞµĞºÑ‚",
-    nextEffectLabel: "Ğ¡Ğ»ĞµĞ´ÑƒÑÑ‰Ğ¸Ğ¹ ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ",
-    costLabel: "Ğ¡Ñ‚Ğ¾Ğ¸Ğ¼Ğ¾ÑÑ‚ÑŒ",
-    statusLabel: "Ğ¡Ñ‚Ğ°Ñ‚ÑƒÑ",
-    levelProgressLabel: "Ğ£Ñ€Ğ¾Ğ²ĞµĞ½ÑŒ",
-    repeatableLabel: "ĞŸĞ¾Ğ²Ñ‚Ğ¾Ñ€ÑĞµĞ¼Ğ¾Ğµ",
-    nextRunLengthLabel: "Ğ”Ğ»Ğ¸Ğ½Ğ° Ğ½Ğ¾Ğ²Ğ¾Ğ¹ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸",
-    confirmResetMeta: "Ğ¡Ğ±Ñ€Ğ¾ÑĞ¸Ñ‚ÑŒ Ğ²ĞµÑÑŒ Ğ¿Ñ€Ğ¾Ğ³Ñ€ĞµÑÑ Ğ¿Ñ€ĞµÑÑ‚Ğ¸Ğ¶Ğ°?",
-    noMetaItemsMatchFilter: "ĞĞµÑ‚ ÑƒĞ»ÑƒÑ‡ÑˆĞµĞ½Ğ¸Ğ¹ Ğ¿Ñ€ĞµÑÑ‚Ğ¸Ğ¶Ğ° Ğ´Ğ»Ñ ÑÑ‚Ğ¾Ğ³Ğ¾ Ñ„Ğ¸Ğ»ÑŒÑ‚Ñ€Ğ°.",
-    stockRising: "ĞĞºÑ†Ğ¸Ñ Ñ€Ğ°ÑÑ‚ĞµÑ‚",
-    stockFalling: "ĞĞºÑ†Ğ¸Ñ Ğ¿Ğ°Ğ´Ğ°ĞµÑ‚",
-    stockNeutral: "ĞĞµĞ¹Ñ‚Ñ€Ğ°Ğ»ÑŒĞ½Ğ¾",
-    newRunSetup: "ĞĞ¾Ğ²Ğ°Ñ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ",
-    newRunSetupDesc: "Ğ’Ñ‹Ğ±ĞµÑ€Ğ¸Ñ‚Ğµ ÑÑ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²ÑƒÑ Ğ¿Ğ¾Ğ·Ğ¸Ñ†Ğ¸Ñ Ğ¸ ÑƒÑ€Ğ¾Ğ²ĞµĞ½ÑŒ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ñ Ğ² Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ğ¸.",
-    chooseScenario: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²Ñ‹Ğ¹ ÑÑ†ĞµĞ½Ğ°Ñ€Ğ¸Ğ¹",
-    chooseDifficulty: "Ğ¡Ğ»Ğ¾Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ",
-    startConfiguredRun: "ĞĞ°Ñ‡Ğ°Ñ‚ÑŒ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ",
-    cancelSetup: "ĞÑÑ‚Ğ°Ğ²Ğ¸Ñ‚ÑŒ Ñ‚ĞµĞºÑƒÑ‰ÑƒÑ Ğ¿Ğ°Ñ€Ñ‚Ğ¸Ñ",
-    scenarioLabel: "Ğ¡Ñ†ĞµĞ½Ğ°Ñ€Ğ¸Ğ¹",
-    difficultyLabel: "Ğ¡Ğ»Ğ¾Ğ¶Ğ½Ğ¾ÑÑ‚ÑŒ",
-    scenarioBalancedTitle: "Ğ¡Ğ±Ğ°Ğ»Ğ°Ğ½ÑĞ¸Ñ€Ğ¾Ğ²Ğ°Ğ½Ğ½Ñ‹Ğ¹ ÑÑ‚Ğ°Ñ€Ñ‚",
-    scenarioBalancedDesc: "ĞšĞ»Ğ°ÑÑĞ¸Ñ‡ĞµÑĞºĞ¸Ğ¹ ÑÑ‚Ğ°Ñ€Ñ‚ Ñ Ğ¾Ğ´Ğ½Ğ¸Ğ¼ ÑĞ»ÑƒÑ‡Ğ°Ğ¹Ğ½Ñ‹Ğ¼ Ğ±Ğ¸Ğ·Ğ½ĞµÑĞ¾Ğ¼ Ğ¸ Ğ±ĞµĞ· Ğ´Ğ¾Ğ»Ğ³Ğ°.",
-    scenarioLeveragedTitle: "Ğ Ğ¾ÑÑ‚ Ğ½Ğ° Ğ·Ğ°Ñ‘Ğ¼Ğ½Ñ‹Ğµ",
-    scenarioLeveragedDesc: "SaaS-Ğ±Ğ¸Ğ·Ğ½ĞµÑ, Ğ´Ğ¾Ğ¿Ğ¾Ğ»Ğ½Ğ¸Ñ‚ĞµĞ»ÑŒĞ½Ğ°Ñ Ğ»Ğ¸ĞºĞ²Ğ¸Ğ´Ğ½Ğ¾ÑÑ‚ÑŒ Ğ¸ Ğ¾Ğ¿Ğ°ÑĞ½Ğ¾Ğµ Ğ´Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğµ Ğ´Ğ°Ğ²Ğ»ĞµĞ½Ğ¸Ğµ.",
-    scenarioTraderTitle: "Ğ‘Ğ¸Ñ€Ğ¶ĞµĞ²Ğ¾Ğ¹ Ñ‚Ñ€ĞµĞ¹Ğ´ĞµÑ€",
-    scenarioTraderDesc: "Ğ¢ĞµÑ…Ğ½Ğ¾Ğ»Ğ¾Ğ³Ğ¸Ñ‡ĞµÑĞºĞ¸Ğ¹ Ğ±Ğ¸Ğ·Ğ½ĞµÑ Ğ¸ Ğ¿Ğ¾Ğ·Ğ¸Ñ†Ğ¸Ñ Ğ² Aplix Ğ½Ğ° Ğ±Ğ¾Ğ»ĞµĞµ Ğ²Ğ¾Ğ»Ğ°Ñ‚Ğ¸Ğ»ÑŒĞ½Ğ¾Ğ¼ Ñ€Ñ‹Ğ½ĞºĞµ.",
-    difficultyRelaxedTitle: "Ğ¡Ğ¿Ğ¾ĞºĞ¾Ğ¹Ğ½Ğ°Ñ",
-    difficultyRelaxedDesc: "Ğ‘Ğ¾Ğ»ÑŒÑˆĞµ Ğ´ĞµĞ½ĞµĞ³, Ğ½Ğ¸Ğ¶Ğµ Ñ€Ğ¸ÑĞº Ğ¸ Ğ±ĞµĞ·Ğ¾Ğ¿Ğ°ÑĞ½ĞµĞµ Ğ´Ğ¾Ğ»Ğ³. ĞĞ°Ğ³Ñ€Ğ°Ğ´Ğ° Ğ¿Ñ€ĞµÑÑ‚Ğ¸Ğ¶Ğ° ÑƒĞ¼ĞµĞ½ÑŒÑˆĞµĞ½Ğ°.",
-    difficultyNormalTitle: "ĞĞ±Ñ‹Ñ‡Ğ½Ğ°Ñ",
-    difficultyNormalDesc: "ĞÑĞ½Ğ¾Ğ²Ğ½Ğ¾Ğ¹ Ğ·Ğ°Ğ´ÑƒĞ¼Ğ°Ğ½Ğ½Ñ‹Ğ¹ Ğ±Ğ°Ğ»Ğ°Ğ½Ñ Ğ¸Ğ³Ñ€Ñ‹.",
-    difficultyHardTitle: "Ğ¡Ğ»Ğ¾Ğ¶Ğ½Ğ°Ñ",
-    difficultyHardDesc: "ĞœĞµĞ½ÑŒÑˆĞµ Ğ´ĞµĞ½ĞµĞ³, Ğ²Ñ‹ÑˆĞµ Ñ€Ğ¸ÑĞº Ğ¸ Ğ±Ñ‹ÑÑ‚Ñ€ĞµĞµ Ğ´Ğ¾Ğ»Ğ³Ğ¾Ğ²Ğ¾Ğ¹ ĞºÑ€Ğ°Ñ…. ĞĞ°Ğ³Ñ€Ğ°Ğ´Ğ° Ğ¿Ñ€ĞµÑÑ‚Ğ¸Ğ¶Ğ° ÑƒĞ²ĞµĞ»Ğ¸Ñ‡ĞµĞ½Ğ°.",
-    setupCash: "Ğ”ĞµĞ½ÑŒĞ³Ğ¸ Ğ½Ğ° ÑÑ‚Ğ°Ñ€Ñ‚Ğµ",
-    setupDebt: "Ğ”Ğ¾Ğ»Ğ³ Ğ½Ğ° ÑÑ‚Ğ°Ñ€Ñ‚Ğµ",
-    setupRisk: "Ğ¡Ñ‚Ğ°Ñ€Ñ‚Ğ¾Ğ²Ñ‹Ğ¹ Ñ€Ğ¸ÑĞº",
-    setupReward: "ĞĞ°Ğ³Ñ€Ğ°Ğ´Ğ° Ğ¿Ñ€ĞµÑÑ‚Ğ¸Ğ¶Ğ°",
-    setupRewardReduced: "Ã—0,75",
-    setupRewardNormal: "Ã—1,00",
-    setupRewardIncreased: "Ã—1,25",
-    startingConfiguration: "{scenario} Â· {difficulty}"
-  }
-};
-
-const state = {
-  businesses: [],
-  stocks: [],
-  events: [],
-  cards: [],
-  synergies: [],
-  run: null,
-  meta: loadMetaProgression(),
-  activeTab: "dashboard",
-  marketView: "root",
-  portfolioFilter: "all",
-  marketFilterIndustry: "all",
-  marketFilterRisk: "all",
-  selectedLanguage: localStorage.getItem(LANGUAGE_KEY),
-  languageModalOpen: false,
-  runSetupOpen: false,
-  selectedScenarioId: "balanced",
-  selectedDifficultyId: "normal",
-  pendingActionType: null,
-  selectedActionType: null,
-  selectedActionItem: null,
-  metaFilter: "all",
-  activeStockId: null,
-  selectedTradeMode: null,
-  activeStockPointIndex: null,
-  stockBuyPercent: 0,
-  stockSellPercent: 0,
-  decisionCarouselIndex: {}
-};
-
-const ui = {
-  eyebrow: document.querySelector(".eyebrow"),
-  headerTitle: document.querySelector(".header-top h1"),
-  newRunButton: document.getElementById("new-run-button"),
-  nextTurnButton: document.getElementById("next-turn-button"),
-  turnLabel: document.getElementById("turn-label"),
-  statusHint: document.getElementById("status-hint"),
-  statsGrid: document.getElementById("stats-grid"),
-  tabContent: document.getElementById("tab-content"),
-  bottomNav: document.getElementById("bottom-nav")
-};
-
-const NAV_ITEMS = [
-  { id: "dashboard", labelKey: "dashboard", icon: "./assets/icons/dashboard.png" },
-  { id: "decisions", labelKey: "decisions", icon: "./assets/icons/decisions.png" },
-  { id: "portfolio", labelKey: "portfolio", icon: "./assets/icons/portfolio.png" },
-  { id: "market", labelKey: "market", icon: "./assets/icons/market.png" },
-  { id: "economy", labelKey: "economy", icon: "./assets/icons/economy.png" }
-];
-
-boot();
-
-async function boot() {
-  const [businesses, stocks, events, cards, synergies] = await Promise.all([
-    fetchJson("./data/businesses.json"),
-    fetchJson("./data/stocks.json"),
-    fetchJson("./data/events.json"),
-    fetchJson("./data/cards.json"),
-    fetchJson("./data/synergies.json")
-  ]);
-
-  state.businesses = businesses;
-  state.stocks = stocks;
-  state.events = events;
-  state.cards = cards;
-  state.synergies = synergies;
-  validateGameData();
-  window.validateGameData = validateGameData;
-  window.simulateRuns = simulateRuns;
-
-  ui.newRunButton.addEventListener("click", openRunSetup);
-  ui.nextTurnButton.addEventListener("click", advanceTurn);
-
-  renderBottomNav();
-  if (hasSelectedLanguage()) {
-    if (!restoreSavedRun()) openRunSetup();
-  } else {
-    render();
-  }
-}
-
-async function fetchJson(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Failed to load ${path}`);
-  return response.json();
-}
-
-function hasSelectedLanguage() {
-  return state.selectedLanguage === "ru" || state.selectedLanguage === "en";
-}
-
-function t(key, params = {}) {
-  const language = hasSelectedLanguage() ? state.selectedLanguage : "en";
-  const phrase = translations[language][key] || translations.en[key] || key;
-  return phrase.replace(/\{(\w+)\}/g, (_, name) => (params[name] ?? `{${name}}`));
-}
-
-function setLanguage(language) {
-  state.selectedLanguage = language;
-  localStorage.setItem(LANGUAGE_KEY, language);
-  state.languageModalOpen = false;
-  if (!state.run) openRunSetup();
-  else render();
-}
-
-function createDefaultMetaProgression() {
-  return {
-    totalKnowledge: 0,
-    unlockedIndustries: [...STARTING_UNLOCKED_INDUSTRIES],
-    unlockedBusinesses: [],
-    unlockedCards: [],
-    unlockedEvents: [],
-    completedRuns: 0,
-    bestValuation: 0,
-    bestTurnReached: 0,
-    purchasedUnlockIds: [],
-    unlockLevels: {},
-    achievements: []
-  };
-}
-
-function loadMetaProgression() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(META_KEY) || "null");
-    if (!parsed) return createDefaultMetaProgression();
-    return {
-      ...createDefaultMetaProgression(),
-      ...parsed,
-      unlockedIndustries: uniqueList([...(parsed.unlockedIndustries || []), ...STARTING_UNLOCKED_INDUSTRIES]),
-      unlockedBusinesses: uniqueList(parsed.unlockedBusinesses || []),
-      unlockedCards: uniqueList(parsed.unlockedCards || []),
-      unlockedEvents: uniqueList(parsed.unlockedEvents || []),
-      purchasedUnlockIds: uniqueList(parsed.purchasedUnlockIds || []),
-      unlockLevels: parsed.unlockLevels || {}
-    };
-  } catch {
-    return createDefaultMetaProgression();
-  }
-}
-
-function saveMetaProgression() {
-  localStorage.setItem(META_KEY, JSON.stringify(state.meta));
-}
-
-function openLanguageModal() {
-  state.languageModalOpen = true;
-  render();
-}
-
-function closeLanguageModal() {
-  state.languageModalOpen = false;
-  render();
-}
-
-function backToDecisionsTab() {
-  state.activeTab = "decisions";
-  state.marketView = "root";
-  if (state.pendingActionType !== "buy_asset") state.pendingActionType = null;
-  render();
-}
-
-function nextRunMaxTurns() {
-  return MAX_TURNS + (unlockLevel("unlock_extended_run") * 2);
-}
-
-function restoreSavedRun() {
-  const savedRun = loadRunState(localStorage, RUN_KEY);
-  if (!savedRun) return false;
-  state.run = savedRun;
-  state.runSetupOpen = false;
-  state.activeTab = "dashboard";
-  state.marketView = "root";
-  state.pendingActionType = null;
-  state.selectedActionType = null;
-  state.selectedActionItem = null;
-  state.activeStockId = null;
-  state.selectedTradeMode = null;
-  state.stockBuyPercent = 0;
-  state.stockSellPercent = 0;
-  state.run.statusMessage = t("runRestored");
-  if (!state.run.currentReport) state.run.currentReport = calculateReport();
-  render();
-  return true;
-}
-
-function saveCurrentRun() {
-  if (!state.run || state.run.finished) return false;
-  return saveRunState(localStorage, RUN_KEY, state.run);
-}
-
-function openRunSetup() {
-  state.runSetupOpen = true;
-  state.selectedScenarioId = "balanced";
-  state.selectedDifficultyId = "normal";
-  render();
-}
-
-function closeRunSetup() {
-  if (!state.run) return;
-  state.runSetupOpen = false;
-  render();
-}
-
-function startRun() {
-  clearRunState(localStorage, RUN_KEY);
-  const startingBonus = metaStartingBonuses();
-  const configuration = createRunConfiguration({
-    scenarioId: state.selectedScenarioId,
-    difficultyId: state.selectedDifficultyId,
-    baseCash: STARTING_CASH,
-    metaExtraCash: startingBonus.extraCash,
-    stocks: state.stocks
-  });
-  const starter = configuration.company.businesses[0].businessId;
-  state.run = {
-    id: `run-${Date.now()}`,
-    maxTurns: nextRunMaxTurns(),
-    scenarioId: configuration.scenario.id,
-    difficultyId: configuration.difficulty.id,
-    turn: 1,
-    finished: false,
-    endReason: null,
-    rewardClaimed: false,
-    knowledgeEarned: 0,
-    resultSummary: null,
-    currentEvent: null,
-    currentReport: null,
-    currentCards: [],
-    marketCycle: "balanced",
-    selectedChoiceId: null,
-    pendingActionDone: false,
-    eventResolved: false,
-    statusMessage: t("resolveEventBeforeNextTurn"),
-    company: configuration.company,
-    macro: configuration.macro,
-    history: [
-      {
-        turn: 1,
-        title: t("runStarted"),
-        body: `${t("startingAsset", { name: businessById(starter).name })}. ${t("startingConfiguration", {
-          scenario: t(configuration.scenario.titleKey),
-          difficulty: t(configuration.difficulty.titleKey)
-        })}`
-      }
-    ],
-    activeModifiers: [],
-    stockMarket: createInitialStockMarket()
-  };
-  state.runSetupOpen = false;
-  state.activeTab = "dashboard";
-  state.marketView = "root";
-  state.pendingActionType = null;
-  state.selectedActionType = null;
-  state.selectedActionItem = null;
-  state.activeStockPointIndex = null;
-  beginTurn();
-}
-
-function beginTurn() {
-  const run = state.run;
-  if (!run || run.finished) {
-    render();
-    return;
-  }
-  updateMarketCycle();
-  tickStockMarket();
-  run.currentReport = calculateReport();
-  run.company.cash += Math.round(run.currentReport.profit);
-  run.company.risk = clamp(run.company.risk + run.macro.marketRisk * 0.1, 0.01, 0.95);
-  tickModifiers();
-  run.currentEvent = chooseEvent();
-  run.currentCards = drawCards();
-  run.selectedChoiceId = null;
-  run.pendingActionDone = false;
-  run.eventResolved = false;
-  run.statusMessage = t("resolveEventBeforeNextTurn");
-  state.pendingActionType = null;
-  state.marketView = "root";
-  saveCurrentRun();
-  render();
-}
-
-function render() {
-  renderHeader();
-  renderBottomNav();
-  if (!hasSelectedLanguage()) {
-    ui.tabContent.innerHTML = renderLanguageSelectScreen();
-    bindLanguageEvents();
-    return;
-  }
-  if (state.runSetupOpen || !state.run) {
-    ui.tabContent.innerHTML = renderRunSetupScreen();
-    bindTabEvents();
-    return;
-  }
-  ui.tabContent.innerHTML = `${state.languageModalOpen ? renderLanguageModal() : ""}${renderActiveTab()}`;
-  bindTabEvents();
-}
-
-function renderHeader() {
-  document.title = t("gameTitle");
-  ui.eyebrow.textContent = t("gameTitle");
-  ui.newRunButton.textContent = t("reset");
-  if (hasSelectedLanguage() && (state.runSetupOpen || !state.run)) {
-    ui.headerTitle.textContent = t("newRunSetup");
-    ui.turnLabel.textContent = t("chooseScenario");
-    ui.statusHint.textContent = t("newRunSetupDesc");
-    ui.nextTurnButton.style.display = "none";
-    ui.nextTurnButton.disabled = true;
-    ui.newRunButton.style.display = "none";
-    ui.statsGrid.innerHTML = "";
-    return;
-  }
-  ui.newRunButton.style.display = "";
-  if (!state.run || !hasSelectedLanguage()) {
-    ui.newRunButton.style.display = "none";
-    ui.headerTitle.textContent = t("currentRun");
-    ui.turnLabel.textContent = t("gameTitle");
-    ui.statusHint.textContent = t("chooseLanguage");
-    ui.nextTurnButton.textContent = t("nextTurn");
-    ui.nextTurnButton.disabled = true;
-    ui.statsGrid.innerHTML = "";
-    return;
-  }
-
-  const run = state.run;
-  const report = run.currentReport || calculateReport();
-  const dashboardMode = state.activeTab === "dashboard";
-  ui.headerTitle.textContent = dashboardMode ? t("currentRun") : tabTitle();
-  ui.turnLabel.textContent = dashboardMode
-    ? (run.finished
-      ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
-      : t("currentTurnStatus", { turn: run.turn, maxTurns: currentMaxTurns() }))
-    : "";
-  ui.statusHint.textContent = dashboardMode ? headerStatusText(run) : "";
-  ui.nextTurnButton.textContent = t("nextTurn");
-  ui.nextTurnButton.disabled = !turnReady() || run.finished || !dashboardMode;
-  ui.nextTurnButton.style.display = dashboardMode ? "" : "none";
-  ui.statsGrid.innerHTML = dashboardMode
-    ? [
-      [t("cash"), money(run.company.cash)],
-      [t("profit"), money(report.profit)],
-      [t("debt"), money(run.company.debt)],
-      [t("valuation"), money(report.valuation)]
-    ].map(([label, value]) => `<div class="stat-tile"><span>${label}</span><strong>${value}</strong></div>`).join("")
-    : "";
-}
-
-function renderBottomNav() {
-  if (!hasSelectedLanguage() || state.runSetupOpen || !state.run) {
-    ui.bottomNav.innerHTML = "";
-    return;
-  }
-  ui.bottomNav.innerHTML = NAV_ITEMS.map((item) => `
-    <button class="nav-item ${state.activeTab === item.id ? "active" : ""}" data-tab="${item.id}">
-      <img src="${item.icon}" alt="${t(item.labelKey)}" class="nav-icon">
-      <strong>${t(item.labelKey)}</strong>
-    </button>
-  `).join("");
-  ui.bottomNav.querySelectorAll("[data-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.activeTab = button.dataset.tab;
-      render();
-    });
-  });
-}
-
-function renderLanguageSelectScreen() {
-  return `
-    <section class="tab-content-wrap language-screen">
-      <div class="language-card">
-        <p class="eyebrow">${t("gameTitle")}</p>
-        <h2>${t("chooseLanguage")}</h2>
-        <p>${t("chooseLanguageLater")}</p>
-        <div class="language-actions">
-          <button class="language-button primary" data-language="ru">${translations.ru.russian}</button>
-          <button class="language-button" data-language="en">${translations.en.english}</button>
-        </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderLanguageModal() {
-  return `
-    <div class="language-modal">
-      <div class="language-card">
-        <p class="eyebrow">${t("changeLanguage")}</p>
-        <h2>${t("chooseLanguage")}</h2>
-        <p>${t("chooseLanguageLater")}</p>
-        <div class="language-actions">
-          <button class="language-button ${state.selectedLanguage === "ru" ? "primary" : ""}" data-language="ru">${translations.ru.russian}</button>
-          <button class="language-button ${state.selectedLanguage === "en" ? "primary" : ""}" data-language="en">${translations.en.english}</button>
-        </div>
-        <button class="modal-close secondary-button" data-close-language>${t("close")}</button>
-      </div>
-    </div>
-  `;
-}
-
-function previewRunConfiguration() {
-  return createRunConfiguration({
-    scenarioId: state.selectedScenarioId,
-    difficultyId: state.selectedDifficultyId,
-    baseCash: STARTING_CASH,
-    metaExtraCash: metaStartingBonuses().extraCash,
-    stocks: state.stocks,
-    random: () => 0
-  });
-}
-
-function difficultyRewardLabel(difficultyId) {
-  if (difficultyId === "relaxed") return t("setupRewardReduced");
-  if (difficultyId === "hard") return t("setupRewardIncreased");
-  return t("setupRewardNormal");
-}
-
-function renderRunSetupScreen() {
-  const preview = previewRunConfiguration();
-  return `
-    <section class="run-setup-screen">
-      <div class="run-setup-intro">
-        <p class="eyebrow">${t("gameTitle")}</p>
-        <h2>${t("newRunSetup")}</h2>
-        <p>${t("newRunSetupDesc")}</p>
-      </div>
-
-      <div class="run-setup-section">
-        <div class="tab-header"><h2>${t("chooseScenario")}</h2></div>
-        <div class="setup-option-grid scenario-option-grid">
-          ${RUN_SCENARIOS.map((scenario) => `
-            <button class="setup-option-card ${state.selectedScenarioId === scenario.id ? "selected" : ""}" data-run-scenario="${scenario.id}" aria-pressed="${state.selectedScenarioId === scenario.id}">
-              <strong>${t(scenario.titleKey)}</strong>
-              <span>${t(scenario.descriptionKey)}</span>
-            </button>
-          `).join("")}
-        </div>
-      </div>
-
-      <div class="run-setup-section">
-        <div class="tab-header"><h2>${t("chooseDifficulty")}</h2></div>
-        <div class="setup-option-grid difficulty-option-grid">
-          ${RUN_DIFFICULTIES.map((difficulty) => `
-            <button class="setup-option-card ${state.selectedDifficultyId === difficulty.id ? "selected" : ""}" data-run-difficulty="${difficulty.id}" aria-pressed="${state.selectedDifficultyId === difficulty.id}">
-              <strong>${t(difficulty.titleKey)}</strong>
-              <span>${t(difficulty.descriptionKey)}</span>
-            </button>
-          `).join("")}
-        </div>
-      </div>
-
-      <article class="setup-preview-card">
-        <div><span>${t("setupCash")}</span><strong>${money(preview.company.cash)}</strong></div>
-        <div><span>${t("setupDebt")}</span><strong>${money(preview.company.debt)}</strong></div>
-        <div><span>${t("setupRisk")}</span><strong>${percent(preview.company.risk)}</strong></div>
-        <div><span>${t("setupReward")}</span><strong>${difficultyRewardLabel(preview.difficulty.id)}</strong></div>
-      </article>
-
-      <div class="setup-actions">
-        <button class="primary-button" data-start-configured-run>${t("startConfiguredRun")}</button>
-        ${state.run ? `<button class="secondary-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
-      </div>
-    </section>
-  `;
-}
-
-function renderActiveTab() {
-  if (state.activeTab === "meta") return renderMetaTab();
-  if (state.activeTab === "runEnd") return renderRunEndScreen();
-  if (state.activeTab === "dashboard") return renderDashboardTab();
-  if (state.activeTab === "decisions") return renderDecisionsTab();
-  if (state.activeTab === "portfolio") return renderPortfolioTab();
-  if (state.activeTab === "market") return renderMarketTab();
-  return renderEconomyTab();
-}
-
-function renderDashboardTab() {
-  const run = state.run;
-  const regime = economyRegime();
-  const macro = effectiveMacro();
-  const scenario = scenarioById(run.scenarioId);
-  const difficulty = difficultyById(run.difficultyId);
-  return `
-    <section class="tab-screen">
-      <button class="dashboard-cta" data-dashboard-primary>
-        <strong>${turnReady() ? t("nextTurn") : run.eventResolved ? t("chooseAction") : t("resolveEventCta")}</strong>
-        <span>${turnReady() ? t("turnReadyToAdvance") : run.eventResolved ? t("openDecisions") : run.statusMessage}</span>
-      </button>
-      <div class="dashboard-secondary-actions">
-        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
-      </div>
-      <div class="run-configuration-tags">
-        ${tag(`${t("scenarioLabel")}: ${t(scenario.titleKey)}`)}
-        ${tag(`${t("difficultyLabel")}: ${t(difficulty.titleKey)}`, "accent")}
-      </div>
-      <article class="overview-card">
-        <h3>${t("macroRegime")}</h3>
-        <p>${regime.description}</p>
-        <div class="macro-strip">
-          ${macroPill(t("rate"), percent(macro.interestRate))}
-          ${macroPill(t("inflation"), percent(macro.inflation))}
-          ${macroPill(t("demand"), macro.demand.toFixed(2))}
-          ${macroPill(t("energyCost"), macro.energyCost.toFixed(2))}
-          ${macroPill(t("creditAvailability"), macro.creditAvailability.toFixed(2))}
-        </div>
-      </article>
-    </section>
-  `;
-}
-
-function metaFilterOptions() {
-  return [
-    { id: "all", label: t("allFilter") },
-    { id: "available", label: t("availableFilter") },
-    { id: "purchased", label: t("purchasedFilter") },
-    { id: "assets", label: t("assetsCategory") },
-    { id: "business", label: t("businessCategory") },
-    { id: "real_estate", label: t("realEstateCategoryShort") },
-    { id: "market", label: t("marketCategoryShort") },
-    { id: "economy", label: t("economyCategoryShort") },
-    { id: "start_bonus", label: t("startCategoryShort") },
-    { id: "meta", label: t("metaCategoryShort") }
-  ];
-}
-
-function metaCost(unlock, level = unlockLevel(unlock.id)) {
-  if (!unlock.repeatable) return unlock.cost;
-  const scale = unlock.costScaling || 1;
-  return Math.round(unlock.cost * Math.pow(scale, level));
-}
-
-function metaCategoryKey(unlock) {
-  return unlock.category || "meta";
-}
-
-function metaCategoryLabel(unlock) {
-  const key = {
-    assets: "assetsCategory",
-    business: "businessCategory",
-    real_estate: "realEstateCategoryShort",
-    market: "marketCategoryShort",
-    economy: "economyCategoryShort",
-    start_bonus: "startCategoryShort",
-    meta: "metaCategoryShort"
-  }[metaCategoryKey(unlock)] || "metaCategoryShort";
-  return t(key);
-}
-
-function unlockCurrentEffect(unlock, level = unlockLevel(unlock.id)) {
-  if (unlock.id === "unlock_extended_run") return `+${level * (unlock.payload.extraTurns || 0)} ${t("turn")}`;
-  if (unlock.type === "starting_bonus" && unlock.payload.extraCash) return money(unlock.payload.extraCash);
-  if (unlock.type === "starting_bonus" && unlock.payload.debtThresholdBonus) return money(unlock.payload.debtThresholdBonus);
-  return t(unlock.descriptionKey);
-}
-
-function unlockNextEffect(unlock, level = unlockLevel(unlock.id)) {
-  if (unlock.id === "unlock_extended_run") return `+${(level + 1) * (unlock.payload.extraTurns || 0)} ${t("turn")}`;
-  return unlockCurrentEffect(unlock, level + 1);
-}
-
-function unlockState(unlock) {
-  const level = unlockLevel(unlock.id);
-  const purchased = hasPurchasedUnlock(unlock.id);
-  const repeatable = !!unlock.repeatable;
-  const maxed = repeatable && unlock.maxLevel && level >= unlock.maxLevel;
-  const affordable = state.meta.totalKnowledge >= metaCost(unlock, level);
-  if (repeatable) {
-    if (maxed) return { status: t("statusMax"), button: t("maxAction"), disabled: true, tone: "unlocked" };
-    if (level > 0 && affordable) return { status: t("statusUpgradable"), button: t("upgradeAction"), disabled: false, tone: "affordable" };
-    if (level > 0) return { status: t("statusNoKnowledge"), button: t("upgradeAction"), disabled: true, tone: "unlocked" };
-    if (affordable) return { status: t("statusAvailable"), button: t("upgradeAction"), disabled: false, tone: "affordable" };
-    return { status: t("statusClosed"), button: t("upgradeAction"), disabled: true, tone: "locked" };
-  }
-  if (purchased) return { status: t("statusOpened"), button: t("unlocked"), disabled: true, tone: "unlocked" };
-  if (affordable) return { status: t("statusAvailable"), button: t("unlock"), disabled: false, tone: "affordable" };
-  return { status: t("statusClosed"), button: t("unavailableAction"), disabled: true, tone: "locked" };
-}
-
-function unlockMatchesFilter(unlock) {
-  if (state.metaFilter === "all") return true;
-  if (state.metaFilter === "available") return !unlockState(unlock).disabled;
-  if (state.metaFilter === "purchased") return hasPurchasedUnlock(unlock.id);
-  return metaCategoryKey(unlock) === state.metaFilter;
-}
-
-function sortUnlocks(unlocks) {
-  return [...unlocks].sort((a, b) => {
-    const aState = unlockState(a);
-    const bState = unlockState(b);
-    const score = (item, stateInfo) => {
-      if (!stateInfo.disabled && item.repeatable) return 0;
-      if (!stateInfo.disabled) return 1;
-      if (hasPurchasedUnlock(item.id) && !(item.repeatable && !(item.maxLevel && unlockLevel(item.id) >= item.maxLevel))) return 3;
-      return 2;
-    };
-    return score(a, aState) - score(b, bState);
-  });
-}
-
-function renderMetaTab() {
-  const filtered = sortUnlocks(META_UNLOCKS.filter(unlockMatchesFilter));
-  return `
-    <section class="tab-screen">
-      <article class="overview-card prestige-summary">
-        <div class="panel-head"><strong>${t("knowledge")}</strong>${statusChip(`${t("nextRunLengthLabel")}: ${nextRunMaxTurns()}`, "active")}</div>
-        <div class="business-metrics">
-          <div><span>${t("knowledge")}</span><strong>${state.meta.totalKnowledge}</strong></div>
-          <div><span>${t("completedRuns")}</span><strong>${state.meta.completedRuns}</strong></div>
-          <div><span>${t("bestValuation")}</span><strong>${money(state.meta.bestValuation)}</strong></div>
-          <div><span>${t("bestTurnReached")}</span><strong>${state.meta.bestTurnReached}</strong></div>
-        </div>
-      </article>
-      <div class="filter-row prestige-filter-row">
-        ${metaFilterOptions().map((item) => `<button class="filter-chip ${state.metaFilter === item.id ? "active" : ""}" data-meta-filter="${item.id}">${item.label}</button>`).join("")}
-      </div>
-      <section class="prestige-section">
-        <div class="tab-header prestige-section-head"><h2>${t("metaUnlockedContent")}</h2><span>${filtered.length}</span></div>
-        ${filtered.length ? `<div class="prestige-grid">${filtered.map((unlock) => renderUnlockCard(unlock)).join("")}</div>` : `<div class="empty-state">${t("noMetaItemsMatchFilter")}</div>`}
-      </section>
-      <div class="prestige-reset-row">
-        <button class="secondary-button" data-reset-meta>${t("resetMeta")}</button>
-      </div>
-    </section>
-  `;
-}
-
-function renderRunEndScreen() {
-  const summary = state.run.resultSummary || summarizeRun(state.run);
-  return `
-    <section class="tab-screen">
-      <div class="tab-header"><h2>${t("runEndTitle")}</h2><p>${t("runEndSubtitle")}</p></div>
-      <article class="regime-card">
-        <h3>${t("completionReason")}</h3>
-        <p>${endReasonLabel(state.run.endReason)}</p>
-        <div class="business-metrics">
-          <div><span>${t("finalCash")}</span><strong>${money(summary.cash)}</strong></div>
-          <div><span>${t("finalDebt")}</span><strong>${money(summary.debt)}</strong></div>
-          <div><span>${t("finalProfit")}</span><strong>${money(summary.profit)}</strong></div>
-          <div><span>${t("finalValuationLabel")}</span><strong>${money(summary.valuation)}</strong></div>
-          <div><span>${t("turnReached")}</span><strong>${summary.turnReached}</strong></div>
-          <div><span>${t("knowledgeEarned")}</span><strong>${state.run.knowledgeEarned}</strong></div>
-        </div>
-      </article>
-      <div class="button-stack">
-        <button class="primary-button" data-new-run>${t("newRun")}</button>
-        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
-        <button class="secondary-button" data-back-dashboard>${t("backToDashboard")}</button>
-      </div>
-    </section>
-  `;
-}
-
-function renderTurnProgressCard() {
-  return `
-    <article class="overview-card">
-      <h3>${t("turnProgress")}</h3>
-      <div class="progress-list">
-        <div class="progress-row">${statusChip(state.run.eventResolved ? "âœ“" : "â€¢", state.run.eventResolved ? "done" : "active")}<span>${state.run.eventResolved ? t("eventResolved") : t("eventPendingShort")}</span></div>
-        <div class="progress-row">${statusChip(state.run.pendingActionDone ? "âœ“" : "â€¢", state.run.pendingActionDone ? "done" : "")}<span>${state.run.pendingActionDone ? t("actionSelected") : t("actionNotSelected")}</span></div>
-        <div class="progress-row">${statusChip(turnReady() ? "âœ“" : "â€¢", turnReady() ? "done" : "")}<span>${turnReady() ? t("turnReadyToAdvance") : t("nextTurnLocked")}</span></div>
-      </div>
-    </article>
-  `;
-}
-
-function renderDecisionStepper(eventActive, actionActive) {
-  return `
-    <article class="stepper-card">
-      <div class="step-item ${state.run.eventResolved ? "done" : eventActive ? "active" : ""}">
-        <span class="step-index">1</span>
-        <div><strong>${t("eventStep")}</strong><p>${state.run.eventResolved ? t("completed") : eventActive ? t("active") : t("pending")}</p></div>
-      </div>
-      <div class="step-line"></div>
-      <div class="step-item ${state.run.pendingActionDone ? "done" : actionActive ? "active" : ""}">
-        <span class="step-index">2</span>
-        <div><strong>${t("actionStep")}</strong><p>${state.run.pendingActionDone ? t("completed") : actionActive ? t("active") : t("pending")}</p></div>
-      </div>
-    </article>
-  `;
-}
-
-function renderEventChoiceCard(choice, index) {
-  const effectText = describeEffects(choice)
-    .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
-  const selected = state.run.selectedChoiceId === choice.title;
-  return `
-    <article class="choice-card ${selected ? "selected" : ""}">
-      <div class="panel-head">
-        <strong>${choice.title}</strong>
-        ${statusChip(riskLabel(choice), riskTone(choice))}
-      </div>
-      <p>${decisionDescription(choice)}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${effectText || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(choice)}</strong></div>
-      </div>
-      <button class="business-button" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>${selected ? t("selected") : t("chooseOption")}</button>
-    </article>
-  `;
-}
-
-function renderDecisionCardCarousel(id, items, slideRenderer, hint = "") {
-  if (!items.length) return "";
-  const activeIndex = Math.max(0, Math.min(state.decisionCarouselIndex[id] || 0, items.length - 1));
-  return `
-    <div class="choice-carousel ${items.length === 1 ? "single" : ""}" data-carousel="${id}">
-      <div class="choice-carousel-track" data-carousel-track="${id}">
-        ${items.map((item, index) => `<div class="choice-carousel-slide" data-carousel-slide="${id}" data-carousel-index="${index}">${slideRenderer(item, index)}</div>`).join("")}
-      </div>
-      ${items.length > 1 ? `<p class="carousel-hint">${hint || t("swipeMoreOptions")}</p>` : ""}
-      ${items.length > 1 ? `<div class="carousel-dots">${items.map((_, index) => `<button class="carousel-dot ${index === activeIndex ? "active" : ""}" data-carousel-dot="${id}" data-carousel-index="${index}" aria-label="${index + 1}"></button>`).join("")}</div>` : ""}
-    </div>
-  `;
-}
-
-function renderActionCategoryContent() {
-  return actionItemsForCurrentCategory().join("");
-}
-
-function actionItemsForCurrentCategory() {
-  if (!state.run.eventResolved) {
-    return [`<div class="empty-state">${t("actionPanelLocked")}</div>`];
-  }
-  if (state.selectedActionType === "buy") {
-    const groups = groupedMarketBusinesses().filter((group) => !group.locked);
-    const items = groups.flatMap((group) => group.items).slice(0, 6);
-    return items.length ? items.map(renderDecisionBuyCard) : [`<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`];
-  }
-  if (state.selectedActionType === "upgrade") {
-    const items = state.run.company.businesses.filter((owned) => owned.level < businessById(owned.businessId).max_level);
-    return items.length ? items.map(renderDecisionUpgradeCard) : [`<div class="empty-state">${t("noBusinessesMatchFilter")}</div>`];
-  }
-  if (state.selectedActionType === "sell") {
-    const items = state.run.company.businesses.filter((owned) => state.run.company.businesses.length > 1);
-    return items.length ? items.map(renderDecisionSellCard) : [`<div class="empty-state">${t("noBusinessesMatchFilter")}</div>`];
-  }
-  if (state.selectedActionType === "cards") {
-    return state.run.currentCards.length ? state.run.currentCards.map(renderDecisionCardPlay) : [`<div class="empty-state">${t("actionPanelLocked")}</div>`];
-  }
-  if (state.selectedActionType === "repay") {
-    return debtRepayCardItems();
-  }
-  return [];
-}
-
-function renderDebtRepayCards() {
-  return debtRepayCardItems().join("");
-}
-
-function debtRepayCardItems() {
-  const debt = state.run.company.debt;
-  if (debt <= 0) return [`<div class="empty-state">${t("debtCleared")}</div>`];
-  const options = [
-    { id: "quarter", label: t("repayQuarter"), amount: repaymentAmount(0.25) },
-    { id: "half", label: t("repayHalf"), amount: repaymentAmount(0.5) },
-    { id: "all", label: t("repayAll"), amount: repaymentAmount(1) }
-  ].filter((item) => item.amount > 0);
-  return options.map((item) => `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("debt")} ${money(state.run.company.debt)}`, "accent")}${tag(`${t("cash")} ${money(state.run.company.cash)}`)}</div>
-      <h3>${item.label}</h3>
-      <p>${t("repayDebtHint")}</p>
-      <div class="business-metrics">
-        <div><span>${t("debtPayment")}</span><strong>${money(item.amount)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${signedPercent(-Math.min(0.03, item.amount / 100000))}</strong></div>
-      </div>
-      <button class="business-button" data-repay-debt="${item.id}" ${canTakeAction(item.amount) ? "" : "disabled"}>${item.label}</button>
-    </article>
-  `);
-}
-
-function renderDecisionsTab() {
-  const run = state.run;
-  const event = run.currentEvent;
-  const eventActive = !run.eventResolved;
-  const actionActive = run.eventResolved && !run.pendingActionDone;
-  const categories = [
-    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.png" },
-    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.png" },
-    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), icon: "./assets/icons/dashboard.png" },
-    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), icon: "./assets/icons/decisions.png" }
-  ];
-  if (run.company.debt > 0) {
-    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), icon: "./assets/icons/economy.png" });
-  }
-  return `
-    <section class="tab-screen">
-      <div class="decision-subheader">
-        <span>${t("cashShort")}: ${money(run.company.cash)}</span>
-        <span>${t("turnShort")} ${Math.min(run.turn, currentMaxTurns())}/${currentMaxTurns()}</span>
-        ${statusChip(compactStatusChip())}
-      </div>
-      ${renderDecisionStepper(eventActive, actionActive)}
-      ${!run.eventResolved ? renderDecisionCardCarousel("event-choices", event.choices, renderEventChoiceCard, t("swipeMoreOptions")) : ``}
-      ${run.eventResolved && !run.pendingActionDone ? `
-        <article class="overview-card">
-          <h3>${t("turnAction")}</h3>
-          <p>${state.selectedActionType ? (categories.find((item) => item.id === state.selectedActionType)?.hint || "") : t("chooseActionType")}</p>
-          ${state.selectedActionType
-            ? `<div class="action-toolbar"><button class="secondary-button" data-action-back>${t("back")}</button></div>`
-            : `<div class="action-type-grid">${categories.map((category) => `
-                <button class="action-type-button" data-action-type="${category.id}">
-                  <img src="${category.icon}" alt="${category.label}" class="action-type-icon">
-                  <strong>${category.label}</strong>
-                  <span>${category.hint}</span>
-                </button>
-              `).join("")}</div>`
-          }
-        </article>
-      ` : ""}
-      ${run.eventResolved && !run.pendingActionDone && state.selectedActionType ? `
-        ${renderDecisionCardCarousel(`action-${state.selectedActionType}`, actionItemsForCurrentCategory(), (item) => item, t("swipeMoreOptions"))}
-      ` : ""}
-      ${run.pendingActionDone ? `<article class="overview-card"><h3>${t("turnProgress")}</h3><p>${t("turnReadyToAdvance")}</p></article>` : ""}
-    </section>
-  `;
-}
-
-function renderPortfolioTab() {
-  const filters = [
-    { id: "all", label: t("all") },
-    { id: "finance", label: t("finance") },
-    { id: "it", label: t("tech") },
-    { id: "real_estate", label: t("realEstate") },
-    { id: "manufacturing", label: t("industry") },
-    { id: "energy", label: t("energy") },
-    { id: "retail", label: t("retail") }
-  ];
-  const owned = filteredPortfolio();
-  const active = activeSynergies();
-  const near = hasPurchasedUnlock("unlock_synergy_scanner") ? almostSynergies() : [];
-  return `
-    <section class="tab-screen">
-      <div class="tab-header"><p>${t("portfolioSubtitle")}</p></div>
-      <div class="filter-row">
-        ${filters.map((item) => `<button class="filter-chip ${state.portfolioFilter === item.id ? "active" : ""}" data-portfolio-filter="${item.id}">${item.label}</button>`).join("")}
-      </div>
-      <div class="portfolio-grid">${owned.map(renderOwnedBusinessCard).join("") || `<div class="empty-state">${t("noBusinessesMatchFilter")}</div>`}</div>
-      <div class="tab-header"><h2>${t("activeSynergies")}</h2><p>${t("portfolioSubtitle")}</p></div>
-      <div class="synergy-section">
-        ${active.length ? active.map(renderActiveSynergy).join("") : `<div class="empty-state">${t("noActiveSynergies")}</div>`}
-        ${near.map(renderNearSynergy).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function renderMarketTab() {
-  const marketTiles = [
-    { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "./assets/icons/market.png" },
-    { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "./assets/icons/portfolio.png" },
-    { id: "stocks", label: t("stockMarketCategory"), description: t("stockMarketCategoryDesc"), icon: "./assets/icons/economy.png" }
-  ];
-  const categoryView = state.marketView !== "root";
-  const groups = groupedMarketBusinesses().filter((group) => state.marketView === "businesses"
-    ? group.industry !== "real_estate"
-    : state.marketView === "real_estate"
-      ? group.industry === "real_estate"
-      : true);
-  return `
-    <section class="tab-screen">
-      ${state.pendingActionType === "buy_asset" ? `<article class="overview-card market-action-banner"><h3>${t("turnActionBuyOneAsset")}</h3><p>${runActionStatusText()}</p></article>` : ""}
-      ${categoryView ? `<div class="market-back-row"><button class="dashboard-cta market-back-button" data-market-root><strong>${t("backToMarket")}</strong></button></div>` : ""}
-      ${state.marketView === "root" ? `
-        <article class="overview-card">
-          <h3>${t("chooseAssetType")}</h3>
-          <p>${t("availableCash")}: ${money(state.run.company.cash)}</p>
-          <div class="market-category-grid">
-            ${marketTiles.map((item) => `
-              <button class="market-category-card" data-market-category="${item.id}">
-                <img src="${item.icon}" alt="${item.label}" class="action-type-icon">
-                <strong>${item.label}</strong>
-                <span>${item.description}</span>
-              </button>
-            `).join("")}
-          </div>
-        </article>
-      ` : state.marketView === "stocks" ? renderStockMarket() : `
-        <div class="portfolio-grid">${groups.length ? groups.map(renderMarketGroup).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}</div>
-      `}
-      ${state.pendingActionType === "buy_asset" && state.run.pendingActionDone ? `<div class="market-back-row"><button class="business-button" data-back-decisions>${t("backToDecisions")}</button></div>` : ""}
-      ${state.activeStockId ? renderStockDetailSheet() : ""}
-    </section>
-  `;
-}
-
-function renderEconomyTab() {
-  const run = state.run;
-  const regime = economyRegime();
-  const macro = effectiveMacro();
-  const history = run.history.slice(0, 3);
-  return `
-    <section class="tab-screen">
-      <article class="regime-card">
-        <h3>${regime.name}</h3>
-        <p>${regime.description}</p>
-        <div class="tag-row">
-          ${tag(`${t("rate")} ${percent(macro.interestRate)}`, "accent")}
-          ${tag(`${t("inflation")} ${percent(macro.inflation)}`, "accent")}
-          ${tag(`${t("demand")} ${macro.demand.toFixed(2)}`, "accent")}
-          ${tag(`${t("energyCost")} ${macro.energyCost.toFixed(2)}`, "accent")}
-          ${tag(`${t("creditAvailability")} ${macro.creditAvailability.toFixed(2)}`, "accent")}
-          ${tag(`${t("marketRisk")} ${percent(macro.marketRisk)}`, "accent")}
-        </div>
-      </article>
-      <div class="macro-grid">
-        ${macroCard(t("rate"), percent(macro.interestRate), rateInsight(macro.interestRate))}
-        ${macroCard(t("inflation"), percent(macro.inflation), inflationInsight(macro.inflation))}
-        ${macroCard(t("demand"), macro.demand.toFixed(2), demandInsight(macro.demand))}
-        ${macroCard(t("energyCost"), macro.energyCost.toFixed(2), energyInsight(macro.energyCost))}
-        ${macroCard(t("creditAvailability"), macro.creditAvailability.toFixed(2), creditInsight(macro.creditAvailability))}
-        ${macroCard(t("marketRisk"), percent(macro.marketRisk), marketRiskInsight(macro.marketRisk))}
-      </div>
-      ${run.activeModifiers.length ? `<article class="overview-card"><h3>${t("temporaryEffects")}</h3><p>${run.activeModifiers.map((modifier) => describeModifier(modifier)).join(", ")}</p></article>` : ""}
-      <article class="overview-card">
-        <h3>${t("whoWinsAndLoses")}</h3>
-        <div class="winners-grid">
-          <div><span class="eyebrow">${t("positive")}</span><p class="positive">${regime.winners.join(", ")}</p></div>
-          <div><span class="eyebrow">${t("negative")}</span><p class="negative">${regime.losers.join(", ")}</p></div>
-        </div>
-      </article>
-      <div class="tab-header"><h2>${t("recentEvents")}</h2></div>
-      <div class="timeline-list">
-        ${history.map((item) => `<article class="timeline-item"><strong>${t("turn")} ${item.turn}: ${item.title}</strong><p>${item.body}</p></article>`).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function renderStockMarket() {
-  const cycle = currentCycleLabel();
-  return `
-    <article class="regime-card">
-      <h3>${t("stockCycle")}: ${cycle.name}</h3>
-      <p>${cycle.description}</p>
-    </article>
-    <div class="stock-list">
-      ${state.run.stockMarket.listings.map(renderStockCard).join("")}
-    </div>
-  `;
-}
-
-function runActionStatusText() {
-  if (state.run.pendingActionDone) return t("actionAlreadyCompleted");
-  if (state.pendingActionType === "buy_asset") return t("turnActionBuyOneAsset");
-  return t("chooseAssetType");
-}
-
-function bindTabEvents() {
-  bindLanguageEvents();
-  ui.tabContent.querySelectorAll("[data-run-scenario]").forEach((button) => button.addEventListener("click", () => {
-    state.selectedScenarioId = button.dataset.runScenario;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-run-difficulty]").forEach((button) => button.addEventListener("click", () => {
-    state.selectedDifficultyId = button.dataset.runDifficulty;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-start-configured-run]").forEach((button) => button.addEventListener("click", startRun));
-  ui.tabContent.querySelectorAll("[data-cancel-run-setup]").forEach((button) => button.addEventListener("click", closeRunSetup));
-  ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
-  ui.tabContent.querySelectorAll("[data-dashboard-primary]").forEach((button) => button.addEventListener("click", () => {
-    if (turnReady()) advanceTurn();
-    else {
-      state.activeTab = "decisions";
-      render();
-    }
-  }));
-  ui.tabContent.querySelectorAll("[data-action-type]").forEach((button) => button.addEventListener("click", () => {
-    const actionType = button.dataset.actionType;
-    if (actionType === "buy") {
-      state.pendingActionType = "buy_asset";
-      state.selectedActionType = null;
-      state.marketView = "root";
-      state.activeTab = "market";
-      render();
-      return;
-    }
-    state.selectedActionType = actionType;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-action-back]").forEach((button) => button.addEventListener("click", () => {
-    state.selectedActionType = null;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-meta-unlock]").forEach((button) => button.addEventListener("click", () => purchaseUnlock(button.dataset.metaUnlock)));
-  ui.tabContent.querySelectorAll("[data-reset-meta]").forEach((button) => button.addEventListener("click", resetMetaProgression));
-  ui.tabContent.querySelectorAll("[data-new-run]").forEach((button) => button.addEventListener("click", openRunSetup));
-  ui.tabContent.querySelectorAll("[data-back-dashboard]").forEach((button) => button.addEventListener("click", backToDashboard));
-  ui.tabContent.querySelectorAll("[data-choice]").forEach((button) => button.addEventListener("click", () => resolveEventChoice(Number(button.dataset.choice))));
-  ui.tabContent.querySelectorAll("[data-play-card]").forEach((button) => button.addEventListener("click", () => playCard(button.dataset.playCard)));
-  ui.tabContent.querySelectorAll("[data-repay-debt]").forEach((button) => button.addEventListener("click", () => repayDebt(button.dataset.repayDebt)));
-  ui.tabContent.querySelectorAll("[data-upgrade]").forEach((button) => button.addEventListener("click", () => upgradeBusiness(button.dataset.upgrade)));
-  ui.tabContent.querySelectorAll("[data-buy]").forEach((button) => button.addEventListener("click", () => buyBusiness(button.dataset.buy)));
-  ui.tabContent.querySelectorAll("[data-sell]").forEach((button) => button.addEventListener("click", () => sellBusiness(button.dataset.sell)));
-  ui.tabContent.querySelectorAll("[data-portfolio-filter]").forEach((button) => button.addEventListener("click", () => { state.portfolioFilter = button.dataset.portfolioFilter; render(); }));
-  ui.tabContent.querySelectorAll("[data-market-industry]").forEach((button) => button.addEventListener("click", () => { state.marketFilterIndustry = button.dataset.marketIndustry; render(); }));
-  ui.tabContent.querySelectorAll("[data-market-risk]").forEach((button) => button.addEventListener("click", () => { state.marketFilterRisk = button.dataset.marketRisk; render(); }));
-  ui.tabContent.querySelectorAll("[data-market-view]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketView; render(); }));
-  ui.tabContent.querySelectorAll("[data-market-category]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketCategory; render(); }));
-  ui.tabContent.querySelectorAll("[data-market-root]").forEach((button) => button.addEventListener("click", () => { state.marketView = "root"; render(); }));
-  ui.tabContent.querySelectorAll("[data-back-decisions]").forEach((button) => button.addEventListener("click", backToDecisionsTab));
-  ui.tabContent.querySelectorAll("[data-open-stock]").forEach((button) => button.addEventListener("click", () => openStockSheet(button.dataset.openStock)));
-  ui.tabContent.querySelectorAll("[data-close-stock-sheet]").forEach((button) => button.addEventListener("click", closeStockSheet));
-  ui.tabContent.querySelectorAll("[data-stock-trade-mode]").forEach((button) => button.addEventListener("click", () => {
-    state.selectedTradeMode = button.dataset.stockTradeMode;
-    if (state.selectedTradeMode === "buy") state.stockSellPercent = 0;
-    if (state.selectedTradeMode === "sell") state.stockBuyPercent = 0;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-meta-filter]").forEach((button) => button.addEventListener("click", () => {
-    state.metaFilter = button.dataset.metaFilter;
-    render();
-  }));
-  ui.tabContent.querySelectorAll("[data-buy-stock]").forEach((button) => button.addEventListener("click", () => buyStock(button.dataset.buyStock)));
-  ui.tabContent.querySelectorAll("[data-sell-stock]").forEach((button) => button.addEventListener("click", () => sellStock(button.dataset.sellStock)));
-  bindCarouselInteractions();
-  bindTradeBars();
-}
-
-function bindLanguageEvents() {
-  ui.tabContent.querySelectorAll("[data-language]").forEach((button) => button.addEventListener("click", () => setLanguage(button.dataset.language)));
-  ui.tabContent.querySelectorAll("[data-open-language]").forEach((button) => button.addEventListener("click", openLanguageModal));
-  ui.tabContent.querySelectorAll("[data-close-language]").forEach((button) => button.addEventListener("click", closeLanguageModal));
-}
-
-function bindCarouselInteractions() {
-  ui.tabContent.querySelectorAll("[data-carousel-track]").forEach((carousel) => {
-    const carouselId = carousel.dataset.carouselTrack;
-    const slides = carousel.querySelectorAll(`[data-carousel-slide="${carouselId}"]`);
-    const gap = 14;
-    const syncDots = () => {
-      if (!slides.length) return;
-      const slideWidth = slides[0].getBoundingClientRect().width + gap;
-      const index = Math.max(0, Math.min(slides.length - 1, Math.round(carousel.scrollLeft / Math.max(1, slideWidth))));
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((dot, dotIndex) => {
-        dot.classList.toggle("active", dotIndex === index);
-      });
-    };
-
-    syncDots();
-    carousel.addEventListener("wheel", (event) => {
-      if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-        event.preventDefault();
-        carousel.scrollLeft += event.deltaY;
-      }
-    }, { passive: false });
-
-    let isDown = false;
-    let startX = 0;
-    let startLeft = 0;
-
-    carousel.addEventListener("mousedown", (event) => {
-      isDown = true;
-      startX = event.pageX;
-      startLeft = carousel.scrollLeft;
-      carousel.classList.add("dragging");
-    });
-    window.addEventListener("mouseup", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mouseleave", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mousemove", (event) => {
-      if (!isDown) return;
-      event.preventDefault();
-      carousel.scrollLeft = startLeft - (event.pageX - startX);
-    });
-    carousel.addEventListener("scroll", syncDots, { passive: true });
-  });
-
-  ui.tabContent.querySelectorAll("[data-carousel-dot]").forEach((dot) => {
-    dot.addEventListener("click", () => {
-      const carouselId = dot.dataset.carouselDot;
-      const index = Number(dot.dataset.carouselIndex || 0);
-      const track = ui.tabContent.querySelector(`[data-carousel-track="${carouselId}"]`);
-      const slide = track?.querySelector(`[data-carousel-slide="${carouselId}"][data-carousel-index="${index}"]`);
-      if (!track || !slide) return;
-      track.scrollTo({ left: slide.offsetLeft - 20, behavior: "smooth" });
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((item, dotIndex) => {
-        item.classList.toggle("active", dotIndex === index);
-      });
-    });
-  });
-}
-
-function resolveEventChoice(choiceIndex) {
-  const run = state.run;
-  if (run.finished || run.eventResolved) return;
-  const choice = run.currentEvent.choices[choiceIndex];
-  applyEffects(run.currentEvent);
-  applyEffects(choice);
-  run.selectedChoiceId = choice.title;
-  run.eventResolved = true;
-  run.statusMessage = t("decisionLocked");
-  run.history.unshift({ turn: run.turn, title: run.currentEvent.title, body: `${t("choiceSelected")}: ${choice.title}` });
-  state.selectedActionType = null;
-  state.activeTab = "decisions";
-  saveCurrentRun();
-  render();
-}
-
-function playCard(cardId) {
-  const run = state.run;
-  const card = run.currentCards.find((item) => item.id === cardId);
-  if (!card || !canTakeAction(card.cost || 0)) return;
-  state.selectedActionItem = cardId;
-  run.company.cash -= card.cost || 0;
-  applyEffects(card);
-  finalizeTurnAction(t("cardPlayed", { name: card.title }));
-}
-
-function buyBusiness(businessId) {
-  const run = state.run;
-  const business = businessById(businessId);
-  if (!business || !canTakeAction(business.cost)) return;
-  if (run.company.businesses.some((item) => item.businessId === businessId)) return;
-  state.selectedActionItem = businessId;
-  run.company.cash -= business.cost;
-  run.company.businesses.push({ businessId, level: 1 });
-  if (state.pendingActionType === "buy_asset") {
-    finalizeTurnAction(`${t("assetPurchased")}. ${t("turnActionCompletedLabel")}.`, { activeTab: "market" });
-    return;
-  }
-  finalizeTurnAction(t("boughtBusiness", { name: business.name }));
-}
-
-function upgradeBusiness(businessId) {
-  const run = state.run;
-  const owned = run.company.businesses.find((item) => item.businessId === businessId);
-  const business = businessById(businessId);
-  if (!owned || !business) return;
-  const cost = upgradeCost(owned);
-  if (!canTakeAction(cost) || owned.level >= business.max_level) return;
-  state.selectedActionItem = businessId;
-  run.company.cash -= cost;
-  owned.level += 1;
-  finalizeTurnAction(t("upgradedBusiness", { name: business.name, level: owned.level }));
-}
-
-function sellBusiness(businessId) {
-  const run = state.run;
-  const owned = run.company.businesses.find((item) => item.businessId === businessId);
-  if (!owned || !canTakeAction(0)) return;
-  const business = businessById(businessId);
-  const saleValue = Math.round(business.cost * (0.55 + owned.level * 0.15));
-  state.selectedActionItem = businessId;
-  run.company.businesses = run.company.businesses.filter((item) => item.businessId !== businessId);
-  run.company.cash += saleValue;
-  finalizeTurnAction(t("soldBusiness", { name: business.name, value: money(saleValue) }));
-}
-
-function buyStock(stockId) {
-  const listing = stockById(stockId);
-  if (!listing) return;
-  const order = calculateBuyOrder(stockId, state.stockBuyPercent);
-  const lotSize = order.shares;
-  const totalCost = order.cost;
-  if (!lotSize) return;
-  if (!canTakeAction(totalCost)) return;
-  state.selectedActionItem = stockId;
-  const holding = state.run.company.stocks.find((item) => item.stockId === stockId);
-  if (holding) {
-    holding.shares += lotSize;
-    holding.averagePrice = +((((holding.averagePrice * (holding.shares - lotSize)) + totalCost) / holding.shares).toFixed(2));
-  } else {
-    state.run.company.stocks.push({ stockId, shares: lotSize, averagePrice: listing.price });
-  }
-  state.run.company.cash -= totalCost;
-  finalizeTurnAction(t("boughtShares", { count: lotSize }));
-}
-
-function sellStock(stockId) {
-  const listing = stockById(stockId);
-  if (!listing) return;
-  const order = calculateSellOrder(stockId, state.stockSellPercent);
-  const holding = state.run.company.stocks.find((item) => item.stockId === stockId);
-  if (!holding || !order.shares || !canTakeAction(0)) return;
-  state.selectedActionItem = stockId;
-  holding.shares -= order.shares;
-  state.run.company.cash += order.value;
-  if (holding.shares <= 0) state.run.company.stocks = state.run.company.stocks.filter((item) => item.stockId !== stockId);
-  finalizeTurnAction(t("soldShares", { count: order.shares }));
-}
-
-function repaymentAmount(fraction) {
-  return Math.max(0, Math.min(state.run.company.debt, Math.floor(state.run.company.debt * fraction), state.run.company.cash));
-}
-
-function repayDebt(mode) {
-  const map = { quarter: 0.25, half: 0.5, all: 1 };
-  const fraction = map[mode];
-  if (!fraction) return;
-  const amount = repaymentAmount(fraction);
-  if (!amount || !canTakeAction(amount)) return;
-  state.selectedActionItem = `repay-${mode}`;
-  state.run.company.cash -= amount;
-  state.run.company.debt = Math.max(0, state.run.company.debt - amount);
-  state.run.company.risk = clamp(state.run.company.risk - Math.min(0.03, amount / 100000), 0.01, 0.95);
-  finalizeTurnAction(`${t("debtPayment")}: ${money(amount)}`);
-}
-
-function finalizeTurnAction(message, options = {}) {
-  const run = state.run;
-  run.pendingActionDone = true;
-  run.statusMessage = t("nextTurnReady");
-  run.history.unshift({ turn: run.turn, title: t("actionCompleted"), body: message });
-  if (!options.keepSelectedActionType) state.selectedActionType = null;
-  state.selectedActionItem = null;
-  state.activeStockId = null;
-  state.selectedTradeMode = null;
-  state.stockBuyPercent = 0;
-  state.stockSellPercent = 0;
-  state.activeTab = options.activeTab || "dashboard";
-  if (options.marketView) state.marketView = options.marketView;
-  saveCurrentRun();
-  render();
-}
-
-function advanceTurn() {
-  const run = state.run;
-  if (!run || !run.eventResolved || !run.pendingActionDone || run.finished) return;
-  run.turn += 1;
-  if (checkGameEnd()) {
-    render();
-    return;
-  }
-  beginTurn();
-}
-
-function checkGameEnd() {
-  const run = state.run;
-  const debtPressure = run.company.debt > debtPressureThreshold(run);
-  const cashBankruptcy = run.company.cash < -5000;
-  const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < run.company.risk;
-  const bankrupt = cashBankruptcy || debtCollapse;
-  const maxed = run.turn > currentMaxTurns();
-  if (bankrupt || maxed) {
-    run.finished = true;
-    run.endReason = maxed ? "completed_all_turns" : debtCollapse ? "debt_collapse" : "bankruptcy";
-    run.statusMessage = bankrupt ? t("runEndedInsolvency") : t("runCompletedSuccessfully");
-    run.resultSummary = summarizeRun(run);
-    run.knowledgeEarned = calculateKnowledgeReward(run);
-    claimRunReward(run);
-    clearRunState(localStorage, RUN_KEY);
-    run.history.unshift({
-      turn: Math.min(run.turn, currentMaxTurns()),
-      title: t("runComplete"),
-      body: bankrupt
-        ? debtCollapse ? t("debtCollapse") : t("bankruptcy")
-        : t("finalValuation", { value: money(run.resultSummary.valuation) })
-    });
-    state.activeTab = "runEnd";
-    return true;
-  }
-  return false;
-}
-
-function calculateReport() {
-  const run = state.run;
-  const temporary = activeTemporaryTotals();
-  const macro = effectiveMacro();
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of run.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    const demandFactor = 1 + ((macro.demand - 1) * business.demand_sensitivity);
-    const inflationRevenue = 1 + macro.inflation * 0.7;
-    const inflationExpense = 1 + macro.inflation;
-    const energyFactor = 1 + ((macro.energyCost - 1) * business.energy_use);
-    revenue += business.revenue * levelMultiplier * demandFactor * inflationRevenue;
-    expenses += business.expense * levelMultiplier * Math.max(0.5, energyFactor) * inflationExpense;
-  }
-  const synergy = activeSynergyBonus();
-  revenue *= 1 + run.company.revenueBonus + temporary.revenue_bonus + synergy.revenue;
-  expenses *= Math.max(0.2, 1 + run.company.expenseBonus + temporary.expense_bonus + synergy.expense);
-  const effectiveRisk = clamp(run.company.risk + temporary.risk, 0.01, 0.95);
-  const interest = run.company.debt * macro.interestRate;
-  const dividends = stockDividends();
-  const profit = revenue - expenses - interest + dividends;
-  const valuation = run.company.cash + assetValue() + stockHoldingsValue() + Math.max(0, profit * 8) - run.company.debt;
-  return { revenue, expenses, interest, profit, valuation, effectiveRisk, dividends };
-}
-
-function assetValue() {
-  return state.run.company.businesses.reduce((sum, owned) => {
-    const business = businessById(owned.businessId);
-    return sum + business.cost * (1 + owned.level * 0.25);
-  }, 0);
-}
-
-function stockHoldingsValue() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    return sum + (listing ? listing.price * holding.shares : 0);
-  }, 0);
-}
-
-function stockDividends() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    if (!listing) return sum;
-    return sum + (listing.price * holding.shares * (listing.dividend_yield || 0));
-  }, 0);
-}
-
-function createInitialStockMarket() {
-  return {
-    listings: state.stocks.map((stock) => ({ ...stock, price: stock.price, momentum: 0, priceHistory: createStockHistory(stock.price, 0, stock.priceHistory) }))
-  };
-}
-
-function stockById(id) {
-  return state.run.stockMarket.listings.find((item) => item.id === id);
-}
-
-function stockHolding(stockId) {
-  return state.run.company.stocks.find((item) => item.stockId === stockId) || null;
-}
-
-function createStockHistory(price, momentum, seed = []) {
-  if (seed?.length) return seed.slice(-100);
-  const history = [];
-  let cursor = price;
-  for (let i = 0; i < 99; i += 1) {
-    const drift = momentum * 0.4;
-    cursor = Math.max(1, +(cursor * (1 - drift + (Math.random() - 0.5) * 0.03)).toFixed(2));
-    history.unshift(cursor);
-  }
-  history.push(price);
-  return history.slice(-100);
-}
-
-function openStockSheet(stockId) {
-  state.activeStockId = stockId;
-  state.selectedTradeMode = null;
-  state.activeStockPointIndex = null;
-  state.stockBuyPercent = 0;
-  state.stockSellPercent = 0;
-  render();
-}
-
-function closeStockSheet() {
-  state.activeStockId = null;
-  state.selectedTradeMode = null;
-  state.activeStockPointIndex = null;
-  state.stockBuyPercent = 0;
-  state.stockSellPercent = 0;
-  render();
-}
-
-function getPercentFromPointer(event, element) {
-  const rect = element.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const raw = x / rect.width;
-  return Math.max(0, Math.min(1, raw));
-}
-
-function calculateMaxBuyShares(stockId) {
-  const stock = stockById(stockId);
-  if (!stock) return 0;
-  return Math.floor(state.run.company.cash / stock.price);
-}
-
-function calculateBuyOrder(stockId, percentValue) {
-  const stock = stockById(stockId);
-  if (!stock) return { shares: 0, cost: 0 };
-  const maxShares = calculateMaxBuyShares(stockId);
-  const shares = Math.floor(maxShares * percentValue);
-  return { shares, cost: +(shares * stock.price).toFixed(2) };
-}
-
-function calculateSellOrder(stockId, percentValue) {
-  const stock = stockById(stockId);
-  const holding = stockHolding(stockId);
-  if (!stock || !holding) return { shares: 0, value: 0 };
-  const shares = Math.floor(holding.shares * percentValue);
-  return { shares, value: +(shares * stock.price).toFixed(2) };
-}
-
-function bindTradeBars() {
-  ui.tabContent.querySelectorAll("[data-trade-bar]").forEach((bar) => {
-    let dragging = false;
-    const mode = bar.dataset.tradeBar;
-    const setValue = (event) => {
-      const value = getPercentFromPointer(event, bar);
-      if (mode === "buy") state.stockBuyPercent = value;
-      else state.stockSellPercent = value;
-      refreshActiveStockTradeUI();
-    };
-    bar.addEventListener("pointerdown", (event) => {
-      dragging = true;
-      bar.setPointerCapture(event.pointerId);
-      setValue(event);
-    });
-    bar.addEventListener("pointermove", (event) => {
-      if (!dragging) return;
-      setValue(event);
-    });
-    const stop = () => { dragging = false; };
-    bar.addEventListener("pointerup", stop);
-    bar.addEventListener("pointercancel", stop);
-  });
-}
-
-function refreshActiveStockTradeUI() {
-  const stockId = state.activeStockId;
-  if (!stockId) return;
-  const buyOrder = calculateBuyOrder(stockId, state.stockBuyPercent);
-  const sellOrder = calculateSellOrder(stockId, state.stockSellPercent);
-  const sharesLabel = t("shares").toLowerCase();
-
-  const sync = (mode, percentValue, order, canSubmit) => {
-    const bar = ui.tabContent.querySelector(`[data-trade-bar="${mode}"]`);
-    const fill = bar?.querySelector(".trade-bar-fill");
-    const thumb = bar?.querySelector(".trade-bar-thumb");
-    const percentLabel = ui.tabContent.querySelector(`[data-trade-percent-label="${mode}"]`);
-    const amount = ui.tabContent.querySelector(`[data-trade-amount="${mode}"]`);
-    const shares = ui.tabContent.querySelector(`[data-trade-shares="${mode}"]`);
-    const action = ui.tabContent.querySelector(`[data-trade-action="${mode}"]`);
-    const width = `${Math.round(percentValue * 100)}%`;
-    if (fill) fill.style.width = width;
-    if (thumb) thumb.style.left = width;
-    if (percentLabel) percentLabel.textContent = width;
-    if (amount) amount.textContent = `${t("amountLabel")} ${stockMoney(mode === "buy" ? order.cost : order.value)}`;
-    if (shares) shares.textContent = `${order.shares} ${sharesLabel}`;
-    if (action) action.disabled = !canSubmit;
-  };
-
-  sync("buy", state.stockBuyPercent, buyOrder, buyOrder.shares > 0 && canTakeAction(buyOrder.cost));
-  sync("sell", state.stockSellPercent, sellOrder, sellOrder.shares > 0 && canTakeAction(0));
-}
-
-function updateMarketCycle() {
-  const macro = effectiveMacro();
-  if (macro.interestRate >= 0.055) state.run.marketCycle = "rates";
-  else if (macro.inflation >= 0.05) state.run.marketCycle = "inflation";
-  else if (macro.demand <= 0.92) state.run.marketCycle = "consumer";
-  else if (macro.creditAvailability >= 1.1) state.run.marketCycle = "growth";
-  else state.run.marketCycle = "balanced";
-}
-
-function currentCycleLabel() {
-  const map = {
-    balanced: { name: t("balancedExpansion"), description: t("balancedExpansionDesc") },
-    consumer: { name: t("demand"), description: t("demandInsightHigh") },
-    growth: { name: t("cheapCreditBoom"), description: t("cheapCreditBoomDesc") },
-    inflation: { name: t("inflationShock"), description: t("inflationShockDesc") },
-    rates: { name: t("highRateSqueeze"), description: t("highRateSqueezeDesc") }
-  };
-  return map[state.run.marketCycle] || map.balanced;
-}
-
-function tickStockMarket() {
-  const cycle = state.run.marketCycle;
-  state.run.stockMarket.listings = state.run.stockMarket.listings.map((listing) => {
-    const cycleBoost = listing.cycle_bias === cycle ? 0.03 : cycle === "balanced" ? 0.01 : -0.01;
-    const macroPenalty = listing.sector === "real_estate" && cycle === "rates" ? -0.03 : 0;
-    const randomShock = (Math.random() - 0.5) * listing.volatility;
-    const change = cycleBoost + macroPenalty + randomShock;
-    const nextPrice = Math.max(1, +(listing.price * (1 + change)).toFixed(2));
-    return { ...listing, momentum: +change.toFixed(3), price: nextPrice, priceHistory: [...(listing.priceHistory || []), nextPrice].slice(-100) };
-  });
-}
-
-function applyEffects(source) {
-  const run = state.run;
-  run.company.cash += source.cash || 0;
-  run.company.debt = Math.max(0, run.company.debt + (source.debt || 0));
-  run.company.risk = clamp(run.company.risk + (source.risk || 0), 0.01, 0.95);
-  run.company.revenueBonus += source.revenue_bonus || 0;
-  run.company.expenseBonus += source.expense_bonus || 0;
-  if (source.interest_rate) run.macro.interestRate = Math.max(0.01, run.macro.interestRate + source.interest_rate);
-  if (source.inflation) run.macro.inflation = Math.max(0.01, run.macro.inflation + source.inflation);
-  if (source.demand) run.macro.demand = Math.max(0.01, run.macro.demand + source.demand);
-  if (source.energy_cost) run.macro.energyCost = Math.max(0.01, run.macro.energyCost + source.energy_cost);
-  if (source.credit_availability) run.macro.creditAvailability = Math.max(0.01, run.macro.creditAvailability + source.credit_availability);
-  if (source.market_risk) run.macro.marketRisk = Math.max(0.01, run.macro.marketRisk + source.market_risk);
-  if (source.temporary_effects && source.duration_turns) {
-    run.activeModifiers.push({
-      label: source.title || source.id || "Modifier",
-      effects: source.temporary_effects,
-      remainingTurns: source.duration_turns
-    });
-  }
-}
-
-function chooseEvent() {
-  const eligible = state.events.filter(eventUnlocked).filter(eventAllowed);
-  if (!eligible.length) return sample(state.events);
-  const total = eligible.reduce((sum, item) => sum + Math.max(1, item.weight || 1), 0);
-  let roll = Math.random() * total;
-  for (const event of eligible) {
-    roll -= Math.max(1, event.weight || 1);
-    if (roll <= 0) return event;
-  }
-  return eligible[eligible.length - 1];
-}
-
-function eventAllowed(event) {
-  const run = state.run;
-  const macro = effectiveMacro();
-  if (run.turn < (event.min_turn || 1)) return false;
-  if (run.turn > (event.max_turn || currentMaxTurns())) return false;
-  if (event.min_debt != null && run.company.debt < event.min_debt) return false;
-  if (event.max_debt != null && run.company.debt > event.max_debt) return false;
-  if (event.min_demand != null && macro.demand < event.min_demand) return false;
-  if (event.max_demand != null && macro.demand > event.max_demand) return false;
-  if (event.min_energy_cost != null && macro.energyCost < event.min_energy_cost) return false;
-  if (event.allowed_industries?.length) {
-    const ownedIndustries = new Set(state.run.company.businesses.map((item) => businessById(item.businessId).industry));
-    if (!event.allowed_industries.some((industry) => ownedIndustries.has(industry))) return false;
-  }
-  return true;
-}
-
-function drawCards() {
-  const pool = state.cards.filter(cardUnlocked);
-  const cards = [];
-  while (pool.length && cards.length < 3) {
-    const index = Math.floor(Math.random() * pool.length);
-    cards.push(pool.splice(index, 1)[0]);
-  }
-  return cards;
-}
-
-function activeSynergies() {
-  const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
-  return state.synergies.filter((synergy) => synergy.requires.every((id) => owned.has(id)));
-}
-
-function almostSynergies() {
-  const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
-  return state.synergies.filter((synergy) => synergy.requires.filter((id) => owned.has(id)).length === synergy.requires.length - 1).slice(0, 3);
-}
-
-function activeSynergyBonus() {
-  return activeSynergies().reduce((acc, synergy) => ({
-    revenue: acc.revenue + (synergy.revenue_bonus || 0),
-    expense: acc.expense + (synergy.expense_bonus || 0)
-  }), { revenue: 0, expense: 0 });
-}
-
-function filteredPortfolio() {
-  return state.run.company.businesses.filter((owned) => {
-    if (state.portfolioFilter === "all") return true;
-    const business = businessById(owned.businessId);
-    if (state.portfolioFilter === "finance") return business.industry === "media";
-    return business.industry === state.portfolioFilter;
-  });
-}
-
-function groupedMarketBusinesses() {
-  const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
-  const visible = state.businesses.filter((business) => !owned.has(business.id)).filter((business) => {
-    const industryOk = state.marketFilterIndustry === "all" || business.industry === state.marketFilterIndustry;
-    const riskOk = state.marketFilterRisk === "all" || matchRiskFilter(business.risk, state.marketFilterRisk);
-    return industryOk && riskOk;
-  });
-  const groups = new Map();
-  for (const business of visible) {
-    if (!groups.has(business.industry)) groups.set(business.industry, []);
-    groups.get(business.industry).push(business);
-  }
-  return [...groups.entries()].map(([industry, items]) => ({
-    industry,
-    locked: !industryUnlocked(industry),
-    items: industryUnlocked(industry) ? items : []
-  }));
-}
-
-function renderOwnedBusinessCard(owned) {
-  const business = businessById(owned.businessId);
-  const revenue = business.revenue * (1 + (owned.level - 1) * 0.45);
-  const expenses = business.expense * (1 + (owned.level - 1) * 0.45);
-  const profit = revenue - expenses;
-  const cost = upgradeCost(owned);
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("revenue")}</span><strong>${money(revenue)}</strong></div>
-        <div><span>${t("expenses")}</span><strong>${money(expenses)}</strong></div>
-        <div><span>${t("profit")}</span><strong>${money(profit)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${percent(business.risk)}</strong></div>
-      </div>
-      <div class="button-row">
-        <button class="business-button" data-upgrade="${business.id}" ${canTakeAction(cost) && owned.level < business.max_level ? "" : "disabled"}>${t("upgrade")}</button>
-        <button class="secondary-button" data-sell="${business.id}" ${canTakeAction(0) && state.run.company.businesses.length > 1 ? "" : "disabled"}>${t("sell")}</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderDecisionBuyCard(business) {
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(industryName(business.industry))}${tag(riskBucketLabel(business.risk))}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${percent(business.risk)}</strong></div>
-        <div><span>${t("synergyHooks")}</span><strong>${synergyHooks(business.id)}</strong></div>
-        <div><span>${t("macroSensitivity")}</span><strong>${macroSensitivity(business)}</strong></div>
-      </div>
-      <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buyAsset")}</button>
-    </article>
-  `;
-}
-
-function renderDecisionUpgradeCard(owned) {
-  const business = businessById(owned.businessId);
-  const upgradePrice = upgradeCost(owned);
-  const revenueGain = Math.round(business.revenue * 0.45);
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("upgrade")}</span><strong>${money(upgradePrice)}</strong></div>
-        <div><span>${t("revenue")}</span><strong>+${money(revenueGain)}</strong></div>
-      </div>
-      <button class="business-button" data-upgrade="${business.id}" ${canTakeAction(upgradePrice) ? "" : "disabled"}>${t("upgradeAsset")}</button>
-    </article>
-  `;
-}
-
-function renderDecisionSellCard(owned) {
-  const business = businessById(owned.businessId);
-  const saleValue = Math.round(business.cost * (0.55 + owned.level * 0.15));
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("sell")}</span><strong>${money(saleValue)}</strong></div>
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-      </div>
-      <button class="business-button" data-sell="${business.id}" ${canTakeAction(0) ? "" : "disabled"}>${t("sellAsset")}</button>
-    </article>
-  `;
-}
-
-function renderDecisionCardPlay(card) {
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(card.cost ? `${t("buy")} ${money(card.cost)}` : t("noCost"), "accent")}</div>
-      <h3>${card.title}</h3>
-      <p>${card.text}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${describeEffects(card) || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(card)}</strong></div>
-      </div>
-      <button class="business-button" data-play-card="${card.id}" ${canTakeAction(card.cost || 0) ? "" : "disabled"}>${t("playCardAction")}</button>
-    </article>
-  `;
-}
-
-function renderActiveSynergy(synergy) {
-  return `<article class="synergy-card"><strong>${synergy.name}</strong><p>${synergy.requires.map((id) => businessById(id).name).join(" + ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`, "accent") : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`, "accent") : ""}</div></article>`;
-}
-
-function renderNearSynergy(synergy) {
-  const missing = synergy.requires.filter((id) => !state.run.company.businesses.some((item) => item.businessId === id));
-  return `<article class="synergy-card"><strong>${t("almostReady")}: ${synergy.name}</strong><p>${missing.map((id) => businessById(id).name).join(", ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`) : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`) : ""}</div></article>`;
-}
-
-function renderMarketGroup(group) {
-  if (group.locked) {
-    return `
-      <section class="market-group">
-        <div class="market-group-header"><h3>${industryName(group.industry)}</h3><p>${t("locked")}</p></div>
-        <article class="business-card locked-card">
-          <div class="tag-row">${tag(t("locked"))}</div>
-          <h3>${industryName(group.industry)}</h3>
-          <p>${t("unlockInMetaProgression")}</p>
-          <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
-        </article>
-      </section>
-    `;
-  }
-  return `
-    <section class="market-group">
-      <div class="market-group-header"><h3>${industryName(group.industry)}</h3><p>${group.items.length} ${t("offers")}</p></div>
-      <div class="market-grid">
-        ${group.items.map((business) => `
-          <article class="business-card">
-            <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(riskBucketLabel(business.risk))}</div>
-            <h3>${business.name}</h3>
-            <p>${businessBlurb(business)}</p>
-            <div class="business-metrics">
-              <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-              <div><span>${t("industryLabel")}</span><strong>${industryName(business.industry)}</strong></div>
-              <div><span>${t("macroSensitivity")}</span><strong>${macroSensitivity(business)}</strong></div>
-              <div><span>${t("synergyHooks")}</span><strong>${synergyHooks(business.id)}</strong></div>
-            </div>
-            <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buy")}</button>
-          </article>
-        `).join("")}
-      </div>
-    </section>
-  `;
-}
-
-function stockLogoMarkup(stock, size = "small") {
-  const className = size === "large" ? "stock-logo stock-logo-large" : "stock-logo";
-  return stock.logo
-    ? `<div class="${className}"><img src="${stock.logo}" alt="${stock.name}"></div>`
-    : `<div class="${className}">${stock.ticker.slice(0, 2)}</div>`;
-}
-
-function stockValuationKey(stock) {
-  const pe = stock.peRatio || 0;
-  if (stock.sector === "tech") {
-    if (pe < 22) return "cheapValuation";
-    if (pe <= 48) return "fairValuation";
-    return "expensiveValuation";
-  }
-  if (pe < 15) return "cheapValuation";
-  if (pe <= 35) return "fairValuation";
-  return "expensiveValuation";
-}
-
-function stockTypeKey(stock) {
-  return stock.stockType === "dividend" ? "dividendStock" : "growthStock";
-}
-
-function stockTrendKey(stock) {
-  if (stock.momentum > 0.004) return "stockRising";
-  if (stock.momentum < -0.004) return "stockFalling";
-  return "stockNeutral";
-}
-
-function chartPoints(points, width, height, padding = { left: 38, right: 14, top: 12, bottom: 28 }) {
-  const values = points?.length ? points : [1, 1];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = Math.max(0.01, max - min);
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-  return values.map((point, index) => {
-    const x = values.length === 1 ? padding.left + (plotWidth / 2) : padding.left + ((index / (values.length - 1)) * plotWidth);
-    const y = padding.top + (plotHeight - (((point - min) / range) * plotHeight));
-    return { x, y, value: point, index };
-  });
-}
-
-function renderInteractiveStockChart(points, momentum) {
-  if (!points?.length) return `<div class="stock-chart-empty">${t("priceHistoryEmpty")}</div>`;
-  const width = 320;
-  const height = 220;
-  const coords = chartPoints(points, width, height);
-  const values = points;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const mid = (min + max) / 2;
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
-  const plotFloor = height - 28;
-  const path = coords.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
-  const area = `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${plotFloor.toFixed(2)} L ${coords[0].x.toFixed(2)} ${plotFloor.toFixed(2)} Z`;
-  const yLabels = [max, mid, min];
-  const xLabels = [
-    { x: coords[0].x, label: `${t("turnLabelShort")} 1` },
-    { x: coords[Math.floor((coords.length - 1) / 2)].x, label: `${t("turnLabelShort")} ${Math.floor((coords.length + 1) / 2)}` },
-    { x: coords[coords.length - 1].x, label: `${t("turnLabelShort")} ${coords.length}` }
-  ];
-  return `
-    <svg class="stock-full-chart" viewBox="0 0 ${width} ${height}" aria-label="${t("openChart")}">
-      ${yLabels.map((value, index) => {
-        const y = 12 + (index * ((height - 40) / 2));
-        return `<g><line x1="38" y1="${y}" x2="${width - 14}" y2="${y}" stroke="rgba(24,23,20,0.08)" stroke-width="1"></line><text x="2" y="${y + 4}" class="stock-axis-text">${stockMoney(value)}</text></g>`;
-      }).join("")}
-      <path d="${area}" fill="${fill}"></path>
-      <path d="${path}" fill="none" stroke="${stroke}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
-      ${xLabels.map((item) => `<text x="${item.x}" y="${height - 6}" text-anchor="middle" class="stock-axis-text">${item.label}</text>`).join("")}
-    </svg>
-  `;
-}
-
-function renderStockCard(stock) {
-  const holding = state.run.company.stocks.find((item) => item.stockId === stock.id);
-  return `
-    <button class="stock-list-item" data-open-stock="${stock.id}">
-      ${stockLogoMarkup(stock)}
-      <div class="stock-main">
-        <strong>${stock.name}</strong>
-        <span>${stock.ticker} Â· ${industryName(stock.sector)}</span>
-        <div class="tag-row compact-tags">${tag(t(stockTypeKey(stock)), "accent")}${stock.stockType === "dividend" ? tag(`${t("dividendYieldLabel")} ${percent(stock.dividend_yield)}`) : ""}</div>${holding ? `<em>${t("ownedShares", { count: holding.shares })}</em>` : ""}
-      </div>
-      <div class="stock-side">
-        <strong>${stockMoney(stock.price)}</strong>
-        <span class="${stock.momentum >= 0 ? "positive" : "negative"}">${signedStockPercent(stock.momentum)}</span>
-        ${renderSparkline(stock.priceHistory || [], stock.momentum)}
-      </div>
-    </button>
-  `;
-}
-
-function renderSparkline(points, momentum) {
-  const path = chartPath(points, 92, 34);
-  const tone = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  return `<svg class="sparkline" viewBox="0 0 92 34" aria-hidden="true"><path d="${path}" fill="none" stroke="${tone}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-}
-
-function renderFullChart(points, momentum) {
-  const width = 320;
-  const height = 200;
-  const path = chartPath(points, width, height);
-  const area = chartArea(points, width, height);
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
-  return `<svg class="stock-full-chart" viewBox="0 0 ${width} ${height}" aria-label="${t("openChart")}"><path d="${area}" fill="${fill}"></path><path d="${path}" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
-}
-
-function chartPath(points, width, height) {
-  const values = points?.length ? points : [1, 1, 1, 1];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = Math.max(0.01, max - min);
-  return values.map((point, index) => {
-    const x = values.length === 1 ? width / 2 : (index / (values.length - 1)) * width;
-    const y = height - ((point - min) / range) * (height - 10) - 5;
-    return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-  }).join(" ");
-}
-
-function chartArea(points, width, height) {
-  const line = chartPath(points, width, height);
-  const values = points?.length ? points : [1, 1, 1, 1];
-  return `${line} L ${width} ${height} L 0 ${height} Z`;
-}
-
-function renderStockDetailSheet() {
-  const stock = stockById(state.activeStockId);
-  if (!stock) return "";
-  const holding = stockHolding(stock.id);
-  const history = (stock.priceHistory || [stock.price]).slice(-100);
-  const buyOrder = calculateBuyOrder(stock.id, state.stockBuyPercent);
-  const sellOrder = calculateSellOrder(stock.id, state.stockSellPercent);
-  const positionValue = holding ? +(holding.shares * stock.price).toFixed(2) : 0;
-  const costBasis = holding ? +(holding.averagePrice * holding.shares).toFixed(2) : 0;
-  const profitLoss = holding ? +(positionValue - costBasis).toFixed(2) : 0;
-  const profitLossPercent = holding && costBasis > 0 ? profitLoss / costBasis : 0;
-  const dividendIncome = holding ? +(stock.price * holding.shares * (stock.dividend_yield || 0)).toFixed(2) : 0;
-  const tradeMode = state.selectedTradeMode;
-  return `
-    <div class="stock-sheet-overlay" data-close-stock-sheet>
-      <article class="stock-sheet" onclick="event.stopPropagation()">
-        <div class="stock-sheet-head stock-sheet-head-compact">
-          <button class="secondary-button slim stock-close-button" data-close-stock-sheet>${t("closeSheet")}</button>
-        </div>
-        <div class="stock-identity-row">
-          ${stockLogoMarkup(stock, "large")}
-          <div class="stock-identity-text">
-            <h3>${stock.name}</h3>
-            <div class="stock-meta-line">
-              <p class="stock-ticker-line">${stock.ticker} Â· ${industryName(stock.sector)}</p>
-              <span class="stock-growth-pill">${t(stockTypeKey(stock))}</span>
-            </div>
-          </div>
-        </div>
-        <div class="stock-sheet-price">
-          <strong>${stockMoney(stock.price)}</strong>
-          <span class="${stock.momentum >= 0 ? "positive" : "negative"}">${signedStockPercent(stock.momentum)} ${t("thisTurn")}</span>
-        </div>
-        <div class="stock-chart-card">
-          ${renderInteractiveStockChart(history, stock.momentum)}
-        </div>
-        <div class="stock-sheet-side-info">
-          <div><span>${t("peRatioLabel")}</span><strong>${stock.peRatio.toFixed(1)}</strong></div>
-        </div>
-        ${holding ? `
-          <article class="trade-card">
-            <div class="panel-head"><strong>${t("yourPosition")}</strong></div>
-            <div class="stock-dividend-inline ${dividendIncome > 0 ? "positive" : "muted"}">${dividendIncome > 0 ? t("dividendIncomePerTurn", { value: stockMoney(dividendIncome) }) : t("noDividendIncome")}</div>
-            <div class="business-metrics stock-detail-metrics">
-              <div><span>${t("shares")}</span><strong>${holding.shares}</strong></div>
-              <div><span>${t("averagePrice")}</span><strong>${stockMoney(holding.averagePrice)}</strong></div>
-              <div><span>${t("positionValue")}</span><strong>${stockMoney(positionValue)}</strong></div>
-              <div><span>${t("profitLoss")}</span><strong class="${profitLoss >= 0 ? "positive" : "negative"}">${signedStockMoney(profitLoss)} / ${signedStockPercent(profitLossPercent)}</strong></div>
-              <div><span>${t("dividendIncome")}</span><strong>${stockMoney(dividendIncome)}</strong></div>
-              <div><span>${t("dividendPerTurn")}</span><strong>${percent(stock.dividend_yield)}</strong></div>
-            </div>
-          </article>
-        ` : ""}
-        <article class="trade-card">
-          <div class="stock-trade-actions">
-            <button class="business-button ${tradeMode === "buy" ? "selected-trade-mode" : ""}" data-stock-trade-mode="buy">${holding ? t("buyShares") : t("buy")}</button>
-            <button class="secondary-button ${tradeMode === "sell" ? "selected-trade-mode" : ""}" data-stock-trade-mode="sell" ${holding ? "" : "disabled"}>${t("sell")}</button>
-          </div>
-          ${tradeMode === "buy" ? `
-            <div class="stock-trade-panel">
-              ${renderTradePercentBar("buy", state.stockBuyPercent)}
-              <div class="trade-summary"><span data-trade-amount="buy">${t("amountLabel")} ${stockMoney(buyOrder.cost)}</span><strong data-trade-shares="buy">${buyOrder.shares} ${t("shares").toLowerCase()}</strong></div>
-              <button class="business-button" data-buy-stock="${stock.id}" data-trade-action="buy" ${buyOrder.shares > 0 && canTakeAction(buyOrder.cost) ? "" : "disabled"}>${t("confirmBuy")}</button>
-            </div>
-          ` : ""}
-          ${tradeMode === "sell" ? `
-            <div class="stock-trade-panel">
-              ${renderTradePercentBar("sell", state.stockSellPercent)}
-              <div class="trade-summary"><span data-trade-amount="sell">${t("amountLabel")} ${stockMoney(sellOrder.value)}</span><strong data-trade-shares="sell">${sellOrder.shares} ${t("shares").toLowerCase()}</strong></div>
-              <button class="secondary-button" data-sell-stock="${stock.id}" data-trade-action="sell" ${sellOrder.shares > 0 && canTakeAction(0) ? "" : "disabled"}>${t("confirmSell")}</button>
-            </div>
-          ` : ""}
-        </article>
-      </article>
-    </div>
-  `;
-}
-
-function renderTradePercentBar(mode, value) {
-  return `
-    <div class="trade-bar-block">
-      <div class="trade-bar" data-trade-bar="${mode}">
-        <div class="trade-bar-fill" style="width:${Math.round(value * 100)}%"></div>
-        <div class="trade-bar-thumb" style="left:${Math.round(value * 100)}%"></div>
-      </div>
-    </div>
-  `;
-}
-
-function macroCard(title, value, helper) {
-  return `<article class="macro-card"><h3>${title}</h3><p class="helper">${helper}</p><div class="tag-row">${tag(value, "accent")}</div></article>`;
-}
-
-function macroPill(label, value) {
-  return `<div class="macro-pill"><span>${label}</span><strong>${value}</strong></div>`;
-}
-
-function economyRegime() {
-  const macro = effectiveMacro();
-  if (macro.energyCost >= 1.15) return { name: t("energyCrisis"), description: t("energyCrisisDesc"), winners: [t("energy"), t("cashLabel")], losers: [t("transport"), t("manufacturingBusinesses")] };
-  if (macro.interestRate >= 0.055) return { name: t("highRateSqueeze"), description: t("highRateSqueezeDesc"), winners: [t("cashLabel"), t("defensiveBusinesses")], losers: [t("realEstateBusinesses"), t("leveragedExpansion")] };
-  if (macro.inflation >= 0.05) return { name: t("inflationShock"), description: t("inflationShockDesc"), winners: [t("pricingPower"), t("media")], losers: [t("retail"), t("energy")] };
-  if (macro.demand <= 0.92) return { name: t("recession"), description: t("recessionDesc"), winners: [t("cashLabel"), t("efficientOperators")], losers: [t("retail"), t("speculativeAssets")] };
-  if (macro.creditAvailability >= 1.12 && macro.interestRate <= 0.035) return { name: t("cheapCreditBoom"), description: t("cheapCreditBoomDesc"), winners: [t("realEstateBusinesses"), t("growthPlays")], losers: [t("idleCash"), t("slowOperators")] };
-  return { name: t("balancedExpansion"), description: t("balancedExpansionDesc"), winners: [t("diversifiedPortfolios"), t("synergyStacks")], losers: [t("singleAssetRuns"), t("leveragedExpansion")] };
-}
-
-function decisionDescription(choice) {
-  if (choice.revenue_bonus && choice.risk > 0) return t("high");
-  if (choice.debt && choice.debt < 0) return t("lower");
-  if (choice.cash && choice.cash > 0) return t("cashLabel");
-  if (choice.expense_bonus && choice.expense_bonus < 0) return t("expenses");
-  return t("strategicShift");
-}
-
-function riskLabel(choice) {
-  if ((choice.risk || 0) >= 0.04) return t("high");
-  if ((choice.risk || 0) > 0) return t("medium");
-  if ((choice.risk || 0) < 0) return t("lower");
-  return t("neutral");
-}
-
-function riskTone(choice) {
-  if ((choice.risk || 0) >= 0.04) return "";
-  if ((choice.risk || 0) <= 0) return "done";
-  return "active";
-}
-
-function canTakeAction(cost) {
-  const run = state.run;
-  return run.eventResolved && !run.pendingActionDone && !run.finished && run.company.cash >= cost;
-}
-
-function upgradeCost(owned) {
-  const business = businessById(owned.businessId);
-  return Math.round(business.cost * (0.55 + owned.level * 0.25));
-}
-
-function businessById(id) {
-  return state.businesses.find((item) => item.id === id);
-}
-
-function industryName(id) {
-  const map = { retail: t("retail"), it: t("tech"), tech: t("tech"), logistics: t("logistics"), manufacturing: t("industry"), industry: t("industry"), energy: t("energy"), real_estate: t("realEstate"), media: t("media"), fund: t("finance") };
-  return map[id] || id;
-}
-
-function businessBlurb(business) {
-  if (business.industry === "retail") return t("consumerBusiness");
-  if (business.industry === "it") return t("scalableUpside");
-  if (business.industry === "logistics") return t("infrastructurePlay");
-  if (business.industry === "manufacturing") return t("highOutputAsset");
-  if (business.industry === "energy") return t("defensiveAsset");
-  if (business.industry === "real_estate") return t("longDurationAsset");
-  return t("audienceBusiness");
-}
-
-function synergyHooks(businessId) {
-  const hooks = state.synergies.filter((item) => item.requires.includes(businessId)).map((item) => item.name);
-  return hooks.length ? hooks.slice(0, 2).join(", ") : t("standalone");
-}
-
-function macroSensitivity(business) {
-  const signals = [];
-  if (business.rate_sensitivity >= 0.4) signals.push(t("rates"));
-  if (business.demand_sensitivity >= 0.7) signals.push(t("demand"));
-  if (business.energy_use >= 0.7) signals.push(t("energy"));
-  return signals.length ? signals.join(", ") : t("balanced");
-}
-
-function matchRiskFilter(risk, filter) {
-  if (filter === "low") return risk <= 0.05;
-  if (filter === "mid") return risk > 0.05 && risk <= 0.09;
-  if (filter === "high") return risk > 0.09;
-  return true;
-}
-
-function riskBucketLabel(risk) {
-  if (risk <= 0.05) return t("lowRiskBucket");
-  if (risk <= 0.09) return t("midRiskBucket");
-  return t("highRiskBucket");
-}
-
-function rateInsight(value) {
-  return value >= 0.055 ? t("rateInsightHigh") : t("rateInsightLow");
-}
-
-function inflationInsight(value) {
-  return value >= 0.05 ? t("inflationInsightHigh") : t("inflationInsightLow");
-}
-
-function demandInsight(value) {
-  return value <= 0.92 ? t("demandInsightLow") : t("demandInsightHigh");
-}
-
-function energyInsight(value) {
-  return value >= 1.15 ? t("energyInsightHigh") : t("energyInsightLow");
-}
-
-function creditInsight(value) {
-  return value >= 1.12 ? t("creditInsightHigh") : t("creditInsightLow");
-}
-
-function marketRiskInsight(value) {
-  return value >= 0.12 ? t("marketRiskInsightHigh") : t("marketRiskInsightLow");
-}
-
-function describeEffects(source) {
-  const parts = [];
-  if (source.cash) parts.push(`${t("cash")} ${signedMoney(source.cash)}`);
-  if (source.debt) parts.push(`${t("debt")} ${signedMoney(source.debt)}`);
-  if (source.risk) parts.push(`${t("risk")} ${signedPercent(source.risk)}`);
-  if (source.revenue_bonus) parts.push(`${t("revenue")} ${signedPercent(source.revenue_bonus)}`);
-  if (source.expense_bonus) parts.push(`${t("expenses")} ${signedPercent(source.expense_bonus)}`);
-  if (source.interest_rate) parts.push(`${t("rate")} ${signedPercent(source.interest_rate)}`);
-  if (source.inflation) parts.push(`${t("inflation")} ${signedPercent(source.inflation)}`);
-  if (source.demand) parts.push(`${t("demand")} ${signedPercent(source.demand)}`);
-  if (source.energy_cost) parts.push(`${t("energyCost")} ${signedPercent(source.energy_cost)}`);
-  if (source.credit_availability) parts.push(`${t("creditAvailability")} ${signedPercent(source.credit_availability)}`);
-  if (source.market_risk) parts.push(`${t("marketRisk")} ${signedPercent(source.market_risk)}`);
-  if (source.temporary_effects && source.duration_turns) {
-    parts.push(`${formatTemporaryEffects(source.temporary_effects)} / ${source.duration_turns}t`);
-  }
-  return parts.join(" | ");
-}
-
-function activeTemporaryTotals() {
-  return state.run.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) {
-      acc[key] = (acc[key] || 0) + value;
-    }
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
-}
-
-function effectiveMacro() {
-  const base = state.run.macro;
-  const temporary = activeTemporaryTotals();
-  return {
-    interestRate: Math.max(0.01, base.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, base.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, base.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, base.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, base.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, base.marketRisk + (temporary.market_risk || 0))
-  };
-}
-
-function tickModifiers() {
-  state.run.activeModifiers = state.run.activeModifiers
-    .map((modifier) => ({ ...modifier, remainingTurns: modifier.remainingTurns - 1 }))
-    .filter((modifier) => modifier.remainingTurns > 0);
-}
-
-function formatTemporaryEffects(effects) {
-  const parts = [];
-  if (effects.revenue_bonus) parts.push(`${t("revenue")} ${signedPercent(effects.revenue_bonus)}`);
-  if (effects.expense_bonus) parts.push(`${t("expenses")} ${signedPercent(effects.expense_bonus)}`);
-  if (effects.risk) parts.push(`${t("risk")} ${signedPercent(effects.risk)}`);
-  if (effects.interest_rate) parts.push(`${t("rate")} ${signedPercent(effects.interest_rate)}`);
-  if (effects.demand) parts.push(`${t("demand")} ${signedPercent(effects.demand)}`);
-  if (effects.energy_cost) parts.push(`${t("energyCost")} ${signedPercent(effects.energy_cost)}`);
-  return parts.join(", ");
-}
-
-function describeModifier(modifier) {
-  return `${modifier.label}: ${formatTemporaryEffects(modifier.effects)} (${modifier.remainingTurns}t)`;
-}
-
-function headerActions() {
-  return "";
-}
-
-function tabTitle() {
-  const map = {
-    dashboard: t("dashboard"),
-    decisions: t("decisions"),
-    portfolio: t("portfolio"),
-    market: t("market"),
-    economy: t("economy"),
-    meta: t("metaProgress"),
-    runEnd: t("runEndTitle")
-  };
-  return map[state.activeTab] || t("gameTitle");
-}
-
-function headerStatusText(run) {
-  if (run.finished) return run.statusMessage;
-  if (run.eventResolved) return run.pendingActionDone ? t("turnReadyToAdvance") : t("chooseAction");
-  return t("resolveEventThenAction");
-}
-
-function compactStatusChip() {
-  if (!state.run.eventResolved && ["decisions", "portfolio", "market"].includes(state.activeTab)) {
-    return t("eventNeedsDecision");
-  }
-  if (state.activeTab === "decisions") {
-    if (!state.run.eventResolved) return t("eventNeedsDecision");
-    if (!state.run.pendingActionDone) return t("chooseAction");
-    return t("turnReadyToAdvance");
-  }
-  if (state.activeTab === "portfolio") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("portfolioReady");
-  if (state.activeTab === "market") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("marketReady");
-  if (state.activeTab === "economy") return t("economyWatch");
-  return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("active");
-}
-
-function statusChip(text, tone = "") {
-  return `<span class="status-chip ${tone}">${text}</span>`;
-}
-
-function turnReady() {
-  return !!(state.run && state.run.eventResolved && state.run.pendingActionDone);
-}
-
-function openMeta() {
-  state.activeTab = "meta";
-  render();
-}
-
-function backToDashboard() {
-  state.activeTab = "dashboard";
-  render();
-}
-
-function renderUnlockCard(unlock) {
-  const level = unlockLevel(unlock.id);
-  const stateInfo = unlockState(unlock);
-  const cost = metaCost(unlock, level);
-  const maxLabel = unlock.maxLevel ? `${level}/${unlock.maxLevel}` : `${level}`;
-  return `
-    <article class="prestige-card ${stateInfo.tone}">
-      <div class="prestige-card-top">
-        <div class="tag-row">
-          ${tag(metaCategoryLabel(unlock), "accent")}
-          ${tag(stateInfo.status)}
-          ${unlock.repeatable ? tag(`${t("levelProgressLabel")} ${maxLabel}`) : ""}
-        </div>
-        <strong class="prestige-cost">${state.meta.totalKnowledge}/${cost}</strong>
-      </div>
-      <h3>${t(unlock.titleKey)}</h3>
-      <p>${t(unlock.descriptionKey)}</p>
-      <div class="business-metrics">
-        <div><span>${t("costLabel")}</span><strong>${cost} ${t("knowledge").toLowerCase()}</strong></div>
-        <div><span>${t("statusLabel") || "Status"}</span><strong>${stateInfo.status}</strong></div>
-        ${unlock.repeatable ? `<div><span>${t("currentEffectLabel")}</span><strong>${unlockCurrentEffect(unlock, level)}</strong></div>` : `<div><span>${t("currentEffectLabel")}</span><strong>${unlockCurrentEffect(unlock, Math.max(1, level))}</strong></div>`}
-        ${unlock.repeatable && !(unlock.maxLevel && level >= unlock.maxLevel) ? `<div><span>${t("nextEffectLabel")}</span><strong>${unlockNextEffect(unlock, level)}</strong></div>` : ""}
-      </div>
-      <button class="business-button prestige-button" data-meta-unlock="${unlock.id}" ${stateInfo.disabled ? "disabled" : ""}>${stateInfo.button}</button>
-    </article>
-  `;
-}
-
-function purchaseUnlock(unlockId) {
-  const unlock = META_UNLOCKS.find((item) => item.id === unlockId);
-  const level = unlockLevel(unlockId);
-  const effectiveCost = unlock ? metaCost(unlock, level) : 0;
-  if (!unlock || (hasPurchasedUnlock(unlockId) && !unlock.repeatable)) return;
-  if (unlock.repeatable && unlock.maxLevel && level >= unlock.maxLevel) return;
-  if (state.meta.totalKnowledge < effectiveCost) {
-    if (state.run) state.run.statusMessage = t("notEnoughKnowledge");
-    render();
-    return;
-  }
-  state.meta.totalKnowledge -= effectiveCost;
-  state.meta.purchasedUnlockIds.push(unlock.id);
-  state.meta.unlockLevels[unlock.id] = level + 1;
-  if (unlock.type === "industry") state.meta.unlockedIndustries.push(unlock.payload.industry);
-  if (unlock.type === "cards") state.meta.unlockedCards.push(...unlock.payload.cards);
-  state.meta.unlockedIndustries = uniqueList(state.meta.unlockedIndustries);
-  state.meta.unlockedCards = uniqueList(state.meta.unlockedCards);
-  state.meta.purchasedUnlockIds = uniqueList(state.meta.purchasedUnlockIds);
-  saveMetaProgression();
-  if (state.run) state.run.statusMessage = `${t("unlockPurchased")}: ${t(unlock.titleKey)}`;
-  saveCurrentRun();
-  render();
-}
-
-function resetMetaProgression() {
-  if (!window.confirm(t("confirmResetMeta"))) return;
-  state.meta = createDefaultMetaProgression();
-  state.metaFilter = "all";
-  saveMetaProgression();
-  if (state.run) state.run.statusMessage = t("resetMetaConfirm");
-  render();
-}
-
-function metaStartingBonuses() {
-  return META_UNLOCKS.reduce((acc, unlock) => {
-    if (!hasPurchasedUnlock(unlock.id) || unlock.type !== "starting_bonus") return acc;
-    acc.extraCash += unlock.payload.extraCash || 0;
-    acc.debtThresholdBonus += unlock.payload.debtThresholdBonus || 0;
-    return acc;
-  }, { extraCash: 0, debtThresholdBonus: 0 });
-}
-
-function currentMaxTurns(targetRun = state.run) {
-  return targetRun?.maxTurns || nextRunMaxTurns();
-}
-
-function debtPressureThreshold(run) {
-  const baseThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, run.company.cash * 4);
-  return applyDifficultyToDebtThreshold(baseThreshold, run.difficultyId);
-}
-
-function summarizeRun(run) {
-  const report = calculateReport();
-  return {
-    turnReached: Math.min(run.turn, currentMaxTurns(run)),
-    cash: run.company.cash,
-    debt: run.company.debt,
-    profit: report.profit,
-    valuation: report.valuation
-  };
-}
-
-function calculateKnowledgeReward(run) {
-  const summary = run.resultSummary || summarizeRun(run);
-  if (run.endReason !== "completed_all_turns" && summary.turnReached < 3) return 0;
-  let reward = 5;
-  reward += summary.turnReached;
-  reward += Math.floor(Math.max(0, summary.valuation) / 25000);
-  if (summary.turnReached >= currentMaxTurns(run)) reward += 3;
-  if (summary.valuation > 150000) reward += 5;
-  return applyDifficultyToKnowledgeReward(reward, run.difficultyId);
-}
-
-function claimRunReward(run) {
-  if (run.rewardClaimed) return;
-  run.rewardClaimed = true;
-  state.meta.totalKnowledge += run.knowledgeEarned;
-  state.meta.completedRuns += 1;
-  state.meta.bestValuation = Math.max(state.meta.bestValuation, run.resultSummary.valuation);
-  state.meta.bestTurnReached = Math.max(state.meta.bestTurnReached, run.resultSummary.turnReached);
-  saveMetaProgression();
-}
-
-function hasPurchasedUnlock(unlockId) {
-  return state.meta.purchasedUnlockIds.includes(unlockId);
-}
-
-function unlockLevel(unlockId) {
-  return Number(state.meta.unlockLevels?.[unlockId] || 0);
-}
-
-function industryUnlocked(industry) {
-  return state.meta.unlockedIndustries.includes(industry);
-}
-
-function cardUnlocked(card) {
-  if (!ADVANCED_FINANCE_CARD_IDS.includes(card.id)) return true;
-  return state.meta.unlockedCards.includes(card.id);
-}
-
-function eventUnlocked(event) {
-  if (!event.meta_unlock_id) return true;
-  return state.meta.unlockedEvents.includes(event.id) || hasPurchasedUnlock(event.meta_unlock_id);
-}
-
-function unlockedContentTags() {
-  const tags = state.meta.unlockedIndustries
-    .filter((industry) => !STARTING_UNLOCKED_INDUSTRIES.includes(industry))
-    .map(industryName);
-  if (hasPurchasedUnlock("unlock_advanced_finance_cards")) tags.push(t("unlockAdvancedFinanceCards"));
-  if (hasPurchasedUnlock("unlock_extra_cash")) tags.push(t("unlockExtraCash"));
-  if (hasPurchasedUnlock("unlock_lower_debt_risk")) tags.push(t("unlockLowerDebtRisk"));
-  if (hasPurchasedUnlock("unlock_synergy_scanner")) tags.push(t("unlockSynergyScanner"));
-  return tags.length ? tags : [t("noUnlocksYet")];
-}
-
-function endReasonLabel(reason) {
-  if (reason === "completed_all_turns") return t("completedAllTurns");
-  if (reason === "debt_collapse") return t("debtCollapse");
-  return t("bankruptcy");
-}
-
-function uniqueList(items) {
-  return [...new Set(items)];
-}
-
-function validateGameData() {
-  const errors = [];
-  const businessIds = new Set();
-  const eventIds = new Set();
-  const cardIds = new Set();
-  const validIndustries = new Set(["retail", "it", "logistics", "manufacturing", "energy", "real_estate", "media"]);
-
-  state.businesses.forEach((business) => {
-    if (!business.id) errors.push("Business missing id");
-    if (businessIds.has(business.id)) errors.push(`Duplicate business id: ${business.id}`);
-    businessIds.add(business.id);
-    if (!(business.cost > 0)) errors.push(`Business cost invalid: ${business.id}`);
-    if (business.revenue < 0) errors.push(`Business revenue invalid: ${business.id}`);
-    if (business.expense < 0) errors.push(`Business expense invalid: ${business.id}`);
-    if (!validIndustries.has(business.industry)) errors.push(`Business industry invalid: ${business.id}`);
-    if (!(business.max_level > 0)) errors.push(`Business max_level invalid: ${business.id}`);
-    if (business.risk < 0 || business.risk > 1) errors.push(`Business risk invalid: ${business.id}`);
-  });
-
-  state.events.forEach((event) => {
-    if (!event.id) errors.push("Event missing id");
-    if (eventIds.has(event.id)) errors.push(`Duplicate event id: ${event.id}`);
-    eventIds.add(event.id);
-    if (!(event.weight > 0)) errors.push(`Event weight invalid: ${event.id}`);
-    if (!Array.isArray(event.choices) || !event.choices.length) errors.push(`Event choices missing: ${event.id}`);
-    (event.choices || []).forEach((choice, index) => {
-      if (!choice.title) errors.push(`Event choice title missing: ${event.id}:${index}`);
-    });
-  });
-
-  state.cards.forEach((card) => {
-    if (!card.id) errors.push("Card missing id");
-    if (cardIds.has(card.id)) errors.push(`Duplicate card id: ${card.id}`);
-    cardIds.add(card.id);
-    if (card.cost != null && card.cost < 0) errors.push(`Card cost invalid: ${card.id}`);
-  });
-
-  state.synergies.forEach((synergy) => {
-    (synergy.requires || []).forEach((id) => {
-      if (!businessIds.has(id)) errors.push(`Synergy references missing business: ${synergy.id}:${id}`);
-    });
-    if (typeof synergy.revenue_bonus !== "number" && typeof synergy.expense_bonus !== "number") {
-      errors.push(`Synergy bonus missing: ${synergy.id}`);
-    }
-  });
-
-  Object.keys(translations.en).forEach((key) => {
-    if (!(key in translations.ru)) errors.push(`Missing ru translation: ${key}`);
-  });
-  Object.keys(translations.ru).forEach((key) => {
-    if (!(key in translations.en)) errors.push(`Missing en translation: ${key}`);
-  });
-
-  if (errors.length) console.error("validateGameData()", errors);
-  else console.info(t("devValidationPassed"));
-  return errors;
-}
-
-function simulateRuns(count = 100) {
-  const results = Array.from({ length: count }, () => simulateSingleRun());
-  const valuations = results.map((item) => item.valuation).sort((a, b) => a - b);
-  const completedRuns = results.filter((item) => item.reason === "completed_all_turns").length;
-  const summary = {
-    runs: count,
-    averageFinalValuation: average(results.map((item) => item.valuation)),
-    medianFinalValuation: valuations[Math.floor(valuations.length / 2)] || 0,
-    bankruptcyRate: `${Math.round(((count - completedRuns) / Math.max(1, count)) * 100)}%`,
-    averageTurnReached: average(results.map((item) => item.turnReached)),
-    averageDebt: average(results.map((item) => item.debt)),
-    averageCash: average(results.map((item) => item.cash)),
-    bestValuation: Math.max(...results.map((item) => item.valuation)),
-    worstValuation: Math.min(...results.map((item) => item.valuation)),
-    completedAll10Turns: `${Math.round((completedRuns / Math.max(1, count)) * 100)}%`
-  };
-  console.table(summary);
-  return { summary, results };
-}
-
-function simulateSingleRun() {
-  const sim = {
-    maxTurns: nextRunMaxTurns(),
-    turn: 1,
-    company: {
-      cash: STARTING_CASH + metaStartingBonuses().extraCash,
-      debt: 0,
-      risk: 0.05,
-      revenueBonus: 0,
-      expenseBonus: 0,
-      businesses: [{ businessId: sample(["coffee_shop", "mini_market", "mobile_studio"]), level: 1 }]
-    },
-    macro: { interestRate: 0.04, inflation: 0.03, demand: 1, energyCost: 1, creditAvailability: 1, marketRisk: 0.05 },
-    activeModifiers: []
-  };
-
-  while (sim.turn <= currentMaxTurns(sim)) {
-    const report = simulationReport(sim);
-    sim.company.cash += Math.round(report.profit);
-    sim.company.risk = clamp(sim.company.risk + sim.macro.marketRisk * 0.1, 0.01, 0.95);
-    sim.activeModifiers = sim.activeModifiers.map((modifier) => ({ ...modifier, remainingTurns: modifier.remainingTurns - 1 })).filter((modifier) => modifier.remainingTurns > 0);
-
-    const eventPool = state.events.filter((event) => simulationEventAllowed(sim, event)).filter(eventUnlocked);
-    const event = eventPool.length ? sample(eventPool) : null;
-    if (event) {
-      simulationApplyEffects(sim, event);
-      const choice = pickBestChoice(event.choices || []);
-      if (choice) simulationApplyEffects(sim, choice);
-    }
-
-    const bestBusiness = pickBestBusiness(state.businesses.filter((business) => industryUnlocked(business.industry)), sim);
-    const bestCard = pickBestCard(state.cards.filter(cardUnlocked), sim);
-    if (bestBusiness && sim.company.cash >= bestBusiness.cost && !sim.company.businesses.some((owned) => owned.businessId === bestBusiness.id)) {
-      sim.company.cash -= bestBusiness.cost;
-      sim.company.businesses.push({ businessId: bestBusiness.id, level: 1 });
-    } else if (bestCard && sim.company.cash >= (bestCard.cost || 0)) {
-      sim.company.cash -= bestCard.cost || 0;
-      simulationApplyEffects(sim, bestCard);
-    } else {
-      const upgrade = pickUpgradeTarget(sim);
-      if (upgrade) {
-        const upgradePrice = Math.round(businessById(upgrade.businessId).cost * (0.55 + upgrade.level * 0.25));
-        if (sim.company.cash >= upgradePrice) {
-          sim.company.cash -= upgradePrice;
-          upgrade.level += 1;
-        }
-      }
-    }
-
-    const simulationThreshold = Math.max(10000 + metaStartingBonuses().debtThresholdBonus, sim.company.cash * 4);
-    const debtPressure = sim.company.debt > applyDifficultyToDebtThreshold(simulationThreshold, sim.difficultyId);
-    const cashBankruptcy = sim.company.cash < -5000;
-    const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < sim.company.risk;
-    if (cashBankruptcy || debtCollapse) {
-      const finalReport = simulationReport(sim);
-      return { reason: debtCollapse ? "debt_collapse" : "bankruptcy", turnReached: sim.turn, cash: sim.company.cash, debt: sim.company.debt, valuation: finalReport.valuation };
-    }
-
-    sim.turn += 1;
-  }
-
-  const finalReport = simulationReport(sim);
-  return { reason: "completed_all_turns", turnReached: currentMaxTurns(sim), cash: sim.company.cash, debt: sim.company.debt, valuation: finalReport.valuation };
-}
-
-function simulationReport(sim) {
-  const temporary = sim.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) acc[key] = (acc[key] || 0) + value;
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
-  const macro = {
-    interestRate: Math.max(0.01, sim.macro.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, sim.macro.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, sim.macro.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, sim.macro.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, sim.macro.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, sim.macro.marketRisk + (temporary.market_risk || 0))
-  };
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of sim.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    revenue += business.revenue * levelMultiplier * (1 + ((macro.demand - 1) * business.demand_sensitivity)) * (1 + macro.inflation * 0.7);
-    expenses += business.expense * levelMultiplier * Math.max(0.5, 1 + ((macro.energyCost - 1) * business.energy_use)) * (1 + macro.inflation);
-  }
-  revenue *= 1 + sim.company.revenueBonus + temporary.revenue_bonus;
-  expenses *= Math.max(0.2, 1 + sim.company.expenseBonus + temporary.expense_bonus);
-  const interest = sim.company.debt * macro.interestRate;
-  const profit = revenue - expenses - interest;
-  const assetTotal = sim.company.businesses.reduce((sum, owned) => sum + businessById(owned.businessId).cost * (1 + owned.level * 0.25), 0);
-  return { profit, valuation: sim.company.cash + assetTotal + Math.max(0, profit * 8) - sim.company.debt };
-}
-
-function simulationApplyEffects(sim, source) {
-  sim.company.cash += source.cash || 0;
-  sim.company.debt = Math.max(0, sim.company.debt + (source.debt || 0));
-  sim.company.risk = clamp(sim.company.risk + (source.risk || 0), 0.01, 0.95);
-  sim.company.revenueBonus += source.revenue_bonus || 0;
-  sim.company.expenseBonus += source.expense_bonus || 0;
-  if (source.interest_rate) sim.macro.interestRate = Math.max(0.01, sim.macro.interestRate + source.interest_rate);
-  if (source.inflation) sim.macro.inflation = Math.max(0.01, sim.macro.inflation + source.inflation);
-  if (source.demand) sim.macro.demand = Math.max(0.01, sim.macro.demand + source.demand);
-  if (source.energy_cost) sim.macro.energyCost = Math.max(0.01, sim.macro.energyCost + source.energy_cost);
-  if (source.credit_availability) sim.macro.creditAvailability = Math.max(0.01, sim.macro.creditAvailability + source.credit_availability);
-  if (source.market_risk) sim.macro.marketRisk = Math.max(0.01, sim.macro.marketRisk + source.market_risk);
-  if (source.temporary_effects && source.duration_turns) {
-    sim.activeModifiers.push({ effects: source.temporary_effects, remainingTurns: source.duration_turns });
-  }
-}
-
-function simulationEventAllowed(sim, event) {
-  if (sim.turn < (event.min_turn || 1)) return false;
-  if (sim.turn > (event.max_turn || currentMaxTurns(sim))) return false;
-  if (event.min_debt != null && sim.company.debt < event.min_debt) return false;
-  if (event.max_debt != null && sim.company.debt > event.max_debt) return false;
-  if (event.allowed_industries?.length) {
-    const ownedIndustries = new Set(sim.company.businesses.map((item) => businessById(item.businessId).industry));
-    if (!event.allowed_industries.some((industry) => ownedIndustries.has(industry))) return false;
-  }
-  return true;
-}
-
-function pickBestChoice(choices) {
-  return [...choices].sort((a, b) => choiceScore(b) - choiceScore(a))[0];
-}
-
-function pickBestCard(cards, sim) {
-  return cards.filter((card) => sim.company.cash >= (card.cost || 0)).sort((a, b) => choiceScore(b) - choiceScore(a))[0];
-}
-
-function pickBestBusiness(businesses, sim) {
-  return businesses
-    .filter((business) => !sim.company.businesses.some((owned) => owned.businessId === business.id))
-    .sort((a, b) => ((b.revenue - b.expense) / b.cost) - ((a.revenue - a.expense) / a.cost))[0];
-}
-
-function pickUpgradeTarget(sim) {
-  return [...sim.company.businesses]
-    .filter((owned) => owned.level < businessById(owned.businessId).max_level)
-    .sort((a, b) => (businessById(b.businessId).revenue - businessById(b.businessId).expense) - (businessById(a.businessId).revenue - businessById(a.businessId).expense))[0];
-}
-
-function choiceScore(choice) {
-  return (choice.cash || 0) + ((choice.debt || 0) * -0.4) + ((choice.revenue_bonus || 0) * 10000) - ((choice.expense_bonus || 0) * 7000) - ((choice.risk || 0) * 12000);
-}
-
-function average(values) {
-  return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-}
-
-function money(value) {
-  return `$${Math.round(value).toLocaleString("en-US")}`;
-}
-
-function stockMoney(value) {
-  return `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function percent(value) {
-  return `${Math.round(value * 100)}%`;
-}
-
-function signedPercent(value) {
-  return `${value >= 0 ? "+" : ""}${Math.round(value * 100)}%`;
-}
-
-function signedStockPercent(value) {
-  return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(1)}%`;
-}
-
-function signedMoney(value) {
-  return `${value >= 0 ? "+" : "-"}$${Math.abs(Math.round(value)).toLocaleString("en-US")}`;
-}
-
-function signedStockMoney(value) {
-  return `${value >= 0 ? "+" : "-"}$${Math.abs(Number(value || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function tag(text, tone = "") {
-  return `<span class="tag ${tone}">${text}</span>`;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function sample(items) {
-  return items[Math.floor(Math.random() * items.length)];
-}
+YªçŠx-®éÜj×¢ëiºÚ+Š§j[h‘éÜ¢éíçnõá:-jZ.¶›­–)Ş³^û»ö–×÷'B²6ÆV%'Vå7FFRÂÆöE'Vå7FFRÂ6fU'Vå7FFRÒg&öÒ"â÷7&2÷W'6—7FVæ6Ræ§2#°¦–×÷'B°¢%TåôD”dd”5TÅD”U2À¢%Tåõ44Tä$”õ2À¢Ç”F–ff–7VÇG•FôFV'EF‡&W6†öÆBÀ¢Ç”F–ff–7VÇG•Fô¶æ÷vÆVFvU&Wv&BÀ¢7&VFU'Vä6öæf–wW&F–öâÀ¢F–ff–7VÇG”'”–BÀ¢66Væ&–ô'”–@§Òg&öÒ"â÷7&2öVæv–æR÷'VâÖ6öæf–ræ§2#° ¦6öç7BÔ…õEU$å2Ò°¦6öç7B5D%D”äuô44‚Ò#°¦6öç7BÄäuTtUô´U’Ò&f–ææ6U&öwVVÆ–¶RæÆæwVvR#°¦6öç7BÔUDô´U’Ò&f–ææ6U&öwVVÆ–¶RæÖWF#°¦6öç7B%Tåô´U’Ò&f–ææ6U&öwVVÆ–¶Ræ7W'&VçE'Vâ#°¦6öç7B5D%D”äuõTäÄô4´TEô”äEU5E$”U2Ò²'&WF–Â"Â&—B"Â&Æöv—7F–72"Â&ÖçVf7GW&–ær%Ó°¦6öç7BEdä4TEôd”ää4Uô4$Eô”E2Ò²&f—†VE÷&FR"Â&'&–FvUöÆöâ"Â'&W•÷6¶vR"Â'&Vf–ææ6R%Ó°¦6öç7BÔUDõTäÄô4µ2Ò°¢²–C¢'VæÆö6µ÷&VÅöW7FFR"ÂF—FÆT¶W“¢'VæÆö6µ&VÄW7FFR"ÂFW67&—F–öä¶W“¢'VæÆö6µ&VÄW7FFTFW62"Â6÷7C¢ÂG—S¢&–æGW7G'’"Â6FVv÷'“¢'&VÅöW7FFR"Â–ÆöC¢²–æGW7G'“¢'&VÅöW7FFR"ÒÒÀ¢²–C¢'VæÆö6µöÖVF–"ÂF—FÆT¶W“¢'VæÆö6´ÖVF–"ÂFW67&—F–öä¶W“¢'VæÆö6´ÖVF–FW62"Â6÷7C¢"ÂG—S¢&–æGW7G'’"Â6FVv÷'“¢&'W6–æW72"Â–ÆöC¢²–æGW7G'“¢&ÖVF–"ÒÒÀ¢²–C¢'VæÆö6µöGfæ6VEöf–ææ6Uö6&G2"ÂF—FÆT¶W“¢'VæÆö6´Gfæ6VDf–ææ6T6&G2"ÂFW67&—F–öä¶W“¢'VæÆö6´Gfæ6VDf–ææ6T6&G4FW62"Â6÷7C¢RÂG—S¢&6&G2"Â6FVv÷'“¢&V6öæö×’"Â–ÆöC¢²6&G3¢Edä4TEôd”ää4Uô4$Eô”E2ÒÒÀ¢²–C¢'VæÆö6µöVæW&w•÷6V7F÷""ÂF—FÆT¶W“¢'VæÆö6´VæW&w•6V7F÷""ÂFW67&—F–öä¶W“¢'VæÆö6´VæW&w•6V7F÷$FW62"Â6÷7C¢‚ÂG—S¢&–æGW7G'’"Â6FVv÷'“¢&'W6–æW72"Â–ÆöC¢²–æGW7G'“¢&VæW&w’"ÒÒÀ¢²–C¢'VæÆö6µöW‡G&ö66‚"ÂF—FÆT¶W“¢'VæÆö6´W‡G&66‚"ÂFW67&—F–öä¶W“¢'VæÆö6´W‡G&66„FW62"Â6÷7C¢#ÂG—S¢'7F'F–æuö&öçW2"Â6FVv÷'“¢'7F'Eö&öçW2"Â–ÆöC¢²W‡G&66ƒ¢SÒÒÀ¢²–C¢'VæÆö6µöÆ÷vW%öFV'E÷&—6²"ÂF—FÆT¶W“¢'VæÆö6´Æ÷vW$FV'E&—6²"ÂFW67&—F–öä¶W“¢'VæÆö6´Æ÷vW$FV'E&—6´FW62"Â6÷7C¢#RÂG—S¢'7F'F–æuö&öçW2"Â6FVv÷'“¢&V6öæö×’"Â–ÆöC¢²FV'EF‡&W6†öÆD&öçW3¢SÒÒÀ¢²–C¢'VæÆö6µ÷7–æW&w•÷66ææW""ÂF—FÆT¶W“¢'VæÆö6µ7–æW&w•66ææW""ÂFW67&—F–öä¶W“¢'VæÆö6µ7–æW&w•66ææW$FW62"Â6÷7C¢"ÂG—S¢&fVGW&R"Â6FVv÷'“¢&76WG2"Â–ÆöC¢²7–æW&w•66ææW#¢G'VRÒÒÀ¢²–C¢'VæÆö6µöW‡FVæFVE÷'Vâ"ÂF—FÆT¶W“¢'VæÆö6´W‡FVæFVE'Vâ"ÂFW67&—F–öä¶W“¢'VæÆö6´W‡FVæFVE'VäFW62"Â6÷7C¢‚ÂG—S¢''Våö&öçW2"Â6FVv÷'“¢&ÖWF"Â–ÆöC¢²W‡G&GW&ç3¢"ÒÂ&WVF&ÆS¢G'VRÂÖ„ÆWfVÃ¢RÂ6÷7E66Æ–æs¢ã#RĞ¥Ó° ¦6öç7BG&ç6ÆF–öç2Ò°¢Vã¢°¢vÖUF—FÆS¢$f–ææ6R&öwVVÆ–¶R"À¢6†ö÷6TÆæwVvS¢$6†ö÷6RÆæwVvR"À¢'W76–ã¢%'W76–â"À¢VævÆ—6ƒ¢$VævÆ—6‚"À¢7W'&VçE'Vã¢$7W'&VçB'Vâ"À¢GW&ã¢%GW&â"À¢66ƒ¢$66‚"À¢&öf—C¢%&öf—B"À¢FV'C¢$FV'B"À¢fÇVF–öã¢%fÇVF–öâ"À¢F6†&ö&C¢$F6†&ö&B"À¢FV6—6–öç3¢$FV6—6–öç2"À¢÷'FföÆ–ó¢%÷'FföÆ–ò"À¢Ö&¶WC¢$Ö&¶WB"À¢7Fö6·3¢%7Fö6·2"À¢V6öæö×“¢$V6öæö×’"À¢æW‡EGW&ã¢$æW‡B"À¢&W6WC¢%&W6WB"À¢ÆæwVvS¢$ÆæwVvR"À¢&W6öÇfTWfVçD&Vf÷&TæW‡EGW&ã¢%&W6öÇfRF†RWfVçB&Vf÷&RæW‡BGW&â"À¢WfVçEVæF–æs¢$WfVçBVæF–ær"À¢7F–öåVæF–æs¢$7F–öâVæF–ær"À¢7W'&VçEGW&å7FGW3¢%GW&â·GW&çÒöb¶Ö…GW&ç7Ò"À¢'Väf–æ—6†VDEGW&ã¢%'Vâf–æ—6†VBBGW&â·GW&çÒ"À¢F6†&ö&E7V'F—FÆS¢$÷fW'f–WröæÇ’âF†—267&VVâW‡Æ–ç2F†R'VâBvÆæ6Râ"À¢FV6—6–öç57V'F—FÆS¢%&W6öÇfRF†R7W'&VçBWfVçB†W&RâöæRWfVçB6†ö–6RöæÇ’â"À¢÷'FföÆ–õ7V'F—FÆS¢$÷væVB76WG2ÂWw&FW2ÂæB7–æW&w’&öw&W72â"À¢Ö&¶WE7V'F—FÆS¢$'W’æWr'W6–æW76W2†W&RâÖ&¶WB7F—26W&FRg&öÒ÷fW'f–Wrâ"À¢V6öæö×•7V'F—FÆS¢$Ö7&ò&Vv–ÖRÂ&V6VçB†—7F÷'’ÂæB6V7F÷"†–çG2â"À¢v†DæVVG4GFVçF–öã¢%v†BæVVG2GFVçF–öâæ÷r"À¢'Vä6ö×ÆWFS¢%'Vâ6ö×ÆWFR"À¢WfVçE&W6öÇfVC¢$WfVçB&W6öÇfVB"À¢WfVçEVæF–æu6†÷'C¢$WfVçBVæF–ær"À¢7F–öäFöæS¢$7F–öâFöæR"À¢7F–öåVæF–æu6†÷'C¢$7F–öâVæF–ær"À¢Ö7&õ&Vv–ÖS¢$Ö7&ò&Vv–ÖR"À¢'Vå6æ6†÷C¢%'Vâ6æ6†÷B"À¢7W'&VçDWfVçC¢$7W'&VçBWfVçB"À¢7F–öä6&G3¢$7F–öâ6&G2"À¢FV×÷&'”VffV7G3¢%FV×÷&'’VffV7G2"À¢7F—fU7–æW&v–W3¢$7F—fR7–æW&v–W2"À¢ÆÖ÷7E&VG“¢$ÆÖ÷7B&VG’"À¢æô7F—fU7–æW&v–W3¢$æò7F—fR7–æW&v–W2–WBâ"À¢æô'W6–æW76W4ÖF6„f–ÇFW#¢$æò'W6–æW76W2ÖF6‚F†—2f–ÇFW"â"À¢æô'W6–æW76W4ÖF6„Ö&¶WDf–ÇFW#¢$æò'W6–æW76W2ÖF6‚F†—2Ö&¶WBf–ÇFW"â"À¢ÆÃ¢$ÆÂ"À¢ÆÄ–æGW7G&–W3¢$ÆÂ–æGW7G&–W2"À¢ÆÅ&—6³¢$ÆÂ&—6²"À¢Æ÷u&—6³¢$Æ÷r&—6²"À¢Ö–E&—6³¢$Ö–B&—6²"À¢†–v…&—6³¢$†–v‚&—6²"À¢FV6ƒ¢%FV6‚"À¢&VÄW7FFS¢%&VÂW7FFR"À¢–æGW7G'“¢$–æGW7G'’"À¢VæW&w“¢$VæW&w’"À¢&WF–Ã¢%&WF–Â"À¢f–ææ6S¢$f–ææ6R"À¢ÖVF–¢$ÖVF–"À¢Æöv—7F–73¢$Æöv—7F–72"À¢öffW'3¢&öffW'2"À¢ÆWfVÃ¢$ÆWfVÂ"À¢&WfVçVS¢%&WfVçVR"À¢W‡Vç6W3¢$W‡Vç6W2"À¢&—6³¢%&—6²"À¢Ww&FS¢%Ww&FR"À¢6VÆÃ¢%6VÆÂ"À¢'W“¢$'W’"À¢W‡V7FVE&öf—C¢$W‡V7FVB&öf—B"À¢Ö7&õ6Vç6—F—f—G“¢$Ö7&ò6Vç6—F—f—G’"À¢7–æW&w”†öö·3¢%7–æW&w’†öö·2"À¢–æGW7G'”Æ&VÃ¢$–æGW7G'’"À¢&V6VçDWfVçG3¢%&V6VçBWfVçG2"À¢v†õv–ç4æDÆ÷6W3¢%v†òv–ç2æBÆ÷6W2"À¢÷6—F—fS¢%÷6—F—fR"À¢æVvF—fS¢$æVvF—fR"À¢æô6÷7C¢$æò6÷7B"À¢7G&FVv–56†–gC¢%7G&FVv–26†–gB"À¢Æ÷vW#¢$Æ÷vW""À¢æWWG&Ã¢$æWWG&Â"À¢ÖVF—VÓ¢$ÖVF—VÒ"À¢†–vƒ¢$†–v‚"À¢FV6—6–öäÆö6¶VC¢$FV6—6–öâÆö6¶VBâF¶RöæRÖ÷fRÂF†VâGfæ6Râ"À¢æW‡EGW&å&VG“¢$æW‡BGW&â—2&VG’â"À¢&W6öÇfTWfVçEF†Vä7F–öã¢%&W6öÇfRF†RWfVçB&Vf÷&RF¶–ærâ7F–öââ"À¢6†ö÷6T7F–öã¢%–6²öæR7F–öâ&VÆ÷râ"À¢6†ö÷6TÆæwVvTÆFW#¢$6†ævRÆæwVvRv—F†÷WB&W6WGF–ærF†R7W'&VçB'Vââ"À¢7F–öä6ö×ÆWFVC¢$7F–öâ6ö×ÆWFVB"À¢'Vå7F'FVC¢%'Vâ7F'FVB"À¢'Vå&W7F÷&VC¢%6fVB'Vâ&W7F÷&VB"À¢6†ö–6U6VÆV7FVC¢$6†ö–6R6VÆV7FVB"À¢&÷Vv‡D'W6–æW73¢$&÷Vv‡B¶æÖWÒ"À¢Ww&FVD'W6–æW73¢%Ww&FVB¶æÖWÒFòÇ¶ÆWfVÇÒ"À¢6öÆD'W6–æW73¢%6öÆB¶æÖWÒf÷"·fÇVWÒ"À¢6&EÆ–VC¢$6&BÆ–VC¢¶æÖWÒ"À¢'VäVæFVD–ç6öÇfVæ7“¢%'VâVæFVB–â–ç6öÇfVæ7’â"À¢'Vä6ö×ÆWFVE7V66W76gVÆÇ“¢%'Vâ6ö×ÆWFVB7V66W76gVÆÇ’â"À¢f–æÅfÇVF–öã¢$f–æÂfÇVF–öã¢·fÇVWÒ"À¢FV'E&W77W&T'&ö¶T6ö×ç“¢$FV'B&W77W&R'&ö¶RF†R6ö×ç’â"À¢7F'F–æt76WC¢%7F'F–ær76WC¢¶æÖWÒ"À¢æôÆöætF6†&ö&C¢$æòÆöærF6†&ö&BâöæR7F—fRF"BF–ÖRâ"À¢66„'VffW#¢$66‚'VffW"¶66‡ÒÂFV'BÆöB¶FV'GÒÂ&ö¦V7FVBGW&â&öf—B·&öf—GÒâ"À¢6†ævTÆæwVvS¢$6†ævRÆæwVvR"À¢6Æ÷6S¢$6Æ÷6R"À¢&FS¢$–çFW&W7B&FR"À¢–æfÆF–öã¢$–æfÆF–öâ"À¢FVÖæC¢$FVÖæB"À¢VæW&w”6÷7C¢$VæW&w’6÷7B"À¢7&VF—Df–Æ&–Æ—G“¢$7&VF—Bf–Æ&–Æ—G’"À¢Ö&¶WE&—6³¢$Ö&¶WB&—6²"À¢&Ææ6VDW‡ç6–öã¢$&Ææ6VBW‡ç6–öâ"À¢&Ææ6VDW‡ç6–öäFW63¢$æò7G&öærÖ7&ò7G&W72â÷'FföÆ–ò6öç7G'V7F–öâÖGFW'2Ö÷7Bâ"À¢VæW&w”7&—6—3¢$VæW&w’7&—6—2"À¢VæW&w”7&—6—4FW63¢$VæW&w’æBG&ç7÷'BÖ&v–ç2&RVæFW"&W77W&Râ"À¢†–v…&FU7VVW¦S¢$†–v‚&FR7VVW¦R"À¢†–v…&FU7VVW¦TFW63¢$6—FÂ—2W‡Vç6—fRæBFV'BÖ†Vg’w&÷wF‚vWG2Væ—6†VBâ"À¢–æfÆF–öå6†ö6³¢$–æfÆF–öâ6†ö6²"À¢–æfÆF–öå6†ö6´FW63¢%F÷Æ–æR&—6W2Â'WB6÷7B6öçG&öÂÖGFW'2WfVâÖ÷&Râ"À¢&V6W76–öã¢%&V6W76–öâ"À¢&V6W76–öäFW63¢$6öç7VÖW'26Æ÷rF÷vâæB66‚F—66—Æ–æRÖGFW'2â"À¢6†V7&VF—D&ööÓ¢$6†V7&VF—B&ööÒ"À¢6†V7&VF—D&ööÔFW63¢$W‡ç6–öâ—26†VæBvw&W76—fR66Æ–ærv÷&·2â"À¢w&÷wF…Æ—3¢&w&÷wF‚Æ—2"À¢–FÆT66ƒ¢&–FÆR66‚"À¢6Æ÷t÷W&F÷'3¢'6Æ÷r÷W&F÷'2"À¢F—fW'6–f–VE÷'FföÆ–÷3¢&F—fW'6–f–VB÷'FföÆ–÷2"À¢7–æW&w•7F6·3¢'7–æW&w’7F6·2"À¢6–ævÆT76WE'Vç3¢'6–ævÆRÖ76WB'Vç2"À¢ÆWfW&vVDW‡ç6–öã¢&ÆWfW&vVBW‡ç6–öâ"À¢&–6–æu÷vW#¢'&–6–ær÷vW""À¢Vff–6–VçD÷W&F÷'3¢&Vff–6–VçB÷W&F÷'2"À¢66„Æ&VÃ¢&66‚"À¢FVfVç6—fT'W6–æW76W3¢&FVfVç6—fR'W6–æW76W2"À¢&VÄW7FFT'W6–æW76W3¢'&VÂW7FFR"À¢7V7VÆF—fT76WG3¢'7V7VÆF—fR76WG2"À¢G&ç7÷'C¢&Æöv—7F–72"À¢ÖçVf7GW&–æt'W6–æW76W3¢&ÖçVf7GW&–ær"À¢6öç7VÖW$'W6–æW73¢$6öç7VÖW"Öf6–ær'W6–æW72v—F‚FVÖæBW‡÷7W&Râ"À¢66Æ&ÆUW6–FS¢%66Æ&ÆRF–v—FÂW6–FRv—F‚†–v†W"föÆF–Æ—G’â"À¢–æg&7G'V7GW&UÆ“¢$–æg&7G'V7GW&RÆ’v—F‚VæW&w’6Vç6—F—f—G’â"À¢FVfVç6—fT76WC¢$FVfVç6—fR76WBv–ç7B6÷7B6†ö6·2â"À¢VF–Væ6T'W6–æW73¢$VF–Væ6R'W6–æW72v—F‚f7B7v–æw2â"À¢ÆöætGW&F–öä76WC¢$ÆöærÖGW&F–öâ76WBF–VBFò&FW2â"À¢7FæFÆöæS¢%7FæFÆöæR"À¢&FW3¢'&FW2"À¢&Ææ6VC¢&&Ææ6VB"À¢Æ÷u&—6´'V6¶WC¢$Æ÷r&—6²"À¢Ö–E&—6´'V6¶WC¢$Ö–B&—6²"À¢†–v…&—6´'V6¶WC¢$†–v‚&—6²"À¢&FT–ç6–v‡DÆ÷s¢$gVæF–ær&VÖ–ç2ÖævV&ÆRâ"À¢&FT–ç6–v‡D†–vƒ¢$FV'BÖ†Vg’w&÷wF‚—2VæFW"&W77W&Râ"À¢–æfÆF–öä–ç6–v‡DÆ÷s¢$–æfÆF–öâ—2æ÷BF†RÖ–âF‡&VBâ"À¢–æfÆF–öä–ç6–v‡D†–vƒ¢%&–6–ær†VÇ2Â'WB6÷7G26Æ–Ö"f7FW"â"À¢FVÖæD–ç6–v‡DÆ÷s¢$6öç7VÖW'2&RVÆÆ–ær&6²â"À¢FVÖæD–ç6–v‡D†–vƒ¢$FVÖæB7F–ÆÂ7W÷'G2W‡ç6–öââ"À¢VæW&w”–ç6–v‡DÆ÷s¢$÷W&F–ær6÷7G27F’6öçF–æVBâ"À¢VæW&w”–ç6–v‡D†–vƒ¢%G&ç7÷'BæBf7F÷&–W2Æ÷6RÖ&v–ââ"À¢7&VF—D–ç6–v‡DÆ÷s¢$7&VF—B—26VÆV7F—fRâ"À¢7&VF—D–ç6–v‡D†–vƒ¢$W‡ç6–öâf–ææ6–ær—266W76–&ÆRâ"À¢Ö&¶WE&—6´–ç6–v‡DÆ÷s¢$&6¶w&÷VæBföÆF–Æ—G’—2ÖöFW&FRâ"À¢Ö&¶WE&—6´–ç6–v‡D†–vƒ¢%&—6·’Æ–æW26â6öÆÆ6RV–6¶Ç’â"À¢ÖWF&öw&W73¢%&W7F–vR"À¢¶æ÷vÆVFvS¢$¶æ÷vÆVFvR"À¢¶æ÷vÆVFvTV&æVC¢$¶æ÷vÆVFvRV&æVB"À¢6ö×ÆWFVE'Vç3¢$6ö×ÆWFVB'Vç2"À¢&W7EfÇVF–öã¢$&W7BfÇVF–öâ"À¢&W7EGW&å&V6†VC¢$&W7BGW&â&V6†VB"À¢GW&å&V6†VC¢%GW&â&V6†VB"À¢VæÆö6³¢%VæÆö6²"À¢Æö6¶VC¢$Æö6¶VB"À¢VæÆö6¶VC¢%VæÆö6¶VB"À¢æWu'Vã¢$æWr'Vâ"À¢&6µFôF6†&ö&C¢$&6²FòF6†&ö&B"À¢'VäVæEF—FÆS¢%'Vâ6ö×ÆWFR"À¢6ö×ÆWFVDÆÅGW&ç3¢$6ö×ÆWFVBÆÂGW&ç2"À¢&æ·'WF7“¢$&æ·'WF7’"À¢FV'D6öÆÆ6S¢$FV'B6öÆÆ6R"À¢VæÆö6´–äÖWF&öw&W76–öã¢%VæÆö6²–âÖWF&öw&W76–öâ"À¢ÖWF7V'F—FÆS¢%W'6—7FVçB&öw&W72&WGvVVâ'Vç2â7VæB¶æ÷vÆVFvRöâæWr6V7F÷'2æB&öçW6W2â"À¢'VäVæE7V'F—FÆS¢%F†—2&Wv&B—2w&çFVBöæ6RW"6ö×ÆWFVB'Vââ"À¢f–æÄ66ƒ¢$f–æÂ66‚"À¢f–æÄFV'C¢$f–æÂFV'B"À¢f–æÅ&öf—C¢$f–æÂ&öf—B"À¢f–æÅfÇVF–öäÆ&VÃ¢$f–æÂfÇVF–öâ"À¢6ö×ÆWF–öå&V6öã¢$6ö×ÆWF–öâ&V6öâ"À¢&W6WDÖWF¢%&W6WBÖWF"À¢&W6WDÖWF6öæf—&Ó¢$ÖWF&öw&W76–öâ&W6WBâ"À¢æõVæÆö6·5–WC¢$æòVæÆö6·2W&6†6VB–WBâ"À¢f–Æ&ÆUVæÆö6·3¢$f–Æ&ÆRVæÆö6·2"À¢W&6†6VEVæÆö6·3¢%W&6†6VBVæÆö6·2"À¢&Wv&DÇ&VG”6Æ–ÖVC¢%&Wv&BÇ&VG’6Æ–ÖVBâ"À¢VæÆö6µW&6†6VC¢%VæÆö6²W&6†6VB"À¢æ÷DVæ÷Vv„¶æ÷vÆVFvS¢$æ÷BVæ÷Vv‚¶æ÷vÆVFvRâ"À¢VæÆö6µ&VÄW7FFS¢%VæÆö6²&VÂW7FFR"À¢VæÆö6µ&VÄW7FFTFW63¢%VæÆö6·2&VÂW7FFR'W6–æW76W2–âÖ&¶WBâ"À¢VæÆö6´ÖVF–¢%VæÆö6²ÖVF–"À¢VæÆö6´ÖVF–FW63¢%VæÆö6·2ÖVF–'W6–æW76W2–âÖ&¶WBâ"À¢VæÆö6´Gfæ6VDf–ææ6T6&G3¢%VæÆö6²Gfæ6VBf–ææ6R6&G2"À¢VæÆö6´Gfæ6VDf–ææ6T6&G4FW63¢$FG2FV'BÂ&FW2ÂæB&Vf–ææ6–ærFV6—6–öâ6&G2â"À¢VæÆö6´VæW&w•6V7F÷#¢%VæÆö6²VæW&w’6V7F÷""À¢VæÆö6´VæW&w•6V7F÷$FW63¢%VæÆö6·2VæW&w’'W6–æW76W2–âÖ&¶WBâ"À¢VæÆö6´W‡G&66ƒ¢%7F'F–ær&öçW3¢W‡G&66‚"À¢VæÆö6´W‡G&66„FW63¢$æWr'Vç27F'Bv—F‚²CRÃ66‚â"À¢VæÆö6´Æ÷vW$FV'E&—6³¢%7F'F–ær&öçW3¢Æ÷vW"FV'B&—6²"À¢VæÆö6´Æ÷vW$FV'E&—6´FW63¢$FV'B&W77W&RF‡&W6†öÆB&V6öÖW26Æ–v‡FÇ’6fW"â"À¢VæÆö6µ7–æW&w•66ææW#¢%VæÆö6²7–æW&w’66ææW""À¢VæÆö6µ7–æW&w•66ææW$FW63¢%÷'FföÆ–ò6†÷w2ÆÖ÷7BÖ6ö×ÆWFR7–æW&v–W2Ö÷&R6ÆV&Ç’â"À¢VæÆö6´W‡FVæFVE'Vã¢$W‡FVæFVBÖæFFR"À¢VæÆö6´W‡FVæFVE'VäFW63¢$æWr'Vç2Æ7B"W‡G&GW&ç2â"À¢ÖWFVæÆö6¶VD6öçFVçC¢%VæÆö6¶VB6öçFVçB"À¢FWefÆ–FF–öå76VC¢$vÖRFFfÆ–FF–öâ76VBâ"À¢†–v„÷WGWD76WC¢$†–v‚Ö÷WGWB÷W&F÷"v—F‚†Vg’6÷7BW‡÷7W&Râ"À¢&W6öÇfTWfVçEF†Vä6†ö÷6T7F–öã¢%&W6öÇfRF†RWfVçBf—'7BÂF†Vâ6†ö÷6RöæR7F–öââ"À¢GW&å&öw&W73¢%GW&â&öw&W72"À¢WfVçE7FW¢$WfVçB"À¢7F–öå7FW¢$7F–öâ"À¢6ö×ÆWFVC¢$6ö×ÆWFVB"À¢7F—fS¢$7F—fR"À¢VæF–æs¢%VæF–ær"À¢7F–öå6VÆV7FVC¢$7F–öâ6VÆV7FVB"À¢7F–öäæ÷E6VÆV7FVC¢$7F–öâæ÷B6VÆV7FVB"À¢æW‡EGW&äÆö6¶VC¢$æW‡BGW&âÆö6¶VB"À¢GW&å&VG•FôGfæ6S¢%GW&â&VG’FòGfæ6R"À¢7W'&VçDWfVçEæVÃ¢$7W'&VçBWfVçB"À¢GW&ä7F–öã¢%GW&â7F–öâ"À¢VffV7DÆ&VÃ¢$VffV7B"À¢&—6´Æ&VÅF—FÆS¢%&—6²"À¢6VÆV7C¢%6VÆV7B"À¢6†ö÷6T6FVv÷'“¢$6†ö÷6RöæR7F–öâ6FVv÷'’â"À¢'W”76WC¢$'W’76WB"À¢Ww&FT76WC¢%Ww&FR76WB"À¢6VÆÄ76WC¢%6VÆÂ76WB"À¢Æ”6&D7F–öã¢%Æ’6&B"À¢WfVçE&W6öÇfVEæVÃ¢$WfVçB&W6öÇfVB"À¢7F–öåæVÄÆö6¶VC¢$7F–öâVæÆö6·2gFW"F†RWfVçB6†ö–6Râ"À¢7F–öä6FVv÷'”'W”†–çC¢%–6²öæRæWr'W6–æW72FòFBF†—2GW&ââ"À¢7F–öä6FVv÷'•Ww&FT†–çC¢%Ww&FRöæR÷væVB'W6–æW72F†—2GW&ââ"À¢7F–öä6FVv÷'•6VÆÄ†–çC¢%6VÆÂöæR÷væVB'W6–æW72f÷"Æ—V–F—G’â"À¢7F–öä6FVv÷'”6&G4†–çC¢%Æ’öæRFV6—6–öâ6&BF†—2GW&ââ"À¢GW&å6†÷'C¢%GW&â"À¢66…6†÷'C¢$66‚"À¢Ö&¶WE&VG“¢$6â'W’76WB"À¢÷'FföÆ–õ&VG“¢$6âÖævR76WG2"À¢V6öæö×•vF6ƒ¢$Ö7&òvF6‚"À¢WfVçDæVVG4FV6—6–öã¢$WfVçBVç&W6öÇfVB"À¢7v—TÖ÷&T÷F–öç3¢%7v—RFò6VRÖ÷&R÷F–öç2"À¢6VÆV7FVC¢%6VÆV7FVB"À¢6†ö÷6T÷F–öã¢$6†ö÷6R÷F–öâ"À¢WfVçD6ö×ÆWFVC¢$WfVçB6ö×ÆWFVB"À¢7F–öä7F—fTÆ&VÃ¢$7F–öâ7F—fR"À¢Æ7G5GW&ç3¢&f÷"·GW&ç7ÒGW&ç2"À¢&W6öÇfTWfVçD7F¢%&W6öÇfRWfVçB"À¢÷VäFV6—6–öç3¢$÷VâFV6—6–öç2"À¢6†ö÷6T7F–öåG—S¢$6†ö÷6RöæR7F–öâG—Râ"À¢&6³¢$&6²"À¢&W”FV'C¢%&W’FV'B"À¢&W”FV'D†–çC¢%W6R66‚Fò&VGV6RFV'BæB&—6²â"À¢&W•V'FW#¢%&W’#RR"À¢&W”†Æc¢%&W’SR"À¢&W”ÆÃ¢%&W’ÆÂ"À¢FV'D6ÆV&VC¢$FV'B6ÆV&VB"À¢FV'E–ÖVçC¢$FV'B–ÖVçB ¢À¢Ö&¶WD'W6–æW76W3¢%&—fFR76WG2"À¢Ö&¶WE7Fö6·3¢%7Fö6²Ö&¶WB"À¢'W6–æW76W46FVv÷'“¢$'W6–æW76W2"À¢&VÄW7FFT6FVv÷'“¢%&VÂW7FFR"À¢7Fö6´Ö&¶WD6FVv÷'“¢%7Fö6²Ö&¶WB"À¢'W6–æW76W46FVv÷'”FW63¢$'W’6ö×æ–W2æB66ÆR÷W&F–ær–æ6öÖRâ"À¢&VÄW7FFT6FVv÷'”FW63¢$'W’&÷W'F–W2f÷"7FVG’76—fR–æ6öÖRâ"À¢7Fö6´Ö&¶WD6FVv÷'”FW63¢%G&FRV&Æ–2WV—F–W2æBÖævR÷6—F–öç2â"À¢6†ö÷6T76WEG—S¢$6†ö÷6R76WBG—R"À¢&6µFôÖ&¶WC¢$&6²FòÖ&¶WB"À¢GW&ä7F–öä'W”öæT76WC¢%GW&â7F–öã¢'W’öæR76WB"À¢76WEW&6†6VC¢$76WBW&6†6VB"À¢GW&ä7F–öä6ö×ÆWFVDÆ&VÃ¢%GW&â7F–öâ6ö×ÆWFVB"À¢&6µFôFV6—6–öç3¢$&6²FòFV6—6–öç2"À¢7F–öäÇ&VG”6ö×ÆWFVC¢$7F–öâÇ&VG’6ö×ÆWFVB"À¢6†&W3¢%6†&W2"À¢&–6S¢%&–6R"À¢6V7F÷#¢%6V7F÷""À¢'W•6†&W3¢$'W’6†&W2"À¢6VÆÅ6†&W3¢%6VÆÂ6†&W2"À¢7Fö6´7–6ÆS¢$Ö&¶WB7–6ÆR"À¢ÖöÖVçGVÓ¢$ÖöÖVçGVÒ"À¢F—f–FVæC¢$F—f–FVæB"À¢f–Æ&ÆT66ƒ¢$f–Æ&ÆR66‚"À¢–÷W%÷6—F–öã¢%–÷W"÷6—F–öâ"À¢'W•÷vW#¢$'W’÷vW""À¢6VÆÅ÷6—F–öã¢%6VÆÂ÷6—F–öâ"À¢Ö„'W“¢$Ö‚'W’"À¢Ö…6VÆÃ¢$Ö‚6VÆÂ"À¢&÷Vv‡E6†&W3¢$&÷Vv‡B¶6÷VçGÒ6†&W2"À¢6öÆE6†&W3¢%6öÆB¶6÷VçGÒ6†&W2"À¢F÷$G&s¢%F÷"G&rFò6†ö÷6RÖ÷VçB"À¢÷Vä6†'C¢$÷Vâ6†'B"À¢÷væVE6†&W3¢$÷væVC¢¶6÷VçGÒ"À¢F†—5GW&ã¢'F†—2GW&â"À¢fÇVTÆ&VÃ¢%fÇVR"À¢Ö÷VçDÆ&VÃ¢$Ö÷VçB"À¢7Fö6´FWF–Ç3¢%7Fö6²FWF–Ç2"À¢æõ÷6—F–öã¢$æò÷6—F–öâ–WBâ"À¢6Æ÷6U6†VWC¢$6Æ÷6R"À¢6†'E&ævS¢%&–6R&ævR"À¢fW&vU&–6S¢$frâ6÷7B"À¢GW&ä6†ævS¢%GW&â6†ævR"À¢&W”FV'EF–ÆS¢$FV'BFW6²"À¢÷6—F–öåfÇVS¢%÷6—F–öâfÇVR"À¢&öf—DÆ÷73¢%&öf—BòÆ÷72"À¢F—f–FVæD–æ6öÖS¢$F—f–FVæB–æ6öÖR"À¢F—f–FVæEW%GW&ã¢%W"GW&â"À¢F—f–FVæD–æ6öÖUW%GW&ã¢$F—f–FVæB–æ6öÖS¢·fÇVWÒF†—2GW&â"À¢æôF—f–FVæD–æ6öÖS¢%F†—27Fö6²FöW2æ÷B’F—f–FVæG2"À¢U&F–ôÆ&VÃ¢%ôR"À¢fÇVF–öäÆ&VÃ¢%fÇVF–öâ"À¢6†VfÇVF–öã¢$6†V"À¢f—%fÇVF–öã¢$f—""À¢W‡Vç6—fUfÇVF–öã¢$W‡Vç6—fR"À¢6öæf—&Ô'W“¢$6öæf—&Ò'W’"À¢6öæf—&Õ6VÆÃ¢$6öæf—&Ò6VÆÂ"À¢G&uFô6†ö÷6TÖ÷VçC¢$G&rFò6†ö÷6RÖ÷VçB"À¢Æ7D—FW&F–öç3¢$Æ7B—FW&F–öç2"À¢w&÷wF…7Fö6³¢$w&÷wF‚"À¢F—f–FVæE7Fö6³¢$F—f–FVæB"À¢7Fö6µG—TÆ&VÃ¢%G—R"À¢F—f–FVæE––VÆDÆ&VÃ¢$F—f–FVæB––VÆB"À¢&–6T†—7F÷'”V×G“¢$æò&–6R†—7F÷'’–WBâ"À¢GW&äÆ&VÅ6†÷'C¢%GW&â"À¢7W'&VçE&–6TÆ&VÃ¢$7W'&VçB&–6R"À¢ÆÄf–ÇFW#¢$ÆÂ"À¢f–Æ&ÆTf–ÇFW#¢$f–Æ&ÆR"À¢W&6†6VDf–ÇFW#¢%W&6†6VB"À¢76WG46FVv÷'“¢$76WG2"À¢'W6–æW746FVv÷'“¢$'W6–æW72"À¢&VÄW7FFT6FVv÷'•6†÷'C¢%&VÂW7FFR"À¢Ö&¶WD6FVv÷'•6†÷'C¢$Ö&¶WB"À¢V6öæö×”6FVv÷'•6†÷'C¢$V6öæö×’"À¢7F'D6FVv÷'•6†÷'C¢%7F'B"À¢ÖWF6FVv÷'•6†÷'C¢$ÖWF"À¢7FGW46Æ÷6VC¢$6Æ÷6VB"À¢7FGW4f–Æ&ÆS¢$f–Æ&ÆR"À¢7FGW4÷VæVC¢$÷VæVB"À¢7FGW5Ww&F&ÆS¢%Ww&F&ÆR"À¢7FGW4Öƒ¢$Ö‚"À¢7FGW4æô¶æ÷vÆVFvS¢$æ÷BVæ÷Vv‚¶æ÷vÆVFvR"À¢Ww&FT7F–öã¢%Ww&FR"À¢Væf–Æ&ÆT7F–öã¢%Væf–Æ&ÆR"À¢Ö„7F–öã¢$Ö‚â"À¢7W'&VçDVffV7DÆ&VÃ¢$7W'&VçBVffV7B"À¢æW‡DVffV7DÆ&VÃ¢$æW‡BÆWfVÂ"À¢6÷7DÆ&VÃ¢$6÷7B"À¢7FGW4Æ&VÃ¢%7FGW2"À¢ÆWfVÅ&öw&W74Æ&VÃ¢$ÆWfVÂ"À¢&WVF&ÆTÆ&VÃ¢%&WVF&ÆR"À¢æW‡E'VäÆVæwF„Æ&VÃ¢$æW‡B'VâÆVæwF‚"À¢6öæf—&Õ&W6WDÖWF¢%&W6WBÆÂ&W7F–vR&öw&W73ò"À¢æôÖWF—FV×4ÖF6„f–ÇFW#¢$æò&W7F–vRWw&FW2ÖF6‚F†—2f–ÇFW"â"À¢7Fö6µ&—6–æs¢%7Fö6²&—6–ær"À¢7Fö6´fÆÆ–æs¢%7Fö6²fÆÆ–ær"À¢7Fö6´æWWG&Ã¢$æWWG&Â"À¢æWu'Vå6WGW¢$æWr'Vâ"À¢æWu'Vå6WGWFW63¢$6†ö÷6RF†R÷Væ–ær÷6—F–öâæB†÷r×V6‚&W77W&RF†R'Vâ6†÷VÆBÇ’â"À¢6†ö÷6U66Væ&–ó¢%7F'F–ær66Væ&–ò"À¢6†ö÷6TF–ff–7VÇG“¢$F–ff–7VÇG’"À¢7F'D6öæf–wW&VE'Vã¢%7F'B'Vâ"À¢6æ6VÅ6WGW¢$¶VW7W'&VçB'Vâ"À¢66Væ&–ôÆ&VÃ¢%66Væ&–ò"À¢F–ff–7VÇG”Æ&VÃ¢$F–ff–7VÇG’"À¢66Væ&–ô&Ææ6VEF—FÆS¢$&Ææ6VB7F'B"À¢66Væ&–ô&Ææ6VDFW63¢$6Æ76–2÷Væ–ærv—F‚öæR&æFöÒ÷W&F–ær'W6–æW72æBæòFV'Bâ"À¢66Væ&–ôÆWfW&vVEF—FÆS¢$ÆWfW&vVBw&÷wF‚"À¢66Væ&–ôÆWfW&vVDFW63¢%7F'Bv—F‚62'W6–æW72ÂW‡G&Æ—V–F—G’ÂæBFævW&÷W2FV'B&W77W&Râ"À¢66Væ&–õG&FW%F—FÆS¢$Ö&¶WBG&FW""À¢66Væ&–õG&FW$FW63¢%7F'Bv—F‚FV6‚'W6–æW72æBâÆ—‚7Fö6²÷6—F–öâ–âÖ÷&RföÆF–ÆRÖ&¶WBâ"À¢F–ff–7VÇG•&VÆ†VEF—FÆS¢%&VÆ†VB"À¢F–ff–7VÇG•&VÆ†VDFW63¢$Ö÷&R66‚ÂÆ÷vW"&—6²ÂæB6fW"FV'BF‡&W6†öÆBâ&W7F–vR&Wv&G2&R&VGV6VBâ"À¢F–ff–7VÇG”æ÷&ÖÅF—FÆS¢$æ÷&ÖÂ"À¢F–ff–7VÇG”æ÷&ÖÄFW63¢%F†R–çFVæFVB&Ææ6Rf÷"F†RÖ–âvÖRâ"À¢F–ff–7VÇG”†&EF—FÆS¢$†&B"À¢F–ff–7VÇG”†&DFW63¢$ÆW7266‚Â†–v†W"&—6²ÂæBf7FW"FV'B6öÆÆ6Râ&W7F–vR&Wv&G2&R–æ7&V6VBâ"À¢6WGW66ƒ¢%7F'F–ær66‚"À¢6WGWFV'C¢%7F'F–ærFV'B"À¢6WGW&—6³¢%7F'F–ær&—6²"À¢6WGW&Wv&C¢%&W7F–vR&Wv&B"À¢6WGW&Wv&E&VGV6VC¢,9sãsR"À¢6WGW&Wv&Dæ÷&ÖÃ¢,9sã"À¢6WGW&Wv&D–æ7&V6VC¢,9sã#R"À¢7F'F–æt6öæf–wW&F–öã¢'·66Væ&–÷Ò+r¶F–ff–7VÇG—Ò ¢ÒÀ¢'S¢°¢vÖUF—FÆS¢$f–ææ6R&öwVVÆ–¶R"À¢6†ö÷6TÆæwVvS¢-	-½]-Rı}½¢"À¢'W76–ã¢-
+=­’"À¢VævÆ—6ƒ¢$VævÆ—6‚"À¢7W'&VçE'Vã¢-
+-]­=òı-ò"À¢GW&ã¢-
+]íB"À¢66ƒ¢-	M]İÍ=‚"À¢&öf—C¢-	ı½½Â"À¢FV'C¢-	Mí½2"À¢fÇVF–öã¢-	ím]İ­"À¢F6†&ö&C¢-	í}í"À¢FV6—6–öç3¢-
+]]İò"À¢÷'FföÆ–ó¢-	ıí-M]½Â"À¢Ö&¶WC¢-
+½İí¢"À¢7Fö6·3¢-	­m‚"À¢V6öæö×“¢-
+İ­íİíÍ­"À¢æW‡EGW&ã¢-
+½]M=í’"À¢&W6WC¢-
+í"À¢ÆæwVvS¢-
+ı}½¢"À¢&W6öÇfTWfVçD&Vf÷&TæW‡EGW&ã¢-
+]-Rí½-Rı]]B½]M=íÂ]íMíÂ"À¢WfVçEVæF–æs¢-
+í½-RİR]]İâ"À¢7F–öåVæF–æs¢-	M]--RİR-½İâ"À¢7W'&VçEGW&å7FGW3¢-
+]íB·GW&çÒr¶Ö…GW&ç7Ò"À¢'Väf–æ—6†VDEGW&ã¢-	ı-ò}-]]İİ]íM2·GW&çÒ"À¢F6†&ö&E7V'F—FÆS¢-
+-í½Í­âí}íâ
+İ-í"İ­Òí­ıİı]"í-íıİRı-‚ı]-í=â-}=½ıMâ"À¢FV6—6–öç57V'F—FÆS¢-	}M]Â]]-ò-]­=]Rí½-Râ
+-í½Í­âíMÒ-½íí½-òâ"À¢÷'FföÆ–õ7V'F—FÆS¢-	-‚­--²Â=½=}]İò‚ıí=]İ]=’â"À¢Ö&¶WE7V'F—FÆS¢-	ıí­=ı­İí-½R}İ]í"â
+½İí¢í-M]½]Òí"í}íâ"À¢V6öæö×•7V'F—FÆS¢-	Í­âİ]mÂÂ-íò‚ıíM­}­‚ıâ]­-íÂâ"À¢v†DæVVG4GFVçF–öã¢-
+}-â-mİâııÍâ]}"À¢'Vä6ö×ÆWFS¢-	ı-ò}-]]İ"À¢WfVçE&W6öÇfVC¢-
+í½-R]]İâ"À¢WfVçEVæF–æu6†÷'C¢-
+í½-RİR]]İâ"À¢7F–öäFöæS¢-	M]--RM]½İâ"À¢7F–öåVæF–æu6†÷'C¢-	M]--RİR-½İâ"À¢Ö7&õ&Vv–ÖS¢-	Í­âİ]mÂ"À¢'Vå6æ6†÷C¢-
+İÍí¢ı-‚"À¢7W'&VçDWfVçC¢-
+-]­=]Rí½-R"À¢7F–öä6&G3¢-	­-²M]--’"À¢FV×÷&'”VffV7G3¢-	-]Í]İİ½RİMM]­-²"À¢7F—fU7–æW&v–W3¢-	­--İ½Rİ]=‚"À¢ÆÖ÷7E&VG“¢-	ıí}-‚íİâ"À¢æô7F—fU7–æW&v–W3¢-	ıí­İ]"­--İ½Rİ]=’â"À¢æô'W6–æW76W4ÖF6„f–ÇFW#¢-	İ]"}İ]í"ıíBİ-í"M½Í-â"À¢æô'W6–æW76W4ÖF6„Ö&¶WDf–ÇFW#¢-	İ]"ı]M½ím]İ’ıíBİ-í"M½Í-½İ­â"À¢ÆÃ¢-	-R"À¢ÆÄ–æGW7G&–W3¢-	-Rí-½‚"À¢ÆÅ&—6³¢-	½íí’¢"À¢Æ÷u&—6³¢-	İ}­’¢"À¢Ö–E&—6³¢-
+]Mİ’¢"À¢†–v…&—6³¢-	-½í­’¢"À¢FV6ƒ¢-
+-]R"À¢&VÄW7FFS¢-	İ]M-mÍí-Â"À¢–æGW7G'“¢-	ıíÍ½½]İİí-Â"À¢VæW&w“¢-
+İİ]=ò"À¢&WF–Ã¢-
+-]²"À¢f–ææ6S¢-
+Mİİ²"À¢ÖVF–¢-	Í]M"À¢Æöv—7F–73¢-	½í=-­"À¢öffW'3¢-ı]M½ím]İ’"À¢ÆWfVÃ¢-
+=í-]İÂ"À¢&WfVçVS¢-	Mí]íB"À¢W‡Vç6W3¢-
+]íM²"À¢&—6³¢-
+¢"À¢Ww&FS¢-
+=½=}-Â"À¢6VÆÃ¢-	ıíM-Â"À¢'W“¢-	­=ı-Â"À¢W‡V7FVE&öf—C¢-	ímM]Íòı½½Â"À¢Ö7&õ6Vç6—F—f—G“¢-
+}=----]½Íİí-Â¢Í­â"À¢7–æW&w”†öö·3¢-
+İ]=‚"À¢–æGW7G'”Æ&VÃ¢-	í-½Â"À¢&V6VçDWfVçG3¢-	ıí½]MİRí½-ò"À¢v†õv–ç4æDÆ÷6W3¢-	­-â-½=½-]"‚ıí=½-]""À¢÷6—F—fS¢-	ı½í"À¢æVvF—fS¢-	Íİ="À¢æô6÷7C¢-	]r-íÍí-‚"À¢7G&FVv–56†–gC¢-
+--]=}]­’M-2"À¢Æ÷vW#¢-	İmR"À¢æWWG&Ã¢-	İ]-½Íİâ"À¢ÖVF—VÓ¢-
+]Mİ’"À¢†–vƒ¢-	-½í­’"À¢FV6—6–öäÆö6¶VC¢-	-½í}M­í-Òâ
+M]½-RíMİâM]--R‚ı]]]íM-R¢½]M=í]Í2]íM2â"À¢æW‡EGW&å&VG“¢-
+½]M=í’]íB=í-í"â"À¢&W6öÇfTWfVçEF†Vä7F–öã¢-
+]-Rí½-Rı]]BM]--]Ââ"À¢6†ö÷6T7F–öã¢-	-½]-RíMİâM]--RİmRâ"À¢6†ö÷6TÆæwVvTÆFW#¢-
+Í]İ-Âı}½¢]rí-]­=]’ı-‚â"À¢7F–öä6ö×ÆWFVC¢-	M]--R-½ıí½İ]İâ"À¢'Vå7F'FVC¢-	ı-òİ}½Â"À¢'Vå&W7F÷&VC¢-
+í]İİİòı-ò-í-İí-½]İ"À¢6†ö–6U6VÆV7FVC¢-	-½Ò-İ""À¢&÷Vv‡D'W6–æW73¢-	­=ı½]Ò¶æÖWÒ"À¢Ww&FVD'W6–æW73¢'¶æÖWÒ=½=}]ÒMâ=â¶ÆWfVÇÒ"À¢6öÆD'W6–æW73¢'¶æÖWÒıíMÒ}·fÇVWÒ"À¢6&EÆ–VC¢-
+}½=İ­-¢¶æÖWÒ"À¢'VäVæFVD–ç6öÇfVæ7“¢-	ı-ò}­íİ}½Ârİ}İ]ı½-]m]ıííİí-‚â"À¢'Vä6ö×ÆWFVE7V66W76gVÆÇ“¢-	ı-ò=ı]İâ}-]]İâ"À¢f–æÅfÇVF–öã¢-	-í=í-òím]İ­¢·fÇVWÒ"À¢FV'E&W77W&T'&ö¶T6ö×ç“¢-	Mí½=í-íRM-½]İR½íÍ½â­íÍıİââ"À¢7F'F–æt76WC¢-
+--í-½’­-#¢¶æÖWÒ"À¢æôÆöætF6†&ö&C¢-	]rM½İİí’ıí­=-­‚â
+-í½Í­âíMİ­--İò-­½M­â"À¢66„'VffW#¢-	ıíM=­M]İ]2¶66‡ÒÂMí½2¶FV'GÒÂı½½Â]íM·&öf—GÒâ"À¢6†ævTÆæwVvS¢-
+Í]İ-Âı}½¢"À¢6Æ÷6S¢-	}­½-Â"À¢&FS¢-
+--­"À¢–æfÆF–öã¢-	İM½ımò"À¢FVÖæC¢-
+ıí"À¢VæW&w”6÷7C¢-
+m]İİİ]=‚"À¢7&VF—Df–Æ&–Æ—G“¢-	Mí-=ıİí-Â­]M-"À¢Ö&¶WE&—6³¢-
+½İí}İ½’¢"À¢&Ææ6VDW‡ç6–öã¢-
+½İí-İİ½’í""À¢&Ææ6VDW‡ç6–öäFW63¢-
+½Íİí=âÍ­âİ-]İ]"â	-mİ]Rí­ıí-M]½òâ"À¢VæW&w”7&—6—3¢-
+İİ]=í­}"À¢VæW&w”7&—6—4FW63¢-	Ímİİ]=‚‚-İıí-ıíBM-½]İ]Ââ"À¢†–v…&FU7VVW¦S¢-	M-½]İR-½í­R--í¢"À¢†–v…&FU7VVW¦TFW63¢-	­ı-²Míí=í’Âí"İMí½=Rİ­}½-]-òâ"À¢–æfÆF–öå6†ö6³¢-	İM½ımíİİ½’í¢"À¢–æfÆF–öå6†ö6´FW63¢-	-½=}­-]"Âİâ­íİ-í½Â]íMí"]R-mİ]Râ"À¢&V6W76–öã¢-
+]m]ò"À¢&V6W76–öäFW63¢-	ıí-]-]½‚}Í]M½ıí-òÂ-mİMmı½İıâ­İ2â"À¢6†V7&VF—D&ööÓ¢-	=ÂM]]-í=â­]M-"À¢6†V7&VF—D&ööÔFW63¢-
+ı-ÍòM]]-âÂ=]-İ½’í"í-]"â"À¢w&÷wF…Æ—3¢-í-í-½R­--²"À¢–FÆT66ƒ¢-ıí-í’­İ‚"À¢6Æ÷t÷W&F÷'3¢-Í]M½]İİ½Ríı]-í²"À¢F—fW'6–f–VE÷'FföÆ–÷3¢-M-]Mmí-İİ½Rıí-M]½‚"À¢7–æW&w•7F6·3¢-í­‚İ]=’"À¢6–ævÆT76WE'Vç3¢-}]=‚"íMÒ­-""À¢ÆWfW&vVDW‡ç6–öã¢-í"İMí½=R"À¢&–6–æu÷vW#¢-½ÍİíRm]İíí}í-İR"À¢Vff–6–VçD÷W&F÷'3¢-İMM]­--İ½Ríı]-í²"À¢66„Æ&VÃ¢-­İ‚"À¢FVfVç6—fT'W6–æW76W3¢-}-İ½R}İ]²"À¢&VÄW7FFT'W6–æW76W3¢-İ]M-mÍí-Â"À¢7V7VÆF—fT76WG3¢-ı]­=½ı--İ½R­--²"À¢G&ç7÷'C¢-½í=-­"À¢ÖçVf7GW&–æt'W6–æW76W3¢-ıí}-íM--â"À¢6öç7VÖW$'W6–æW73¢-	ıí-]-]½Í­’}İ]}-Íí-Íâí"ıíâ"À¢66Æ&ÆUW6–FS¢-
+mMí-í’í"í½]R-½í­í’-í½-½Íİí-Íââ"À¢–æg&7G'V7GW&UÆ“¢-	İM-=­-=İ½’­-"}=----]½Íİí-Íâ¢İİ]=‚â"À¢FVfVç6—fT76WC¢-	}-İ½’­-"ıí-"í­}-"â"À¢VF–Væ6T'W6–æW73¢-	Í]Mİ}İ]½-½Í‚­í½]İıÍ‚=M-í‚â"À¢ÆöætGW&F–öä76WC¢-	M½İİ½’­-"Â}-ı}İİ½’İ--­Râ"À¢7FæFÆöæS¢-
+Íí-íı-]½Íİâ"À¢&FW3¢---­‚"À¢&Ææ6VC¢-½İí-İİâ"À¢Æ÷u&—6´'V6¶WC¢-	İ}­’¢"À¢Ö–E&—6´'V6¶WC¢-
+]Mİ’¢"À¢†–v…&—6´'V6¶WC¢-	-½í­’¢"À¢&FT–ç6–v‡DÆ÷s¢-
+Mİİí-İRıí­í-]-ò=ı-½ı]Í½Ââ"À¢&FT–ç6–v‡D†–vƒ¢-
+í"İMí½=RıíBM-½]İ]Ââ"À¢–æfÆF–öä–ç6–v‡DÆ÷s¢-	İM½ımòİR=½-İ½’¢â"À¢–æfÆF–öä–ç6–v‡D†–vƒ¢-
+m]İ²ıíÍí=í"Âİâ]íM²-="½-]Râ"À¢FVÖæD–ç6–v‡DÆ÷s¢-	ıí-]-]½‚í­í"--²â"À¢FVÖæD–ç6–v‡D†–vƒ¢-
+ıíıí­ıíMM]m-]"í"â"À¢VæW&w”–ç6–v‡DÆ÷s¢-	íı]míİİ½R}--²í-í-òıíB­íİ-í½]Ââ"À¢VæW&w”–ç6–v‡D†–vƒ¢-	½í=-­‚M­‚-]ıí"Ím2â"À¢7&VF—D–ç6–v‡DÆ÷s¢-	­]M"-½Mí"í-íímİââ"À¢7&VF—D–ç6–v‡D†–vƒ¢-
+Mİİí-İR]İòMí-=ıİââ"À¢Ö&¶WE&—6´–ç6–v‡DÆ÷s¢-
+Míİí-ò-í½-½Íİí-Â=Í]]İİòâ"À¢Ö&¶WE&—6´–ç6–v‡D†–vƒ¢-
+­í-İİ½R½İ‚Íí=="]}­âıí]-Ââ"À¢ÖWF&öw&W73¢-	ı]-b"À¢¶æ÷vÆVFvS¢-	}İİò"À¢¶æ÷vÆVFvTV&æVC¢-	ıí½=}]İâ}İİ’"À¢6ö×ÆWFVE'Vç3¢-	}-]İİ½Rı-‚"À¢&W7EfÇVF–öã¢-	½=}òím]İ­"À¢&W7EGW&å&V6†VC¢-	½=}’Mí-=İ=-½’]íB"À¢GW&å&V6†VC¢-	Mí-=İ=-½’]íB"À¢VæÆö6³¢-	í-­½-Â"À¢Æö6¶VC¢-	}­½-â"À¢VæÆö6¶VC¢-	í-­½-â"À¢æWu'Vã¢-	İí-òı-ò"À¢&6µFôF6†&ö&C¢-	İ}B¢í}í2"À¢'VäVæEF—FÆS¢-	ı-ò}-]]İ"À¢6ö×ÆWFVDÆÅGW&ç3¢-	ıíM]İ²-R]íM²"À¢&æ·'WF7“¢-	İ­í---â"À¢FV'D6öÆÆ6S¢-	Mí½=í-í’­R"À¢VæÆö6´–äÖWF&öw&W76–öã¢-	í-­í-R"Í]-İıí=]‚"À¢ÖWF7V'F—FÆS¢-	ıí-íıİİ½’ıí=]Í]mM2ı-ıÍ‚â
+--Í-R}İİòİİí-½R]­-í²‚íİ=²â"À¢'VäVæE7V'F—FÆS¢-
+İ-İ=M-½M-òíMÒr}­mM=âı-ââ"À¢f–æÄ66ƒ¢-	-í=í-½RM]İÍ=‚"À¢f–æÄFV'C¢-	-í=í-½’Mí½2"À¢f–æÅ&öf—C¢-	-í=í-òı½½Â"À¢f–æÅfÇVF–öäÆ&VÃ¢-	-í=í-òím]İ­"À¢6ö×ÆWF–öå&V6öã¢-	ı}İ}-]]İò"À¢&W6WDÖWF¢-
+í-ÂÍ]-İıí=]"À¢&W6WDÖWF6öæf—&Ó¢-	Í]-İıí=]í]Òâ"À¢æõVæÆö6·5–WC¢-	ıí­İ]"­=ı½]İİ½Rí-­½-’â"À¢f–Æ&ÆUVæÆö6·3¢-	Mí-=ıİ½Rí-­½-ò"À¢W&6†6VEVæÆö6·3¢-	­=ı½]İİ½Rí-­½-ò"À¢&Wv&DÇ&VG”6Æ–ÖVC¢-	İ=M=mRİ}½]İâ"À¢VæÆö6µW&6†6VC¢-	í-­½-R­=ı½]İâ"À¢æ÷DVæ÷Vv„¶æ÷vÆVFvS¢-	İR]--]"	}İİ’â"À¢VæÆö6µ&VÄW7FFS¢-	í-­½-Âİ]M-mÍí-Â"À¢VæÆö6µ&VÄW7FFTFW63¢-	í-­½-]"}İ]²İ]M-mÍí-‚İ½İ­Râ"À¢VæÆö6´ÖVF–¢-	í-­½-ÂÍ]M"À¢VæÆö6´ÖVF–FW63¢-	í-­½-]"Í]Mİ}İ]²İ½İ­Râ"À¢VæÆö6´Gfæ6VDf–ææ6T6&G3¢-	í-­½-ÂıíM-İ=-½RMİ­-²"À¢VæÆö6´Gfæ6VDf–ææ6T6&G4FW63¢-	Mí-½ı]"­-²ıâMí½2Â--­‚‚&Vf–ææ6Râ"À¢VæÆö6´VæW&w•6V7F÷#¢-	í-­½-Âİİ]=]-­2"À¢VæÆö6´VæW&w•6V7F÷$FW63¢-	í-­½-]"İİ]=]-}]­R}İ]²İ½İ­Râ"À¢VæÆö6´W‡G&66ƒ¢-
+--í-½’íİ=¢Míòâ­İ‚"À¢VæÆö6´W‡G&66„FW63¢-	İí-½Rı-‚İ}İí-ò²CRÃâ"À¢VæÆö6´Æ÷vW$FV'E&—6³¢-
+--í-½’íİ=¢İmRMí½=í-í’¢"À¢VæÆö6´Æ÷vW$FV'E&—6´FW63¢-	ıíí2Mí½=í-í=âM-½]İò-İí--ò}=-ÂÍı=}Râ"À¢VæÆö6µ7–æW&w•66ææW#¢-	í-­½-Â­İ]İ]=’"À¢VæÆö6µ7–æW&w•66ææW$FW63¢-	ıí-M]½Â½=}Rıí­}½-]"ıí}-‚íİİ½Rİ]=‚â"À¢VæÆö6´W‡FVæFVE'Vã¢-
+-ÂÍİM""À¢VæÆö6´W‡FVæFVE'VäFW63¢-	İí-½Rı-‚M="İ"]íMMí½ÍRâ"À¢ÖWFVæÆö6¶VD6öçFVçC¢-	í-­½-½’­íİ-]İ""À¢FWefÆ–FF–öå76VC¢-	ıí-]­=í-½RMİİ½RıíM]İâ"À¢†–v„÷WGWD76WC¢-	ıí}-íM-]½Íİ½’­-"-½í­í’}=----]½Íİí-Íâ¢}--Ââ"À¢&W6öÇfTWfVçEF†Vä6†ö÷6T7F–öã¢-
+İ}½]-Rí½-RÂ}-]Â-½]-RíMİâM]--Râ"À¢GW&å&öw&W73¢-	ıí=]]íM"À¢WfVçE7FW¢-
+í½-R"À¢7F–öå7FW¢-	M]--R"À¢6ö×ÆWFVC¢-	-½ıí½İ]İâ"À¢7F—fS¢-	­--İâ"À¢VæF–æs¢-	ímMİR"À¢7F–öå6VÆV7FVC¢-	M]--R-½ıí½İ]İâ"À¢7F–öäæ÷E6VÆV7FVC¢-	M]--RİR-½ıí½İ]İâ"À¢æW‡EGW&äÆö6¶VC¢-
+½]M=í’]íBİ]Mí-=ı]Ò"À¢GW&å&VG•FôGfæ6S¢-
+]íB=í-í"¢}-]]İâ"À¢7W'&VçDWfVçEæVÃ¢-
+-]­=]Rí½-R"À¢GW&ä7F–öã¢-	M]--R]íM"À¢VffV7DÆ&VÃ¢-
+İMM]­""À¢&—6´Æ&VÅF—FÆS¢-
+¢"À¢6VÆV7C¢-	-½-Â"À¢6†ö÷6T6FVv÷'“¢-	-½]-RíMİ2­-]=íâM]--òâ"À¢'W”76WC¢-	­=ı-Â­-""À¢Ww&FT76WC¢-
+=½=}-Â­-""À¢6VÆÄ76WC¢-	ıíM-Â­-""À¢Æ”6&D7F–öã¢-
+½=-Â­-2"À¢WfVçE&W6öÇfVEæVÃ¢-
+í½-R]]İâ"À¢7F–öåæVÄÆö6¶VC¢-	M]--Rí-­í]-òıí½R-½íıâí½-ââ"À¢7F–öä6FVv÷'”'W”†–çC¢-	-½]-RíMÒİí-½’}İ]İİ-í"]íBâ"À¢7F–öä6FVv÷'•Ww&FT†–çC¢-
+=½=}-RíMÒ-í’}İ]İİ-í"]íBâ"À¢7F–öä6FVv÷'•6VÆÄ†–çC¢-	ıíM-RíMÒ}İ]M½ò½­-Mİí-‚â"À¢7F–öä6FVv÷'”6&G4†–çC¢-
+½=-RíMİ2­-2M]--òİİ-í"]íBâ"À¢GW&å6†÷'C¢-
+]íB"À¢66…6†÷'C¢-	M]İÍ=‚"À¢Ö&¶WE&VG“¢-	Íímİâ­=ı-Â­-""À¢÷'FföÆ–õ&VG“¢-	Íímİâ=ı-½ı-Â­--Í‚"À¢V6öæö×•vF6ƒ¢-	İ½íM]İR}Í­â"À¢WfVçDæVVG4FV6—6–öã¢%ÇSC#ÇSC6UÇSC3ÇSCF%ÇSCC%ÇSC3…ÇSC3RÇSC6EÇSC3RÇSCCÇSC3UÇSCC…ÇSC3UÇSC6EÇSC6R"À¢7v—TÖ÷&T÷F–öç3¢%ÇSC#ÇSC3%ÇSC3ÇSC3•ÇSC6eÇSC6EÇSC3…ÇSCC%ÇSC3RÂÇSCCuÇSCC%ÇSC6UÇSC3ÇSCF"ÇSCC5ÇSC3%ÇSC3…ÇSC3EÇSC3UÇSCC%ÇSCF2ÇSC3EÇSCCÇSCC5ÇSC35ÇSC3…ÇSC3RÇSC3%ÇSC3ÇSCCÇSC3…ÇSC3ÇSC6EÇSCC%ÇSCF""À¢6VÆV7FVC¢%ÇSC%ÇSCF%ÇSC3ÇSCCÇSC3ÇSC6EÇSC6R"À¢6†ö÷6T÷F–öã¢%ÇSC%ÇSCF%ÇSC3ÇSCCÇSC3ÇSCC%ÇSCF2ÇSC3%ÇSC3ÇSCCÇSC3…ÇSC3ÇSC6EÇSCC""À¢WfVçD6ö×ÆWFVC¢%ÇSC#ÇSC6UÇSC3ÇSCF%ÇSCC%ÇSC3…ÇSC3RÇSC3uÇSC3ÇSC3%ÇSC3UÇSCCÇSCC…ÇSC3UÇSC6EÇSC6R"À¢7F–öä7F—fTÆ&VÃ¢%ÇSCEÇSC3UÇSC3•ÇSCCÇSCC%ÇSC3%ÇSC3…ÇSC3RÇSC3ÇSC6ÇSCC%ÇSC3…ÇSC3%ÇSC6EÇSC6R"À¢Æ7G5GW&ç3¢%ÇSC6EÇSC3·GW&ç7ÒÇSCCUÇSC6UÇSC3EÇSC3"À¢&W6öÇfTWfVçD7F¢-
+]-Âí½-R"À¢÷VäFV6—6–öç3¢-	í-­½-Â]]İò"À¢6†ö÷6T7F–öåG—S¢-	-½]-RíMÒ-òM]--òâ"À¢&6³¢-	İ}B"À¢&W”FV'C¢-	ıí=-ÂMí½2"À¢&W”FV'D†–çC¢-	ıí½Í}=-RM]İÍ=‚Â}-í²İ}-ÂMí½2‚¢â"À¢&W•V'FW#¢-	ıí=-Â#RR"À¢&W”†Æc¢-	ıí=-ÂSR"À¢&W”ÆÃ¢-	ıí=-Â-"À¢FV'D6ÆV&VC¢-	Mí½2ıí=]Ò"À¢FV'E–ÖVçC¢-	ı½-bıâMí½=2 ¢À¢Ö&¶WD'W6–æW76W3¢-
+}-İ½R­--²"À¢Ö&¶WE7Fö6·3¢-
+MíİMí-½’½İí¢"À¢'W6–æW76W46FVv÷'“¢-	}İ]²"À¢&VÄW7FFT6FVv÷'“¢-	İ]M-mÍí-Â"À¢7Fö6´Ö&¶WD6FVv÷'“¢-	m"À¢'W6–æW76W46FVv÷'”FW63¢-	ıí­=ı-R­íÍıİ‚‚}---RMí]íBâ"À¢&VÄW7FFT6FVv÷'”FW63¢-	ıí­=ı-Rí­]­-²ı-İ½ÂMí]íMíÂâ"À¢7Fö6´Ö&¶WD6FVv÷'”FW63¢-	ıí­=ı-R‚ıíM--R­m‚â"À¢6†ö÷6T76WEG—S¢-	-½]-R-ò­--"À¢&6µFôÖ&¶WC¢-	İ}B¢½İ­2"À¢GW&ä7F–öä'W”öæT76WC¢-	M]--R]íM¢­=ı-RíMÒ­-""À¢76WEW&6†6VC¢-	­-"­=ı½]Ò"À¢GW&ä7F–öä6ö×ÆWFVDÆ&VÃ¢-	M]--R]íM-½ıí½İ]İâ"À¢&6µFôFV6—6–öç3¢-	-]İ=-Íò¢]]İıÂ"À¢7F–öäÇ&VG”6ö×ÆWFVC¢-	M]--R=mR-½ıí½İ]İâ"À¢6†&W3¢-	­m‚"À¢&–6S¢-
+m]İ"À¢6V7F÷#¢-
+]­-í"À¢'W•6†&W3¢-	­=ı-Â­m‚"À¢6VÆÅ6†&W3¢-	ıíM-Â­m‚"À¢7Fö6´7–6ÆS¢-
+½İí}İ½’m­²"À¢ÖöÖVçGVÓ¢-	Íı=½Í"À¢F—f–FVæC¢-	M-M]İB"À¢f–Æ&ÆT66ƒ¢-	Mí-=ıİâM]İ]2"À¢–÷W%÷6—F–öã¢-	-ıí}mò"À¢'W•÷vW#¢-	ıí­=ı-]½Íİò½"À¢6VÆÅ÷6—F–öã¢-	ıíMmıí}m‚"À¢Ö„'W“¢-	Í­Í=Âıí­=ı­‚"À¢Ö…6VÆÃ¢-	Í­Í=ÂıíMm‚"À¢&÷Vv‡E6†&W3¢-	­=ı½]İâ¶6÷VçGÒ­m’"À¢6öÆE6†&W3¢-	ıíMİâ¶6÷VçGÒ­m’"À¢F÷$G&s¢-	İmÍ-R½‚ıí-ıİ-RÂ}-í²-½-Â=ÍÍ2"À¢÷Vä6†'C¢-	í-­½-Â=M¢"À¢÷væVE6†&W3¢-	­m“¢¶6÷VçGÒ"À¢F†—5GW&ã¢-}]íB"À¢fÇVTÆ&VÃ¢-
+-íÍí-Â"À¢Ö÷VçDÆ&VÃ¢-
+=ÍÍ"À¢7Fö6´FWF–Ç3¢-	M]-½‚­m‚"À¢æõ÷6—F–öã¢-	ıí}m‚ıí­İ]"â"À¢6Æ÷6U6†VWC¢-	}­½-Â"À¢6†'E&ævS¢-	Mı}íÒm]İ²"À¢fW&vU&–6S¢-
+]Mİıòm]İ"À¢GW&ä6†ævS¢-	}Í]İ]İR}]íB"À¢&W”FV'EF–ÆS¢-
+-í²Mí½="À¢÷6—F–öåfÇVS¢-
+-íÍí-Âıí}m‚"À¢&öf—DÆ÷73¢-	ı½½Âò=½-í¢"À¢F—f–FVæD–æ6öÖS¢-	Mí]íBM-M]İMí""À¢F—f–FVæEW%GW&ã¢-	}]íB"À¢F—f–FVæD–æ6öÖUW%GW&ã¢-	Mí]íBM-M]İMí#¢·fÇVWÒ}]íB"À¢æôF—f–FVæD–æ6öÖS¢-
+İ-­mòİRı½-"M-M]İM²"À¢U&F–ôÆ&VÃ¢%ôR"À¢fÇVF–öäÆ&VÃ¢-	ím]İ­"À¢6†VfÇVF–öã¢-	M]]-ò"À¢f—%fÇVF–öã¢-	İíÍ½Íİò"À¢W‡Vç6—fUfÇVF–öã¢-	MíímR½İ­"À¢6öæf—&Ô'W“¢-	ıíM--]M-Âıí­=ı­2"À¢6öæf—&Õ6VÆÃ¢-	ıíM--]M-ÂıíMm2"À¢G&uFô6†ö÷6TÖ÷VçC¢-	ıí-ıİ-RÂ}-í²-½-Â=ÍÍ2"À¢Æ7D—FW&F–öç3¢-	ıí½]MİR-]m’"À¢w&÷wF…7Fö6³¢-	­mòí-"À¢F—f–FVæE7Fö6³¢-	M-M]İMİò"À¢7Fö6µG—TÆ&VÃ¢-
+-ò"À¢F—f–FVæE––VÆDÆ&VÃ¢-	M"âMí]íMİí-Â"À¢&–6T†—7F÷'”V×G“¢-	-íòm]İ²ıí­İ]Mí-=ıİâ"À¢GW&äÆ&VÅ6†÷'C¢-
+]íB"À¢7W'&VçE&–6TÆ&VÃ¢-
+-]­=òm]İ"À¢ÆÄf–ÇFW#¢-	-R"À¢f–Æ&ÆTf–ÇFW#¢-	Mí-=ıİ½R"À¢W&6†6VDf–ÇFW#¢-	­=ı½]İİ½R"À¢76WG46FVv÷'“¢-	­--²"À¢'W6–æW746FVv÷'“¢-	}İ]"À¢&VÄW7FFT6FVv÷'•6†÷'C¢-	İ]M-mÍí-Â"À¢Ö&¶WD6FVv÷'•6†÷'C¢-	m"À¢V6öæö×”6FVv÷'•6†÷'C¢-
+İ­íİíÍ­"À¢7F'D6FVv÷'•6†÷'C¢-
+-""À¢ÖWF6FVv÷'•6†÷'C¢-	Í]-"À¢7FGW46Æ÷6VC¢-	}­½-â"À¢7FGW4f–Æ&ÆS¢-	Mí-=ıİâ"À¢7FGW4÷VæVC¢-	í-­½-â"À¢7FGW5Ww&F&ÆS¢-
+=½=}]Íâ"À¢7FGW4Öƒ¢-	Í­â"À¢7FGW4æô¶æ÷vÆVFvS¢-	İR]--]"}İİ’"À¢Ww&FT7F–öã¢-
+=½=}-Â"À¢Væf–Æ&ÆT7F–öã¢-	İ]Mí-=ıİâ"À¢Ö„7F–öã¢-	Í­â"À¢7W'&VçDVffV7DÆ&VÃ¢-
+-]­=’İMM]­""À¢æW‡DVffV7DÆ&VÃ¢-
+½]M=í’=í-]İÂ"À¢6÷7DÆ&VÃ¢-
+-íÍí-Â"À¢7FGW4Æ&VÃ¢-
+--="À¢ÆWfVÅ&öw&W74Æ&VÃ¢-
+=í-]İÂ"À¢&WVF&ÆTÆ&VÃ¢-	ıí--íı]ÍíR"À¢æW‡E'VäÆVæwF„Æ&VÃ¢-	M½İİí-í’ı-‚"À¢6öæf—&Õ&W6WDÖWF¢-
+í-Â-]Âıí=]ı]-mò"À¢æôÖWF—FV×4ÖF6„f–ÇFW#¢-	İ]"=½=}]İ’ı]-mM½òİ-í=âM½Í-â"À¢7Fö6µ&—6–æs¢-	­mò-]""À¢7Fö6´fÆÆ–æs¢-	­mòıM]""À¢7Fö6´æWWG&Ã¢-	İ]-½Íİâ"À¢æWu'Vå6WGW¢-	İí-òı-ò"À¢æWu'Vå6WGWFW63¢-	-½]-R--í-=âıí}mâ‚=í-]İÂM-½]İò"ı-‚â"À¢6†ö÷6U66Væ&–ó¢-
+--í-½’m]İ’"À¢6†ö÷6TF–ff–7VÇG“¢-
+½ímİí-Â"À¢7F'D6öæf–wW&VE'Vã¢-	İ}-Âı-â"À¢6æ6VÅ6WGW¢-	í---Â-]­==âı-â"À¢66Væ&–ôÆ&VÃ¢-
+m]İ’"À¢F–ff–7VÇG”Æ&VÃ¢-
+½ímİí-Â"À¢66Væ&–ô&Ææ6VEF—FÆS¢-
+½İí-İİ½’-""À¢66Væ&–ô&Ææ6VDFW63¢-	­½}]­’-"íMİÂ½=}İ½Â}İ]íÂ‚]rMí½=â"À¢66Væ&–ôÆWfW&vVEF—FÆS¢-
+í"İ}Íİ½R"À¢66Væ&–ôÆWfW&vVDFW63¢%62İ}İ]ÂMíıí½İ-]½Íİò½­-Mİí-Â‚íıİíRMí½=í-íRM-½]İRâ"À¢66Væ&–õG&FW%F—FÆS¢-	m]-í’-]M]"À¢66Væ&–õG&FW$FW63¢-
+-]]İí½í=}]­’}İ]‚ıí}mò"Æ—‚İí½]R-í½-½ÍİíÂ½İ­Râ"À¢F–ff–7VÇG•&VÆ†VEF—FÆS¢-
+ıí­íİò"À¢F–ff–7VÇG•&VÆ†VDFW63¢-	í½ÍRM]İ]2ÂİmR¢‚]}íıİ]RMí½2â	İ=Mı]-m=Í]İÍ]İâ"À¢F–ff–7VÇG”æ÷&ÖÅF—FÆS¢-	í½}İò"À¢F–ff–7VÇG”æ÷&ÖÄFW63¢-	íİí-İí’}M=Íİİ½’½İ=²â"À¢F–ff–7VÇG”†&EF—FÆS¢-
+½ímİò"À¢F–ff–7VÇG”†&DFW63¢-	Í]İÍRM]İ]2Â-½R¢‚½-]RMí½=í-í’­Râ	İ=Mı]-m=-]½}]İâ"À¢6WGW66ƒ¢-	M]İÍ=‚İ--R"À¢6WGWFV'C¢-	Mí½2İ--R"À¢6WGW&—6³¢-
+--í-½’¢"À¢6WGW&Wv&C¢-	İ=Mı]-m"À¢6WGW&Wv&E&VGV6VC¢,9sÃsR"À¢6WGW&Wv&Dæ÷&ÖÃ¢,9sÃ"À¢6WGW&Wv&D–æ7&V6VC¢,9sÃ#R"À¢7F'F–æt6öæf–wW&F–öã¢'·66Væ&–÷Ò+r¶F–ff–7VÇG—Ò ¢Ğ§Ó° ¦6öç7B7FFRÒ°¢'W6–æW76W3¢µÒÀ¢7Fö6·3¢µÒÀ¢WfVçG3¢µÒÀ¢6&G3¢µÒÀ¢7–æW&v–W3¢µÒÀ¢'Vã¢çVÆÂÀ¢ÖWF¢ÆöDÖWF&öw&W76–öâ‚’À¢7F—fUF#¢&F6†&ö&B"À¢Ö&¶WEf–Ws¢'&ö÷B"À¢÷'FföÆ–ôf–ÇFW#¢&ÆÂ"À¢Ö&¶WDf–ÇFW$–æGW7G'“¢&ÆÂ"À¢Ö&¶WDf–ÇFW%&—6³¢&ÆÂ"À¢6VÆV7FVDÆæwVvS¢Æö6Å7F÷&vRævWD—FVÒ„ÄäuTtUô´U’’À¢ÆæwVvTÖöFÄ÷Vã¢fÇ6RÀ¢'Vå6WGW÷Vã¢fÇ6RÀ¢6VÆV7FVE66Væ&–ô–C¢&&Ææ6VB"À¢6VÆV7FVDF–ff–7VÇG”–C¢&æ÷&ÖÂ"À¢VæF–æt7F–öåG—S¢çVÆÂÀ¢6VÆV7FVD7F–öåG—S¢çVÆÂÀ¢6VÆV7FVD7F–öä—FVÓ¢çVÆÂÀ¢ÖWFf–ÇFW#¢&ÆÂ"À¢7F—fU7Fö6´–C¢çVÆÂÀ¢6VÆV7FVEG&FTÖöFS¢çVÆÂÀ¢7F—fU7Fö6µö–çD–æFWƒ¢çVÆÂÀ¢7Fö6´'W•W&6VçC¢À¢7Fö6µ6VÆÅW&6VçC¢À¢FV6—6–öä6&÷W6VÄ–æFWƒ¢·Ğ§Ó° ¦6öç7BV’Ò°¢W–V'&÷s¢Fö7VÖVçBçVW'•6VÆV7F÷"‚"æW–V'&÷r"’À¢†VFW%F—FÆS¢Fö7VÖVçBçVW'•6VÆV7F÷"‚"æ†VFW"×F÷ƒ"’À¢æWu'Vä'WGFöã¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚&æWr×'VâÖ'WGFöâ"’À¢æW‡EGW&ä'WGFöã¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚&æW‡B×GW&âÖ'WGFöâ"’À¢GW&äÆ&VÃ¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚'GW&âÖÆ&VÂ"’À¢7FGW4†–çC¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚'7FGW2Ö†–çB"’À¢7FG4w&–C¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚'7FG2Öw&–B"’À¢F$6öçFVçC¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚'F"Ö6öçFVçB"’À¢&÷GFöÔæc¢Fö7VÖVçBævWDVÆVÖVçD'”–B‚&&÷GFöÒÖæb"§Ó° ¦6öç7Bäeô•DTÕ2Ò°¢²–C¢&F6†&ö&B"ÂÆ&VÄ¶W“¢&F6†&ö&B"Â–6öã¢"âö76WG2ö–6öç2öF6†&ö&BçvV'"ÒÀ¢²–C¢&FV6—6–öç2"ÂÆ&VÄ¶W“¢&FV6—6–öç2"Â–6öã¢"âö76WG2ö–6öç2öFV6—6–öç2çvV'"ÒÀ¢²–C¢'÷'FföÆ–ò"ÂÆ&VÄ¶W“¢'÷'FföÆ–ò"Â–6öã¢"âö76WG2ö–6öç2÷÷'FföÆ–òçvV'"ÒÀ¢²–C¢&Ö&¶WB"ÂÆ&VÄ¶W“¢&Ö&¶WB"Â–6öã¢"âö76WG2ö–6öç2öÖ&¶WBçvV'"ÒÀ¢²–C¢&V6öæö×’"ÂÆ&VÄ¶W“¢&V6öæö×’"Â–6öã¢"âö76WG2ö–6öç2öV6öæö×’çvV'"Ğ¥Ó° ¦&ö÷B‚“° ¦7–æ2gVæ7F–öâ&ö÷B‚’°¢6öç7B¶'W6–æW76W2Â7Fö6·2ÂWfVçG2Â6&G2Â7–æW&v–W5ÒÒv—B&öÖ—6RæÆÂ…°¢fWF6„§6öâ‚"âöFFö'W6–æW76W2æ§6öâ"’À¢fWF6„§6öâ‚"âöFF÷7Fö6·2æ§6öâ"’À¢fWF6„§6öâ‚"âöFFöWfVçG2æ§6öâ"’À¢fWF6„§6öâ‚"âöFFö6&G2æ§6öâ"’À¢fWF6„§6öâ‚"âöFF÷7–æW&v–W2æ§6öâ"¢Ò“° ¢7FFRæ'W6–æW76W2Ò'W6–æW76W3°¢7FFRç7Fö6·2Ò7Fö6·3°¢7FFRæWfVçG2ÒWfVçG3°¢7FFRæ6&G2Ò6&G3°¢7FFRç7–æW&v–W2Ò7–æW&v–W3°¢fÆ–FFTvÖTFF‚“°¢v–æF÷rçfÆ–FFTvÖTFFÒfÆ–FFTvÖTFF°¢v–æF÷rç6–×VÆFU'Vç2Ò6–×VÆFU'Vç3° ¢V’ææWu'Vä'WGFöâæFDWfVçDÆ—7FVæW"‚&6Æ–6²"Â÷Vå'Vå6WGW“°¢V’ææW‡EGW&ä'WGFöâæFDWfVçDÆ—7FVæW"‚&6Æ–6²"ÂGfæ6UGW&â“° ¢&VæFW$&÷GFöÔæb‚“°¢–b††56VÆV7FVDÆæwVvR‚’’°¢–b‚&W7F÷&U6fVE'Vâ‚’’÷Vå'Vå6WGW‚“°¢ÒVÇ6R°¢&VæFW"‚“°¢Ğ§Ğ ¦7–æ2gVæ7F–öâfWF6„§6öâ‡F‚’°¢6öç7B&W7öç6RÒv—BfWF6‚‡F‚“°¢–b‚&W7öç6Ræö²’F‡&÷ræWrW'&÷"†f–ÆVBFòÆöBG·F‡Ö“°¢&WGW&â&W7öç6Ræ§6öâ‚“°§Ğ ¦gVæ7F–öâ†56VÆV7FVDÆæwVvR‚’°¢&WGW&â7FFRç6VÆV7FVDÆæwVvRÓÓÒ''R"ÇÂ7FFRç6VÆV7FVDÆæwVvRÓÓÒ&Vâ#°§Ğ ¦gVæ7F–öâB†¶W’Â&×2Ò·Ò’°¢6öç7BÆæwVvRÒ†56VÆV7FVDÆæwVvR‚’ò7FFRç6VÆV7FVDÆæwVvR¢&Vâ#°¢6öç7B‡&6RÒG&ç6ÆF–öç5¶ÆæwVvUÕ¶¶W•ÒÇÂG&ç6ÆF–öç2æVå¶¶W•ÒÇÂ¶W“°¢&WGW&â‡&6Rç&WÆ6R‚õÇ²…Çr²•ÇÒörÂ…òÂæÖR’Óâ‡&×5¶æÖUÒóò²G¶æÖW×Ö’“°§Ğ ¦gVæ7F–öâ6WDÆæwVvR†ÆæwVvR’°¢7FFRç6VÆV7FVDÆæwVvRÒÆæwVvS°¢Æö6Å7F÷&vRç6WD—FVÒ„ÄäuTtUô´U’ÂÆæwVvR“°¢7FFRæÆæwVvTÖöFÄ÷VâÒfÇ6S°¢–b‚7FFRç'Vâ’÷Vå'Vå6WGW‚“°¢VÇ6R&VæFW"‚“°§Ğ ¦gVæ7F–öâ7&VFTFVfVÇDÖWF&öw&W76–öâ‚’°¢&WGW&â°¢F÷FÄ¶æ÷vÆVFvS¢À¢VæÆö6¶VD–æGW7G&–W3¢²ââå5D%D”äuõTäÄô4´TEô”äEU5E$”U5ÒÀ¢VæÆö6¶VD'W6–æW76W3¢µÒÀ¢VæÆö6¶VD6&G3¢µÒÀ¢VæÆö6¶VDWfVçG3¢µÒÀ¢6ö×ÆWFVE'Vç3¢À¢&W7EfÇVF–öã¢À¢&W7EGW&å&V6†VC¢À¢W&6†6VEVæÆö6´–G3¢µÒÀ¢VæÆö6´ÆWfVÇ3¢·ÒÀ¢6†–WfVÖVçG3¢µĞ¢Ó°§Ğ ¦gVæ7F–öâÆöDÖWF&öw&W76–öâ‚’°¢G'’°¢6öç7B'6VBÒ¥4ôâç'6R†Æö6Å7F÷&vRævWD—FVÒ„ÔUDô´U’’ÇÂ&çVÆÂ"“°¢–b‚'6VB’&WGW&â7&VFTFVfVÇDÖWF&öw&W76–öâ‚“°¢&WGW&â°¢ââæ7&VFTFVfVÇDÖWF&öw&W76–öâ‚’À¢ââç'6VBÀ¢VæÆö6¶VD–æGW7G&–W3¢Væ—VTÆ—7B…²âââ‡'6VBçVæÆö6¶VD–æGW7G&–W2ÇÂµÒ’Âââå5D%D”äuõTäÄô4´TEô”äEU5E$”U5Ò’À¢VæÆö6¶VD'W6–æW76W3¢Væ—VTÆ—7B‡'6VBçVæÆö6¶VD'W6–æW76W2ÇÂµÒ’À¢VæÆö6¶VD6&G3¢Væ—VTÆ—7B‡'6VBçVæÆö6¶VD6&G2ÇÂµÒ’À¢VæÆö6¶VDWfVçG3¢Væ—VTÆ—7B‡'6VBçVæÆö6¶VDWfVçG2ÇÂµÒ’À¢W&6†6VEVæÆö6´–G3¢Væ—VTÆ—7B‡'6VBçW&6†6VEVæÆö6´–G2ÇÂµÒ’À¢VæÆö6´ÆWfVÇ3¢'6VBçVæÆö6´ÆWfVÇ2ÇÂ·Ğ¢Ó°¢Ò6F6‚°¢&WGW&â7&VFTFVfVÇDÖWF&öw&W76–öâ‚“°¢Ğ§Ğ ¦gVæ7F–öâ6fTÖWF&öw&W76–öâ‚’°¢Æö6Å7F÷&vRç6WD—FVÒ„ÔUDô´U’Â¥4ôâç7G&–æv–g’‡7FFRæÖWF’“°§Ğ ¦gVæ7F–öâ÷VäÆæwVvTÖöFÂ‚’°¢7FFRæÆæwVvTÖöFÄ÷VâÒG'VS°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ6Æ÷6TÆæwVvTÖöFÂ‚’°¢7FFRæÆæwVvTÖöFÄ÷VâÒfÇ6S°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ&6µFôFV6—6–öç5F"‚’°¢7FFRæ7F—fUF"Ò&FV6—6–öç2#°¢7FFRæÖ&¶WEf–WrÒ'&ö÷B#°¢–b‡7FFRçVæF–æt7F–öåG—RÓÒ&'W•ö76WB"’7FFRçVæF–æt7F–öåG—RÒçVÆÃ°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâæW‡E'VäÖ…GW&ç2‚’°¢&WGW&âÔ…õEU$å2²‡VæÆö6´ÆWfVÂ‚'VæÆö6µöW‡FVæFVE÷'Vâ"’¢"“°§Ğ ¦gVæ7F–öâ&W7F÷&U6fVE'Vâ‚’°¢6öç7B6fVE'VâÒÆöE'Vå7FFR†Æö6Å7F÷&vRÂ%Tåô´U’“°¢–b‚6fVE'Vâ’&WGW&âfÇ6S°¢7FFRç'VâÒ6fVE'Vã°¢7FFRç'Vå6WGW÷VâÒfÇ6S°¢7FFRæ7F—fUF"Ò&F6†&ö&B#°¢7FFRæÖ&¶WEf–WrÒ'&ö÷B#°¢7FFRçVæF–æt7F–öåG—RÒçVÆÃ°¢7FFRç6VÆV7FVD7F–öåG—RÒçVÆÃ°¢7FFRç6VÆV7FVD7F–öä—FVÒÒçVÆÃ°¢7FFRæ7F—fU7Fö6´–BÒçVÆÃ°¢7FFRç6VÆV7FVEG&FTÖöFRÒçVÆÃ°¢7FFRç7Fö6´'W•W&6VçBÒ°¢7FFRç7Fö6µ6VÆÅW&6VçBÒ°¢7FFRç'Vâç7FGW4ÖW76vRÒB‚''Vå&W7F÷&VB"“°¢–b‚7FFRç'Vâæ7W'&VçE&W÷'B’7FFRç'Vâæ7W'&VçE&W÷'BÒ6Æ7VÆFU&W÷'B‚“°¢&VæFW"‚“°¢&WGW&âG'VS°§Ğ ¦gVæ7F–öâ6fT7W'&VçE'Vâ‚’°¢–b‚7FFRç'VâÇÂ7FFRç'Vâæf–æ—6†VB’&WGW&âfÇ6S°¢&WGW&â6fU'Vå7FFR†Æö6Å7F÷&vRÂ%Tåô´U’Â7FFRç'Vâ“°§Ğ ¦gVæ7F–öâ÷Vå'Vå6WGW‚’°¢7FFRç'Vå6WGW÷VâÒG'VS°¢7FFRç6VÆV7FVE66Væ&–ô–BÒ&&Ææ6VB#°¢7FFRç6VÆV7FVDF–ff–7VÇG”–BÒ&æ÷&ÖÂ#°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ6Æ÷6U'Vå6WGW‚’°¢–b‚7FFRç'Vâ’&WGW&ã°¢7FFRç'Vå6WGW÷VâÒfÇ6S°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ7F'E'Vâ‚’°¢6ÆV%'Vå7FFR†Æö6Å7F÷&vRÂ%Tåô´U’“°¢6öç7B7F'F–æt&öçW2ÒÖWF7F'F–æt&öçW6W2‚“°¢6öç7B6öæf–wW&F–öâÒ7&VFU'Vä6öæf–wW&F–öâ‡°¢66Væ&–ô–C¢7FFRç6VÆV7FVE66Væ&–ô–BÀ¢F–ff–7VÇG”–C¢7FFRç6VÆV7FVDF–ff–7VÇG”–BÀ¢&6T66ƒ¢5D%D”äuô44‚À¢ÖWFW‡G&66ƒ¢7F'F–æt&öçW2æW‡G&66‚À¢7Fö6·3¢7FFRç7Fö6·0¢Ò“°¢6öç7B7F'FW"Ò6öæf–wW&F–öâæ6ö×ç’æ'W6–æW76W5³Òæ'W6–æW74–C°¢7FFRç'VâÒ°¢–C¢'VâÒG´FFRææ÷r‚—ÖÀ¢Ö…GW&ç3¢æW‡E'VäÖ…GW&ç2‚’À¢66Væ&–ô–C¢6öæf–wW&F–öâç66Væ&–òæ–BÀ¢F–ff–7VÇG”–C¢6öæf–wW&F–öâæF–ff–7VÇG’æ–BÀ¢GW&ã¢À¢f–æ—6†VC¢fÇ6RÀ¢VæE&V6öã¢çVÆÂÀ¢&Wv&D6Æ–ÖVC¢fÇ6RÀ¢¶æ÷vÆVFvTV&æVC¢À¢&W7VÇE7VÖÖ'“¢çVÆÂÀ¢7W'&VçDWfVçC¢çVÆÂÀ¢7W'&VçE&W÷'C¢çVÆÂÀ¢7W'&VçD6&G3¢µÒÀ¢Ö&¶WD7–6ÆS¢&&Ææ6VB"À¢6VÆV7FVD6†ö–6T–C¢çVÆÂÀ¢VæF–æt7F–öäFöæS¢fÇ6RÀ¢WfVçE&W6öÇfVC¢fÇ6RÀ¢7FGW4ÖW76vS¢B‚'&W6öÇfTWfVçD&Vf÷&TæW‡EGW&â"’À¢6ö×ç“¢6öæf–wW&F–öâæ6ö×ç’À¢Ö7&ó¢6öæf–wW&F–öâæÖ7&òÀ¢†—7F÷'“¢°¢°¢GW&ã¢À¢F—FÆS¢B‚''Vå7F'FVB"’À¢&öG“¢G·B‚'7F'F–æt76WB"Â²æÖS¢'W6–æW74'”–B‡7F'FW"’ææÖRÒ—ÒâG·B‚'7F'F–æt6öæf–wW&F–öâ"Â°¢66Væ&–ó¢B†6öæf–wW&F–öâç66Væ&–òçF—FÆT¶W’’À¢F–ff–7VÇG“¢B†6öæf–wW&F–öâæF–ff–7VÇG’çF—FÆT¶W’¢Ò—Ö ¢Ğ¢ÒÀ¢7F—fTÖöF–f–W'3¢µÒÀ¢7Fö6´Ö&¶WC¢7&VFT–æ—F–Å7Fö6´Ö&¶WB‚¢Ó°¢7FFRç'Vå6WGW÷VâÒfÇ6S°¢7FFRæ7F—fUF"Ò&F6†&ö&B#°¢7FFRæÖ&¶WEf–WrÒ'&ö÷B#°¢7FFRçVæF–æt7F–öåG—RÒçVÆÃ°¢7FFRç6VÆV7FVD7F–öåG—RÒçVÆÃ°¢7FFRç6VÆV7FVD7F–öä—FVÒÒçVÆÃ°¢7FFRæ7F—fU7Fö6µö–çD–æFW‚ÒçVÆÃ°¢&Vv–åGW&â‚“°§Ğ ¦gVæ7F–öâ&Vv–åGW&â‚’°¢6öç7B'VâÒ7FFRç'Vã°¢–b‚'VâÇÂ'Vâæf–æ—6†VB’°¢&VæFW"‚“°¢&WGW&ã°¢Ğ¢WFFTÖ&¶WD7–6ÆR‚“°¢F–6µ7Fö6´Ö&¶WB‚“°¢'Vâæ7W'&VçE&W÷'BÒ6Æ7VÆFU&W÷'B‚“°¢'Vâæ6ö×ç’æ66‚³ÒÖF‚ç&÷VæB‡'Vâæ7W'&VçE&W÷'Bç&öf—B“°¢'Vâæ6ö×ç’ç&—6²Ò6Æ×‡'Vâæ6ö×ç’ç&—6²²'VâæÖ7&òæÖ&¶WE&—6²¢ãÂãÂã“R“°¢F–6´ÖöF–f–W'2‚“°¢'Vâæ7W'&VçDWfVçBÒ6†ö÷6TWfVçB‚“°¢'Vâæ7W'&VçD6&G2ÒG&t6&G2‚“°¢'Vâç6VÆV7FVD6†ö–6T–BÒçVÆÃ°¢'VâçVæF–æt7F–öäFöæRÒfÇ6S°¢'VâæWfVçE&W6öÇfVBÒfÇ6S°¢'Vâç7FGW4ÖW76vRÒB‚'&W6öÇfTWfVçD&Vf÷&TæW‡EGW&â"“°¢7FFRçVæF–æt7F–öåG—RÒçVÆÃ°¢7FFRæÖ&¶WEf–WrÒ'&ö÷B#°¢6fT7W'&VçE'Vâ‚“°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ&VæFW"‚’°¢&VæFW$†VFW"‚“°¢&VæFW$&÷GFöÔæb‚“°¢–b‚†56VÆV7FVDÆæwVvR‚’’°¢V’çF$6öçFVçBæ–ææW$…DÔÂÒ&VæFW$ÆæwVvU6VÆV7E67&VVâ‚“°¢&–æDÆæwVvTWfVçG2‚“°¢&WGW&ã°¢Ğ¢–b‡7FFRç'Vå6WGW÷VâÇÂ7FFRç'Vâ’°¢V’çF$6öçFVçBæ–ææW$…DÔÂÒ&VæFW%'Vå6WGW67&VVâ‚“°¢&–æEF$WfVçG2‚“°¢&WGW&ã°¢Ğ¢V’çF$6öçFVçBæ–ææW$…DÔÂÒG·7FFRæÆæwVvTÖöFÄ÷Vâò&VæFW$ÆæwVvTÖöFÂ‚’¢"'ÒG·&VæFW$7F—fUF"‚—Ö°¢&–æEF$WfVçG2‚“°§Ğ ¦gVæ7F–öâ&VæFW$†VFW"‚’°¢Fö7VÖVçBçF—FÆRÒB‚&vÖUF—FÆR"“°¢V’æW–V'&÷rçFW‡D6öçFVçBÒB‚&vÖUF—FÆR"“°¢V’ææWu'Vä'WGFöâçFW‡D6öçFVçBÒB‚'&W6WB"“°¢–b††56VÆV7FVDÆæwVvR‚’bb‡7FFRç'Vå6WGW÷VâÇÂ7FFRç'Vâ’’°¢V’æ†VFW%F—FÆRçFW‡D6öçFVçBÒB‚&æWu'Vå6WGW"“°¢V’çGW&äÆ&VÂçFW‡D6öçFVçBÒB‚&6†ö÷6U66Væ&–ò"“°¢V’ç7FGW4†–çBçFW‡D6öçFVçBÒB‚&æWu'Vå6WGWFW62"“°¢V’ææW‡EGW&ä'WGFöâç7G–ÆRæF—7Æ’Ò&æöæR#°¢V’ææW‡EGW&ä'WGFöâæF—6&ÆVBÒG'VS°¢V’ææWu'Vä'WGFöâç7G–ÆRæF—7Æ’Ò&æöæR#°¢V’ç7FG4w&–Bæ–ææW$…DÔÂÒ"#°¢&WGW&ã°¢Ğ¢V’ææWu'Vä'WGFöâç7G–ÆRæF—7Æ’Ò"#°¢–b‚7FFRç'VâÇÂ†56VÆV7FVDÆæwVvR‚’’°¢V’ææWu'Vä'WGFöâç7G–ÆRæF—7Æ’Ò&æöæR#°¢V’æ†VFW%F—FÆRçFW‡D6öçFVçBÒB‚&7W'&VçE'Vâ"“°¢V’çGW&äÆ&VÂçFW‡D6öçFVçBÒB‚&vÖUF—FÆR"“°¢V’ç7FGW4†–çBçFW‡D6öçFVçBÒB‚&6†ö÷6TÆæwVvR"“°¢V’ææW‡EGW&ä'WGFöâçFW‡D6öçFVçBÒB‚&æW‡EGW&â"“°¢V’ææW‡EGW&ä'WGFöâæF—6&ÆVBÒG'VS°¢V’ç7FG4w&–Bæ–ææW$…DÔÂÒ"#°¢&WGW&ã°¢Ğ ¢6öç7B'VâÒ7FFRç'Vã°¢6öç7B&W÷'BÒ'Vâæ7W'&VçE&W÷'BÇÂ6Æ7VÆFU&W÷'B‚“°¢6öç7BF6†&ö&DÖöFRÒ7FFRæ7F—fUF"ÓÓÒ&F6†&ö&B#°¢V’æ†VFW%F—FÆRçFW‡D6öçFVçBÒF6†&ö&DÖöFRòB‚&7W'&VçE'Vâ"’¢F%F—FÆR‚“°¢V’çGW&äÆ&VÂçFW‡D6öçFVçBÒF6†&ö&DÖöFP¢ò‡'Vâæf–æ—6†V@¢òB‚''Väf–æ—6†VDEGW&â"Â²GW&ã¢ÖF‚æÖ–â‡'VâçGW&âÂ7W'&VçDÖ…GW&ç2‚’’Ò¢¢B‚&7W'&VçEGW&å7FGW2"Â²GW&ã¢'VâçGW&âÂÖ…GW&ç3¢7W'&VçDÖ…GW&ç2‚’Ò’¢¢"#°¢V’ç7FGW4†–çBçFW‡D6öçFVçBÒF6†&ö&DÖöFRò†VFW%7FGW5FW‡B‡'Vâ’¢"#°¢V’ææW‡EGW&ä'WGFöâçFW‡D6öçFVçBÒB‚&æW‡EGW&â"“°¢V’ææW‡EGW&ä'WGFöâæF—6&ÆVBÒGW&å&VG’‚’ÇÂ'Vâæf–æ—6†VBÇÂF6†&ö&DÖöFS°¢V’ææW‡EGW&ä'WGFöâç7G–ÆRæF—7Æ’ÒF6†&ö&DÖöFRò""¢&æöæR#°¢V’ç7FG4w&–Bæ–ææW$…DÔÂÒF6†&ö&DÖöFP¢ò°¢·B‚&66‚"’ÂÖöæW’‡'Vâæ6ö×ç’æ66‚•ÒÀ¢·B‚'&öf—B"’ÂÖöæW’‡&W÷'Bç&öf—B•ÒÀ¢·B‚&FV'B"’ÂÖöæW’‡'Vâæ6ö×ç’æFV'B•ÒÀ¢·B‚'fÇVF–öâ"’ÂÖöæW’‡&W÷'BçfÇVF–öâ•Ğ¢ÒæÖ‚…¶Æ&VÂÂfÇVUÒ’ÓâÆF—b6Æ73Ò'7FB×F–ÆR#ãÇ7ãâG¶Æ&VÇÓÂ÷7ããÇ7G&öæsâG·fÇVWÓÂ÷7G&öæsãÂöF—cæ’æ¦ö–â‚""¢¢"#°§Ğ ¦gVæ7F–öâ&VæFW$&÷GFöÔæb‚’°¢–b‚†56VÆV7FVDÆæwVvR‚’ÇÂ7FFRç'Vå6WGW÷VâÇÂ7FFRç'Vâ’°¢V’æ&÷GFöÔæbæ–ææW$…DÔÂÒ"#°¢&WGW&ã°¢Ğ¢V’æ&÷GFöÔæbæ–ææW$…DÔÂÒäeô•DTÕ2æÖ‚†—FVÒ’Óâ ¢Æ'WGFöâ6Æ73Ò&æbÖ—FVÒG·7FFRæ7F—fUF"ÓÓÒ—FVÒæ–Bò&7F—fR"¢"'Ò"FF×F#Ò"G¶—FVÒæ–GÒ#à¢Æ–Ör7&3Ò"G¶—FVÒæ–6öçÒ"ÇCÒ"G·B†—FVÒæÆ&VÄ¶W’—Ò"6Æ73Ò&æbÖ–6öâ#à¢Ç7G&öæsâG·B†—FVÒæÆ&VÄ¶W’—ÓÂ÷7G&öæsà¢Âö'WGFöãà¢’æ¦ö–â‚""“°¢V’æ&÷GFöÔæbçVW'•6VÆV7F÷$ÆÂ‚%¶FF×F%Ò"’æf÷$V6‚‚†'WGFöâ’Óâ°¢'WGFöâæFDWfVçDÆ—7FVæW"‚&6Æ–6²"Â‚’Óâ°¢7FFRæ7F—fUF"Ò'WGFöâæFF6WBçF#°¢&VæFW"‚“°¢Ò“°¢Ò“°§Ğ ¦gVæ7F–öâ&VæFW$ÆæwVvU6VÆV7E67&VVâ‚’°¢&WGW&â ¢Ç6V7F–öâ6Æ73Ò'F"Ö6öçFVçB×w&ÆæwVvR×67&VVâ#à¢ÆF—b6Æ73Ò&ÆæwVvRÖ6&B#à¢Ç6Æ73Ò&W–V'&÷r#âG·B‚&vÖUF—FÆR"—ÓÂ÷à¢Æƒ#âG·B‚&6†ö÷6TÆæwVvR"—ÓÂöƒ#à¢ÇâG·B‚&6†ö÷6TÆæwVvTÆFW""—ÓÂ÷à¢ÆF—b6Æ73Ò&ÆæwVvRÖ7F–öç2#à¢Æ'WGFöâ6Æ73Ò&ÆæwVvRÖ'WGFöâ&–Ö'’"FFÖÆæwVvSÒ''R#âG·G&ç6ÆF–öç2ç'Rç'W76–çÓÂö'WGFöãà¢Æ'WGFöâ6Æ73Ò&ÆæwVvRÖ'WGFöâ"FFÖÆæwVvSÒ&Vâ#âG·G&ç6ÆF–öç2æVâæVævÆ—6‡ÓÂö'WGFöãà¢ÂöF—cà¢ÂöF—cà¢Â÷6V7F–öãà¢°§Ğ ¦gVæ7F–öâ&VæFW$ÆæwVvTÖöFÂ‚’°¢&WGW&â ¢ÆF—b6Æ73Ò&ÆæwVvRÖÖöFÂ#à¢ÆF—b6Æ73Ò&ÆæwVvRÖ6&B#à¢Ç6Æ73Ò&W–V'&÷r#âG·B‚&6†ævTÆæwVvR"—ÓÂ÷à¢Æƒ#âG·B‚&6†ö÷6TÆæwVvR"—ÓÂöƒ#à¢ÇâG·B‚&6†ö÷6TÆæwVvTÆFW""—ÓÂ÷à¢ÆF—b6Æ73Ò&ÆæwVvRÖ7F–öç2#à¢Æ'WGFöâ6Æ73Ò&ÆæwVvRÖ'WGFöâG·7FFRç6VÆV7FVDÆæwVvRÓÓÒ''R"ò'&–Ö'’"¢"'Ò"FFÖÆæwVvSÒ''R#âG·G&ç6ÆF–öç2ç'Rç'W76–çÓÂö'WGFöãà¢Æ'WGFöâ6Æ73Ò&ÆæwVvRÖ'WGFöâG·7FFRç6VÆV7FVDÆæwVvRÓÓÒ&Vâ"ò'&–Ö'’"¢"'Ò"FFÖÆæwVvSÒ&Vâ#âG·G&ç6ÆF–öç2æVâæVævÆ—6‡ÓÂö'WGFöãà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&ÖöFÂÖ6Æ÷6R6V6öæF'’Ö'WGFöâ"FFÖ6Æ÷6RÖÆæwVvSâG·B‚&6Æ÷6R"—ÓÂö'WGFöãà¢ÂöF—cà¢ÂöF—cà¢°§Ğ ¦gVæ7F–öâ&Wf–Wu'Vä6öæf–wW&F–öâ‚’°¢&WGW&â7&VFU'Vä6öæf–wW&F–öâ‡°¢66Væ&–ô–C¢7FFRç6VÆV7FVE66Væ&–ô–BÀ¢F–ff–7VÇG”–C¢7FFRç6VÆV7FVDF–ff–7VÇG”–BÀ¢&6T66ƒ¢5D%D”äuô44‚À¢ÖWFW‡G&66ƒ¢ÖWF7F'F–æt&öçW6W2‚’æW‡G&66‚À¢7Fö6·3¢7FFRç7Fö6·2À¢&æFöÓ¢‚’Óâ ¢Ò“°§Ğ ¦gVæ7F–öâF–ff–7VÇG•&Wv&DÆ&VÂ†F–ff–7VÇG”–B’°¢–b†F–ff–7VÇG”–BÓÓÒ'&VÆ†VB"’&WGW&âB‚'6WGW&Wv&E&VGV6VB"“°¢–b†F–ff–7VÇG”–BÓÓÒ&†&B"’&WGW&âB‚'6WGW&Wv&D–æ7&V6VB"“°¢&WGW&âB‚'6WGW&Wv&Dæ÷&ÖÂ"“°§Ğ ¦gVæ7F–öâ&VæFW%'Vå6WGW67&VVâ‚’°¢6öç7B&Wf–WrÒ&Wf–Wu'Vä6öæf–wW&F–öâ‚“°¢&WGW&â ¢Ç6V7F–öâ6Æ73Ò''Vâ×6WGW×67&VVâ#à¢ÆF—b6Æ73Ò''Vâ×6WGWÖ–çG&ò#à¢Ç6Æ73Ò&W–V'&÷r#âG·B‚&vÖUF—FÆR"—ÓÂ÷à¢Æƒ#âG·B‚&æWu'Vå6WGW"—ÓÂöƒ#à¢ÇâG·B‚&æWu'Vå6WGWFW62"—ÓÂ÷à¢ÂöF—cà ¢ÆF—b6Æ73Ò''Vâ×6WGW×6V7F–öâ#à¢ÆF—b6Æ73Ò'F"Ö†VFW"#ãÆƒ#âG·B‚&6†ö÷6U66Væ&–ò"—ÓÂöƒ#ãÂöF—cà¢ÆF—b6Æ73Ò'6WGWÖ÷F–öâÖw&–B66Væ&–òÖ÷F–öâÖw&–B#à¢Gµ%Tåõ44Tä$”õ2æÖ‚‡66Væ&–ò’Óâ ¢Æ'WGFöâ6Æ73Ò'6WGWÖ÷F–öâÖ6&BG·7FFRç6VÆV7FVE66Væ&–ô–BÓÓÒ66Væ&–òæ–Bò'6VÆV7FVB"¢"'Ò"FF×'Vâ×66Væ&–óÒ"G·66Væ&–òæ–GÒ"&–×&W76VCÒ"G·7FFRç6VÆV7FVE66Væ&–ô–BÓÓÒ66Væ&–òæ–GÒ#à¢Ç7G&öæsâG·B‡66Væ&–òçF—FÆT¶W’—ÓÂ÷7G&öæsà¢Ç7ãâG·B‡66Væ&–òæFW67&—F–öä¶W’—ÓÂ÷7ãà¢Âö'WGFöãà¢’æ¦ö–â‚""—Ğ¢ÂöF—cà¢ÂöF—cà ¢ÆF—b6Æ73Ò''Vâ×6WGW×6V7F–öâ#à¢ÆF—b6Æ73Ò'F"Ö†VFW"#ãÆƒ#âG·B‚&6†ö÷6TF–ff–7VÇG’"—ÓÂöƒ#ãÂöF—cà¢ÆF—b6Æ73Ò'6WGWÖ÷F–öâÖw&–BF–ff–7VÇG’Ö÷F–öâÖw&–B#à¢Gµ%TåôD”dd”5TÅD”U2æÖ‚†F–ff–7VÇG’’Óâ ¢Æ'WGFöâ6Æ73Ò'6WGWÖ÷F–öâÖ6&BG·7FFRç6VÆV7FVDF–ff–7VÇG”–BÓÓÒF–ff–7VÇG’æ–Bò'6VÆV7FVB"¢"'Ò"FF×'VâÖF–ff–7VÇG“Ò"G¶F–ff–7VÇG’æ–GÒ"&–×&W76VCÒ"G·7FFRç6VÆV7FVDF–ff–7VÇG”–BÓÓÒF–ff–7VÇG’æ–GÒ#à¢Ç7G&öæsâG·B†F–ff–7VÇG’çF—FÆT¶W’—ÓÂ÷7G&öæsà¢Ç7ãâG·B†F–ff–7VÇG’æFW67&—F–öä¶W’—ÓÂ÷7ãà¢Âö'WGFöãà¢’æ¦ö–â‚""—Ğ¢ÂöF—cà¢ÂöF—cà ¢Æ'F–6ÆR6Æ73Ò'6WGW×&Wf–WrÖ6&B#à¢ÆF—cãÇ7ãâG·B‚'6WGW66‚"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡&Wf–Wræ6ö×ç’æ66‚—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'6WGWFV'B"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡&Wf–Wræ6ö×ç’æFV'B—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'6WGW&—6²"—ÓÂ÷7ããÇ7G&öæsâG·W&6VçB‡&Wf–Wræ6ö×ç’ç&—6²—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'6WGW&Wv&B"—ÓÂ÷7ããÇ7G&öæsâG¶F–ff–7VÇG•&Wv&DÆ&VÂ‡&Wf–WræF–ff–7VÇG’æ–B—ÓÂ÷7G&öæsãÂöF—cà¢Âö'F–6ÆSà ¢ÆF—b6Æ73Ò'6WGWÖ7F–öç2#à¢Æ'WGFöâ6Æ73Ò'&–Ö'’Ö'WGFöâ"FF×7F'BÖ6öæf–wW&VB×'VãâG·B‚'7F'D6öæf–wW&VE'Vâ"—ÓÂö'WGFöãà¢G·7FFRç'VâòÆ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ"FFÖ6æ6VÂ×'Vâ×6WGWâG·B‚&6æ6VÅ6WGW"—ÓÂö'WGFöãæ¢"'Ğ¢ÂöF—cà¢Â÷6V7F–öãà¢°§Ğ ¦gVæ7F–öâ&VæFW$7F—fUF"‚’°¢–b‡7FFRæ7F—fUF"ÓÓÒ&ÖWF"’&WGW&â&VæFW$ÖWFF"‚“°¢–b‡7FFRæ7F—fUF"ÓÓÒ''VäVæB"’&WGW&â&VæFW%'VäVæE67&VVâ‚“°¢–b‡7FFRæ7F—fUF"ÓÓÒ&F6†&ö&B"’&WGW&â&VæFW$F6†&ö&EF"‚“°¢–b‡7FFRæ7F—fUF"ÓÓÒ&FV6—6–öç2"’&WGW&â&VæFW$FV6—6–öç5F"‚“°¢–b‡7FFRæ7F—fUF"ÓÓÒ'÷'FföÆ–ò"’&WGW&â&VæFW%÷'FföÆ–õF"‚“°¢–b‡7FFRæ7F—fUF"ÓÓÒ&Ö&¶WB"’&WGW&â&VæFW$Ö&¶WEF"‚“°¢&WGW&â&VæFW$V6öæö×•F"‚“°§Ğ ¦gVæ7F–öâ&VæFW$F6†&ö&EF"‚’°¢6öç7B'VâÒ7FFRç'Vã°¢6öç7B&Vv–ÖRÒV6öæö×•&Vv–ÖR‚“°¢6öç7BÖ7&òÒVffV7F—fTÖ7&ò‚“°¢6öç7B66Væ&–òÒ66Væ&–ô'”–B‡'Vâç66Væ&–ô–B“°¢6öç7BF–ff–7VÇG’ÒF–ff–7VÇG”'”–B‡'VâæF–ff–7VÇG”–B“°¢&WGW&â ¢Ç6V7F–öâ6Æ73Ò'F"×67&VVâ#à¢Æ'WGFöâ6Æ73Ò&F6†&ö&BÖ7F"FFÖF6†&ö&B×&–Ö'“à¢Ç7G&öæsâG·GW&å&VG’‚’òB‚&æW‡EGW&â"’¢'VâæWfVçE&W6öÇfVBòB‚&6†ö÷6T7F–öâ"’¢B‚'&W6öÇfTWfVçD7F"—ÓÂ÷7G&öæsà¢Ç7ãâG·GW&å&VG’‚’òB‚'GW&å&VG•FôGfæ6R"’¢'VâæWfVçE&W6öÇfVBòB‚&÷VäFV6—6–öç2"’¢'Vâç7FGW4ÖW76vWÓÂ÷7ãà¢Âö'WGFöãà¢ÆF—b6Æ73Ò&F6†&ö&B×6V6öæF'’Ö7F–öç2#à¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ"FFÖ÷VâÖÖWFâG·B‚&ÖWF&öw&W72"—ÓÂö'WGFöãà¢ÂöF—cà¢ÆF—b6Æ73Ò''VâÖ6öæf–wW&F–öâ×Fw2#à¢G·Fr†G·B‚'66Væ&–ôÆ&VÂ"—Ó¢G·B‡66Væ&–òçF—FÆT¶W’—Ö—Ğ¢G·Fr†G·B‚&F–ff–7VÇG”Æ&VÂ"—Ó¢G·B†F–ff–7VÇG’çF—FÆT¶W’—ÖÂ&66VçB"—Ğ¢ÂöF—cà¢Æ'F–6ÆR6Æ73Ò&÷fW'f–WrÖ6&B#à¢Æƒ3âG·B‚&Ö7&õ&Vv–ÖR"—ÓÂöƒ3à¢ÇâG·&Vv–ÖRæFW67&—F–öçÓÂ÷à¢ÆF—b6Æ73Ò&Ö7&ò×7G&—#à¢G¶Ö7&õ–ÆÂ‡B‚'&FR"’ÂW&6VçB†Ö7&òæ–çFW&W7E&FR’—Ğ¢G¶Ö7&õ–ÆÂ‡B‚&–æfÆF–öâ"’ÂW&6VçB†Ö7&òæ–æfÆF–öâ’—Ğ¢G¶Ö7&õ–ÆÂ‡B‚&FVÖæB"’ÂÖ7&òæFVÖæBçFôf—†VBƒ"’—Ğ¢G¶Ö7&õ–ÆÂ‡B‚&VæW&w”6÷7B"’ÂÖ7&òæVæW&w”6÷7BçFôf—†VBƒ"’—Ğ¢G¶Ö7&õ–ÆÂ‡B‚&7&VF—Df–Æ&–Æ—G’"’ÂÖ7&òæ7&VF—Df–Æ&–Æ—G’çFôf—†VBƒ"’—Ğ¢ÂöF—cà¢Âö'F–6ÆSà¢Â÷6V7F–öãà¢°§Ğ ¦gVæ7F–öâÖWFf–ÇFW$÷F–öç2‚’°¢&WGW&â°¢²–C¢&ÆÂ"ÂÆ&VÃ¢B‚&ÆÄf–ÇFW""’ÒÀ¢²–C¢&f–Æ&ÆR"ÂÆ&VÃ¢B‚&f–Æ&ÆTf–ÇFW""’ÒÀ¢²–C¢'W&6†6VB"ÂÆ&VÃ¢B‚'W&6†6VDf–ÇFW""’ÒÀ¢²–C¢&76WG2"ÂÆ&VÃ¢B‚&76WG46FVv÷'’"’ÒÀ¢²–C¢&'W6–æW72"ÂÆ&VÃ¢B‚&'W6–æW746FVv÷'’"’ÒÀ¢²–C¢'&VÅöW7FFR"ÂÆ&VÃ¢B‚'&VÄW7FFT6FVv÷'•6†÷'B"’ÒÀ¢²–C¢&Ö&¶WB"ÂÆ&VÃ¢B‚&Ö&¶WD6FVv÷'•6†÷'B"’ÒÀ¢²–C¢&V6öæö×’"ÂÆ&VÃ¢B‚&V6öæö×”6FVv÷'•6†÷'B"’ÒÀ¢²–C¢'7F'Eö&öçW2"ÂÆ&VÃ¢B‚'7F'D6FVv÷'•6†÷'B"’ÒÀ¢²–C¢&ÖWF"ÂÆ&VÃ¢B‚&ÖWF6FVv÷'•6†÷'B"’Ğ¢Ó°§Ğ ¦gVæ7F–öâÖWF6÷7B‡VæÆö6²ÂÆWfVÂÒVæÆö6´ÆWfVÂ‡VæÆö6²æ–B’’°¢–b‚VæÆö6²ç&WVF&ÆR’&WGW&âVæÆö6²æ6÷7C°¢6öç7B66ÆRÒVæÆö6²æ6÷7E66Æ–ærÇÂ°¢&WGW&âÖF‚ç&÷VæB‡VæÆö6²æ6÷7B¢ÖF‚ç÷r‡66ÆRÂÆWfVÂ’“°§Ğ ¦gVæ7F–öâÖWF6FVv÷'”¶W’‡VæÆö6²’°¢&WGW&âVæÆö6²æ6FVv÷'’ÇÂ&ÖWF#°§Ğ ¦gVæ7F–öâÖWF6FVv÷'”Æ&VÂ‡VæÆö6²’°¢6öç7B¶W’Ò°¢76WG3¢&76WG46FVv÷'’"À¢'W6–æW73¢&'W6–æW746FVv÷'’"À¢&VÅöW7FFS¢'&VÄW7FFT6FVv÷'•6†÷'B"À¢Ö&¶WC¢vï^-¢G§²ÚîÆ­y×fVçVRÂW‡Vç6W2Â–çFW&W7BÂ&öf—BÂfÇVF–öâÂVffV7F—fU&—6²ÂF—f–FVæG2Ó°§Ğ ¦gVæ7F–öâ76WEfÇVR‚’°¢&WGW&â7FFRç'Vâæ6ö×ç’æ'W6–æW76W2ç&VGV6R‚‡7VÒÂ÷væVB’Óâ°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢&WGW&â7VÒ²'W6–æW72æ6÷7B¢ƒ²÷væVBæÆWfVÂ¢ã#R“°¢ÒÂ“°§Ğ ¦gVæ7F–öâ7Fö6´†öÆF–æw5fÇVR‚’°¢&WGW&â7FFRç'Vâæ6ö×ç’ç7Fö6·2ç&VGV6R‚‡7VÒÂ†öÆF–ær’Óâ°¢6öç7BÆ—7F–ærÒ7Fö6´'”–B††öÆF–ærç7Fö6´–B“°¢&WGW&â7VÒ²†Æ—7F–æròÆ—7F–ærç&–6R¢†öÆF–ærç6†&W2¢“°¢ÒÂ“°§Ğ ¦gVæ7F–öâ7Fö6´F—f–FVæG2‚’°¢&WGW&â7FFRç'Vâæ6ö×ç’ç7Fö6·2ç&VGV6R‚‡7VÒÂ†öÆF–ær’Óâ°¢6öç7BÆ—7F–ærÒ7Fö6´'”–B††öÆF–ærç7Fö6´–B“°¢–b‚Æ—7F–ær’&WGW&â7VÓ°¢&WGW&â7VÒ²†Æ—7F–ærç&–6R¢†öÆF–ærç6†&W2¢†Æ—7F–æræF—f–FVæE÷––VÆBÇÂ’“°¢ÒÂ“°§Ğ ¦gVæ7F–öâ7&VFT–æ—F–Å7Fö6´Ö&¶WB‚’°¢&WGW&â°¢Æ—7F–æw3¢7FFRç7Fö6·2æÖ‚‡7Fö6²’Óâ‡²ââç7Fö6²Â&–6S¢7Fö6²ç&–6RÂÖöÖVçGVÓ¢Â&–6T†—7F÷'“¢7&VFU7Fö6´†—7F÷'’‡7Fö6²ç&–6RÂÂ7Fö6²ç&–6T†—7F÷'’’Ò’¢Ó°§Ğ ¦gVæ7F–öâ7Fö6´'”–B†–B’°¢&WGW&â7FFRç'Vâç7Fö6´Ö&¶WBæÆ—7F–æw2æf–æB‚†—FVÒ’Óâ—FVÒæ–BÓÓÒ–B“°§Ğ ¦gVæ7F–öâ7Fö6´†öÆF–ær‡7Fö6´–B’°¢&WGW&â7FFRç'Vâæ6ö×ç’ç7Fö6·2æf–æB‚†—FVÒ’Óâ—FVÒç7Fö6´–BÓÓÒ7Fö6´–B’ÇÂçVÆÃ°§Ğ ¦gVæ7F–öâ7&VFU7Fö6´†—7F÷'’‡&–6RÂÖöÖVçGVÒÂ6VVBÒµÒ’°¢–b‡6VVCòæÆVæwF‚’&WGW&â6VVBç6Æ–6R‚Ó“°¢6öç7B†—7F÷'’ÒµÓ°¢ÆWB7W'6÷"Ò&–6S°¢f÷"†ÆWB’Ò²’Â““²’³Ò’°¢6öç7BG&–gBÒÖöÖVçGVÒ¢ãC°¢7W'6÷"ÒÖF‚æÖ‚ƒÂ²†7W'6÷"¢ƒÒG&–gB²„ÖF‚ç&æFöÒ‚’ÒãR’¢ã2’’çFôf—†VBƒ"’“°¢†—7F÷'’çVç6†–gB†7W'6÷"“°¢Ğ¢†—7F÷'’çW6‚‡&–6R“°¢&WGW&â†—7F÷'’ç6Æ–6R‚Ó“°§Ğ ¦gVæ7F–öâ÷Vå7Fö6µ6†VWB‡7Fö6´–B’°¢7FFRæ7F—fU7Fö6´–BÒ7Fö6´–C°¢7FFRç6VÆV7FVEG&FTÖöFRÒçVÆÃ°¢7FFRæ7F—fU7Fö6µö–çD–æFW‚ÒçVÆÃ°¢7FFRç7Fö6´'W•W&6VçBÒ°¢7FFRç7Fö6µ6VÆÅW&6VçBÒ°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ6Æ÷6U7Fö6µ6†VWB‚’°¢7FFRæ7F—fU7Fö6´–BÒçVÆÃ°¢7FFRç6VÆV7FVEG&FTÖöFRÒçVÆÃ°¢7FFRæ7F—fU7Fö6µö–çD–æFW‚ÒçVÆÃ°¢7FFRç7Fö6´'W•W&6VçBÒ°¢7FFRç7Fö6µ6VÆÅW&6VçBÒ°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâvWEW&6VçDg&öÕö–çFW"†WfVçBÂVÆVÖVçB’°¢6öç7B&V7BÒVÆVÖVçBævWD&÷VæF–æt6Æ–VçE&V7B‚“°¢6öç7B‚ÒWfVçBæ6Æ–VçE‚Ò&V7BæÆVgC°¢6öç7B&rÒ‚ò&V7Bçv–GFƒ°¢&WGW&âÖF‚æÖ‚ƒÂÖF‚æÖ–âƒÂ&r’“°§Ğ ¦gVæ7F–öâ6Æ7VÆFTÖ„'W•6†&W2‡7Fö6´–B’°¢6öç7B7Fö6²Ò7Fö6´'”–B‡7Fö6´–B“°¢–b‚7Fö6²’&WGW&â°¢&WGW&âÖF‚æfÆö÷"‡7FFRç'Vâæ6ö×ç’æ66‚ò7Fö6²ç&–6R“°§Ğ ¦gVæ7F–öâ6Æ7VÆFT'W”÷&FW"‡7Fö6´–BÂW&6VçEfÇVR’°¢6öç7B7Fö6²Ò7Fö6´'”–B‡7Fö6´–B“°¢–b‚7Fö6²’&WGW&â²6†&W3¢Â6÷7C¢Ó°¢6öç7BÖ…6†&W2Ò6Æ7VÆFTÖ„'W•6†&W2‡7Fö6´–B“°¢6öç7B6†&W2ÒÖF‚æfÆö÷"†Ö…6†&W2¢W&6VçEfÇVR“°¢&WGW&â²6†&W2Â6÷7C¢²‡6†&W2¢7Fö6²ç&–6R’çFôf—†VBƒ"’Ó°§Ğ ¦gVæ7F–öâ6Æ7VÆFU6VÆÄ÷&FW"‡7Fö6´–BÂW&6VçEfÇVR’°¢6öç7B7Fö6²Ò7Fö6´'”–B‡7Fö6´–B“°¢6öç7B†öÆF–ærÒ7Fö6´†öÆF–ær‡7Fö6´–B“°¢–b‚7Fö6²ÇÂ†öÆF–ær’&WGW&â²6†&W3¢ÂfÇVS¢Ó°¢6öç7B6†&W2ÒÖF‚æfÆö÷"††öÆF–ærç6†&W2¢W&6VçEfÇVR“°¢&WGW&â²6†&W2ÂfÇVS¢²‡6†&W2¢7Fö6²ç&–6R’çFôf—†VBƒ"’Ó°§Ğ ¦gVæ7F–öâ&–æEG&FT&'2‚’°¢V’çF$6öçFVçBçVW'•6VÆV7F÷$ÆÂ‚%¶FF×G&FRÖ&%Ò"’æf÷$V6‚‚†&"’Óâ°¢ÆWBG&vv–ærÒfÇ6S°¢6öç7BÖöFRÒ&"æFF6WBçG&FT&#°¢6öç7B6WEfÇVRÒ†WfVçB’Óâ°¢6öç7BfÇVRÒvWEW&6VçDg&öÕö–çFW"†WfVçBÂ&"“°¢–b†ÖöFRÓÓÒ&'W’"’7FFRç7Fö6´'W•W&6VçBÒfÇVS°¢VÇ6R7FFRç7Fö6µ6VÆÅW&6VçBÒfÇVS°¢&Vg&W6„7F—fU7Fö6µG&FUT’‚“°¢Ó°¢&"æFDWfVçDÆ—7FVæW"‚'ö–çFW&F÷vâ"Â†WfVçB’Óâ°¢G&vv–ærÒG'VS°¢&"ç6WEö–çFW$6GW&R†WfVçBçö–çFW$–B“°¢6WEfÇVR†WfVçB“°¢Ò“°¢&"æFDWfVçDÆ—7FVæW"‚'ö–çFW&Ö÷fR"Â†WfVçB’Óâ°¢–b‚G&vv–ær’&WGW&ã°¢6WEfÇVR†WfVçB“°¢Ò“°¢6öç7B7F÷Ò‚’Óâ²G&vv–ærÒfÇ6S²Ó°¢&"æFDWfVçDÆ—7FVæW"‚'ö–çFW'W"Â7F÷“°¢&"æFDWfVçDÆ—7FVæW"‚'ö–çFW&6æ6VÂ"Â7F÷“°¢Ò“°§Ğ ¦gVæ7F–öâ&Vg&W6„7F—fU7Fö6µG&FUT’‚’°¢6öç7B7Fö6´–BÒ7FFRæ7F—fU7Fö6´–C°¢–b‚7Fö6´–B’&WGW&ã°¢6öç7B'W”÷&FW"Ò6Æ7VÆFT'W”÷&FW"‡7Fö6´–BÂ7FFRç7Fö6´'W•W&6VçB“°¢6öç7B6VÆÄ÷&FW"Ò6Æ7VÆFU6VÆÄ÷&FW"‡7Fö6´–BÂ7FFRç7Fö6µ6VÆÅW&6VçB“°¢6öç7B6†&W4Æ&VÂÒB‚'6†&W2"’çFôÆ÷vW$66R‚“° ¢6öç7B7–æ2Ò†ÖöFRÂW&6VçEfÇVRÂ÷&FW"Â6å7V&Ö—B’Óâ°¢6öç7B&"ÒV’çF$6öçFVçBçVW'•6VÆV7F÷"†¶FF×G&FRÖ&#Ò"G¶ÖöFWÒ%Ö“°¢6öç7Bf–ÆÂÒ&#òçVW'•6VÆV7F÷"‚"çG&FRÖ&"Öf–ÆÂ"“°¢6öç7BF‡VÖ"Ò&#òçVW'•6VÆV7F÷"‚"çG&FRÖ&"×F‡VÖ""“°¢6öç7BW&6VçDÆ&VÂÒV’çF$6öçFVçBçVW'•6VÆV7F÷"†¶FF×G&FR×W&6VçBÖÆ&VÃÒ"G¶ÖöFWÒ%Ö“°¢6öç7BÖ÷VçBÒV’çF$6öçFVçBçVW'•6VÆV7F÷"†¶FF×G&FRÖÖ÷VçCÒ"G¶ÖöFWÒ%Ö“°¢6öç7B6†&W2ÒV’çF$6öçFVçBçVW'•6VÆV7F÷"†¶FF×G&FR×6†&W3Ò"G¶ÖöFWÒ%Ö“°¢6öç7B7F–öâÒV’çF$6öçFVçBçVW'•6VÆV7F÷"†¶FF×G&FRÖ7F–öãÒ"G¶ÖöFWÒ%Ö“°¢6öç7Bv–GF‚ÒG´ÖF‚ç&÷VæB‡W&6VçEfÇVR¢—ÒV°¢–b†f–ÆÂ’f–ÆÂç7G–ÆRçv–GF‚Òv–GFƒ°¢–b‡F‡VÖ"’F‡VÖ"ç7G–ÆRæÆVgBÒv–GFƒ°¢–b‡W&6VçDÆ&VÂ’W&6VçDÆ&VÂçFW‡D6öçFVçBÒv–GFƒ°¢–b†Ö÷VçB’Ö÷VçBçFW‡D6öçFVçBÒG·B‚&Ö÷VçDÆ&VÂ"—ÒG·7Fö6´ÖöæW’†ÖöFRÓÓÒ&'W’"ò÷&FW"æ6÷7B¢÷&FW"çfÇVR—Ö°¢–b‡6†&W2’6†&W2çFW‡D6öçFVçBÒG¶÷&FW"ç6†&W7ÒG·6†&W4Æ&VÇÖ°¢–b†7F–öâ’7F–öâæF—6&ÆVBÒ6å7V&Ö—C°¢Ó° ¢7–æ2‚&'W’"Â7FFRç7Fö6´'W•W&6VçBÂ'W”÷&FW"Â'W”÷&FW"ç6†&W2âbb6åF¶T7F–öâ†'W”÷&FW"æ6÷7B’“°¢7–æ2‚'6VÆÂ"Â7FFRç7Fö6µ6VÆÅW&6VçBÂ6VÆÄ÷&FW"Â6VÆÄ÷&FW"ç6†&W2âbb6åF¶T7F–öâƒ’“°§Ğ ¦gVæ7F–öâWFFTÖ&¶WD7–6ÆR‚’°¢6öç7BÖ7&òÒVffV7F—fTÖ7&ò‚“°¢–b†Ö7&òæ–çFW&W7E&FRãÒãSR’7FFRç'VâæÖ&¶WD7–6ÆRÒ'&FW2#°¢VÇ6R–b†Ö7&òæ–æfÆF–öâãÒãR’7FFRç'VâæÖ&¶WD7–6ÆRÒ&–æfÆF–öâ#°¢VÇ6R–b†Ö7&òæFVÖæBÃÒã“"’7FFRç'VâæÖ&¶WD7–6ÆRÒ&6öç7VÖW"#°¢VÇ6R–b†Ö7&òæ7&VF—Df–Æ&–Æ—G’ãÒã’7FFRç'VâæÖ&¶WD7–6ÆRÒ&w&÷wF‚#°¢VÇ6R7FFRç'VâæÖ&¶WD7–6ÆRÒ&&Ææ6VB#°§Ğ ¦gVæ7F–öâ7W'&VçD7–6ÆTÆ&VÂ‚’°¢6öç7BÖÒ°¢&Ææ6VC¢²æÖS¢B‚&&Ææ6VDW‡ç6–öâ"’ÂFW67&—F–öã¢B‚&&Ææ6VDW‡ç6–öäFW62"’ÒÀ¢6öç7VÖW#¢²æÖS¢B‚&FVÖæB"’ÂFW67&—F–öã¢B‚&FVÖæD–ç6–v‡D†–v‚"’ÒÀ¢w&÷wFƒ¢²æÖS¢B‚&6†V7&VF—D&ööÒ"’ÂFW67&—F–öã¢B‚&6†V7&VF—D&ööÔFW62"’ÒÀ¢–æfÆF–öã¢²æÖS¢B‚&–æfÆF–öå6†ö6²"’ÂFW67&—F–öã¢B‚&–æfÆF–öå6†ö6´FW62"’ÒÀ¢&FW3¢²æÖS¢B‚&†–v…&FU7VVW¦R"’ÂFW67&—F–öã¢B‚&†–v…&FU7VVW¦TFW62"’Ğ¢Ó°¢&WGW&âÖ·7FFRç'VâæÖ&¶WD7–6ÆUÒÇÂÖæ&Ææ6VC°§Ğ ¦gVæ7F–öâF–6µ7Fö6´Ö&¶WB‚’°¢6öç7B7–6ÆRÒ7FFRç'VâæÖ&¶WD7–6ÆS°¢7FFRç'Vâç7Fö6´Ö&¶WBæÆ—7F–æw2Ò7FFRç'Vâç7Fö6´Ö&¶WBæÆ—7F–æw2æÖ‚†Æ—7F–ær’Óâ°¢6öç7B7–6ÆT&ö÷7BÒÆ—7F–æræ7–6ÆUö&–2ÓÓÒ7–6ÆRòã2¢7–6ÆRÓÓÒ&&Ææ6VB"òã¢Óã°¢6öç7BÖ7&õVæÇG’ÒÆ—7F–ærç6V7F÷"ÓÓÒ'&VÅöW7FFR"bb7–6ÆRÓÓÒ'&FW2"òÓã2¢°¢6öç7B&æFöÕ6†ö6²Ò„ÖF‚ç&æFöÒ‚’ÒãR’¢Æ—7F–ærçföÆF–Æ—G“°¢6öç7B6†ævRÒ7–6ÆT&ö÷7B²Ö7&õVæÇG’²&æFöÕ6†ö6³°¢6öç7BæW‡E&–6RÒÖF‚æÖ‚ƒÂ²†Æ—7F–ærç&–6R¢ƒ²6†ævR’’çFôf—†VBƒ"’“°¢&WGW&â²ââæÆ—7F–ærÂÖöÖVçGVÓ¢¶6†ævRçFôf—†VBƒ2’Â&–6S¢æW‡E&–6RÂ&–6T†—7F÷'“¢²âââ†Æ—7F–ærç&–6T†—7F÷'’ÇÂµÒ’ÂæW‡E&–6UÒç6Æ–6R‚Ó’Ó°¢Ò“°§Ğ ¦gVæ7F–öâÇ”VffV7G2‡6÷W&6R’°¢6öç7B'VâÒ7FFRç'Vã°¢'Vâæ6ö×ç’æ66‚³Ò6÷W&6Ræ66‚ÇÂ°¢'Vâæ6ö×ç’æFV'BÒÖF‚æÖ‚ƒÂ'Vâæ6ö×ç’æFV'B²‡6÷W&6RæFV'BÇÂ’“°¢'Vâæ6ö×ç’ç&—6²Ò6Æ×‡'Vâæ6ö×ç’ç&—6²²‡6÷W&6Rç&—6²ÇÂ’ÂãÂã“R“°¢'Vâæ6ö×ç’ç&WfVçVT&öçW2³Ò6÷W&6Rç&WfVçVUö&öçW2ÇÂ°¢'Vâæ6ö×ç’æW‡Vç6T&öçW2³Ò6÷W&6RæW‡Vç6Uö&öçW2ÇÂ°¢–b‡6÷W&6Ræ–çFW&W7E÷&FR’'VâæÖ7&òæ–çFW&W7E&FRÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæ–çFW&W7E&FR²6÷W&6Ræ–çFW&W7E÷&FR“°¢–b‡6÷W&6Ræ–æfÆF–öâ’'VâæÖ7&òæ–æfÆF–öâÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæ–æfÆF–öâ²6÷W&6Ræ–æfÆF–öâ“°¢–b‡6÷W&6RæFVÖæB’'VâæÖ7&òæFVÖæBÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæFVÖæB²6÷W&6RæFVÖæB“°¢–b‡6÷W&6RæVæW&w•ö6÷7B’'VâæÖ7&òæVæW&w”6÷7BÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæVæW&w”6÷7B²6÷W&6RæVæW&w•ö6÷7B“°¢–b‡6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’’'VâæÖ7&òæ7&VF—Df–Æ&–Æ—G’ÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæ7&VF—Df–Æ&–Æ—G’²6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’“°¢–b‡6÷W&6RæÖ&¶WE÷&—6²’'VâæÖ7&òæÖ&¶WE&—6²ÒÖF‚æÖ‚ƒãÂ'VâæÖ7&òæÖ&¶WE&—6²²6÷W&6RæÖ&¶WE÷&—6²“°¢–b‡6÷W&6RçFV×÷&'•öVffV7G2bb6÷W&6RæGW&F–öå÷GW&ç2’°¢'Vâæ7F—fTÖöF–f–W'2çW6‚‡°¢Æ&VÃ¢6÷W&6RçF—FÆRÇÂ6÷W&6Ræ–BÇÂ$ÖöF–f–W""À¢VffV7G3¢6÷W&6RçFV×÷&'•öVffV7G2À¢&VÖ–æ–æuGW&ç3¢6÷W&6RæGW&F–öå÷GW&ç0¢Ò“°¢Ğ§Ğ ¦gVæ7F–öâ6†ö÷6TWfVçB‚’°¢6öç7BVÆ–v–&ÆRÒ7FFRæWfVçG2æf–ÇFW"†WfVçEVæÆö6¶VB’æf–ÇFW"†WfVçDÆÆ÷vVB“°¢–b‚VÆ–v–&ÆRæÆVæwF‚’&WGW&â6×ÆR‡7FFRæWfVçG2“°¢6öç7BF÷FÂÒVÆ–v–&ÆRç&VGV6R‚‡7VÒÂ—FVÒ’Óâ7VÒ²ÖF‚æÖ‚ƒÂ—FVÒçvV–v‡BÇÂ’Â“°¢ÆWB&öÆÂÒÖF‚ç&æFöÒ‚’¢F÷FÃ°¢f÷"†6öç7BWfVçBöbVÆ–v–&ÆR’°¢&öÆÂÓÒÖF‚æÖ‚ƒÂWfVçBçvV–v‡BÇÂ“°¢–b‡&öÆÂÃÒ’&WGW&âWfVçC°¢Ğ¢&WGW&âVÆ–v–&ÆU¶VÆ–v–&ÆRæÆVæwF‚ÒÓ°§Ğ ¦gVæ7F–öâWfVçDÆÆ÷vVB†WfVçB’°¢6öç7B'VâÒ7FFRç'Vã°¢6öç7BÖ7&òÒVffV7F—fTÖ7&ò‚“°¢–b‡'VâçGW&âÂ†WfVçBæÖ–å÷GW&âÇÂ’’&WGW&âfÇ6S°¢–b‡'VâçGW&ââ†WfVçBæÖ…÷GW&âÇÂ7W'&VçDÖ…GW&ç2‚’’’&WGW&âfÇ6S°¢–b†WfVçBæÖ–åöFV'BÒçVÆÂbb'Vâæ6ö×ç’æFV'BÂWfVçBæÖ–åöFV'B’&WGW&âfÇ6S°¢–b†WfVçBæÖ…öFV'BÒçVÆÂbb'Vâæ6ö×ç’æFV'BâWfVçBæÖ…öFV'B’&WGW&âfÇ6S°¢–b†WfVçBæÖ–åöFVÖæBÒçVÆÂbbÖ7&òæFVÖæBÂWfVçBæÖ–åöFVÖæB’&WGW&âfÇ6S°¢–b†WfVçBæÖ…öFVÖæBÒçVÆÂbbÖ7&òæFVÖæBâWfVçBæÖ…öFVÖæB’&WGW&âfÇ6S°¢–b†WfVçBæÖ–åöVæW&w•ö6÷7BÒçVÆÂbbÖ7&òæVæW&w”6÷7BÂWfVçBæÖ–åöVæW&w•ö6÷7B’&WGW&âfÇ6S°¢–b†WfVçBæÆÆ÷vVEö–æGW7G&–W3òæÆVæwF‚’°¢6öç7B÷væVD–æGW7G&–W2ÒæWr6WB‡7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æÖ‚†—FVÒ’Óâ'W6–æW74'”–B†—FVÒæ'W6–æW74–B’æ–æGW7G'’’“°¢–b‚WfVçBæÆÆ÷vVEö–æGW7G&–W2ç6öÖR‚†–æGW7G'’’Óâ÷væVD–æGW7G&–W2æ†2†–æGW7G'’’’’&WGW&âfÇ6S°¢Ğ¢&WGW&âG'VS°§Ğ ¦gVæ7F–öâG&t6&G2‚’°¢6öç7BööÂÒ7FFRæ6&G2æf–ÇFW"†6&EVæÆö6¶VB“°¢6öç7B6&G2ÒµÓ°¢v†–ÆR‡ööÂæÆVæwF‚bb6&G2æÆVæwF‚Â2’°¢6öç7B–æFW‚ÒÖF‚æfÆö÷"„ÖF‚ç&æFöÒ‚’¢ööÂæÆVæwF‚“°¢6&G2çW6‚‡ööÂç7Æ–6R†–æFW‚Â•³Ò“°¢Ğ¢&WGW&â6&G3°§Ğ ¦gVæ7F–öâ7F—fU7–æW&v–W2‚’°¢6öç7B÷væVBÒæWr6WB‡7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æÖ‚†—FVÒ’Óâ—FVÒæ'W6–æW74–B’“°¢&WGW&â7FFRç7–æW&v–W2æf–ÇFW"‚‡7–æW&w’’Óâ7–æW&w’ç&WV—&W2æWfW'’‚†–B’Óâ÷væVBæ†2†–B’’“°§Ğ ¦gVæ7F–öâÆÖ÷7E7–æW&v–W2‚’°¢6öç7B÷væVBÒæWr6WB‡7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æÖ‚†—FVÒ’Óâ—FVÒæ'W6–æW74–B’“°¢&WGW&â7FFRç7–æW&v–W2æf–ÇFW"‚‡7–æW&w’’Óâ7–æW&w’ç&WV—&W2æf–ÇFW"‚†–B’Óâ÷væVBæ†2†–B’’æÆVæwF‚ÓÓÒ7–æW&w’ç&WV—&W2æÆVæwF‚Ò’ç6Æ–6RƒÂ2“°§Ğ ¦gVæ7F–öâ7F—fU7–æW&w”&öçW2‚’°¢&WGW&â7F—fU7–æW&v–W2‚’ç&VGV6R‚†62Â7–æW&w’’Óâ‡°¢&WfVçVS¢62ç&WfVçVR²‡7–æW&w’ç&WfVçVUö&öçW2ÇÂ’À¢W‡Vç6S¢62æW‡Vç6R²‡7–æW&w’æW‡Vç6Uö&öçW2ÇÂ¢Ò’Â²&WfVçVS¢ÂW‡Vç6S¢Ò“°§Ğ ¦gVæ7F–öâf–ÇFW&VE÷'FföÆ–ò‚’°¢&WGW&â7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æf–ÇFW"‚†÷væVB’Óâ°¢–b‡7FFRç÷'FföÆ–ôf–ÇFW"ÓÓÒ&ÆÂ"’&WGW&âG'VS°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢–b‡7FFRç÷'FföÆ–ôf–ÇFW"ÓÓÒ&f–ææ6R"’&WGW&â'W6–æW72æ–æGW7G'’ÓÓÒ&ÖVF–#°¢&WGW&â'W6–æW72æ–æGW7G'’ÓÓÒ7FFRç÷'FföÆ–ôf–ÇFW#°¢Ò“°§Ğ ¦gVæ7F–öâw&÷WVDÖ&¶WD'W6–æW76W2‚’°¢6öç7B÷væVBÒæWr6WB‡7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æÖ‚†—FVÒ’Óâ—FVÒæ'W6–æW74–B’“°¢6öç7Bf—6–&ÆRÒ7FFRæ'W6–æW76W2æf–ÇFW"‚†'W6–æW72’Óâ÷væVBæ†2†'W6–æW72æ–B’’æf–ÇFW"‚†'W6–æW72’Óâ°¢6öç7B–æGW7G'”ö²Ò7FFRæÖ&¶WDf–ÇFW$–æGW7G'’ÓÓÒ&ÆÂ"ÇÂ'W6–æW72æ–æGW7G'’ÓÓÒ7FFRæÖ&¶WDf–ÇFW$–æGW7G'“°¢6öç7B&—6´ö²Ò7FFRæÖ&¶WDf–ÇFW%&—6²ÓÓÒ&ÆÂ"ÇÂÖF6…&—6´f–ÇFW"†'W6–æW72ç&—6²Â7FFRæÖ&¶WDf–ÇFW%&—6²“°¢&WGW&â–æGW7G'”ö²bb&—6´ö³°¢Ò“°¢6öç7Bw&÷W2ÒæWrÖ‚“°¢f÷"†6öç7B'W6–æW72öbf—6–&ÆR’°¢–b‚w&÷W2æ†2†'W6–æW72æ–æGW7G'’’’w&÷W2ç6WB†'W6–æW72æ–æGW7G'’ÂµÒ“°¢w&÷W2ævWB†'W6–æW72æ–æGW7G'’’çW6‚†'W6–æW72“°¢Ğ¢&WGW&â²ââæw&÷W2æVçG&–W2‚•ÒæÖ‚…¶–æGW7G'’Â—FV×5Ò’Óâ‡°¢–æGW7G'’À¢Æö6¶VC¢–æGW7G'•VæÆö6¶VB†–æGW7G'’’À¢—FV×3¢–æGW7G'•VæÆö6¶VB†–æGW7G'’’ò—FV×2¢µĞ¢Ò’“°§Ğ ¦gVæ7F–öâ&VæFW$÷væVD'W6–æW746&B†÷væVB’°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢6öç7B&WfVçVRÒ'W6–æW72ç&WfVçVR¢ƒ²†÷væVBæÆWfVÂÒ’¢ãCR“°¢6öç7BW‡Vç6W2Ò'W6–æW72æW‡Vç6R¢ƒ²†÷væVBæÆWfVÂÒ’¢ãCR“°¢6öç7B&öf—BÒ&WfVçVRÒW‡Vç6W3°¢6öç7B6÷7BÒWw&FT6÷7B†÷væVB“°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†–æGW7G'”æÖR†'W6–æW72æ–æGW7G'’’Â&66VçB"—ÒG·Fr†G·B‚&ÆWfVÂ"—ÒG¶÷væVBæÆWfVÇÖ—ÓÂöF—cà¢Æƒ3âG¶'W6–æW72ææÖWÓÂöƒ3à¢ÇâG¶'W6–æW74&ÇW&"†'W6–æW72—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚'&WfVçVR"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡&WfVçVR—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&W‡Vç6W2"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’†W‡Vç6W2—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&öf—B"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡&öf—B—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&—6²"—ÓÂ÷7ããÇ7G&öæsâG·W&6VçB†'W6–æW72ç&—6²—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢ÆF—b6Æ73Ò&'WGFöâ×&÷r#à¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FF×Ww&FSÒ"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâ†6÷7B’bb÷væVBæÆWfVÂÂ'W6–æW72æÖ…öÆWfVÂò""¢&F—6&ÆVB'ÓâG·B‚'Ww&FR"—ÓÂö'WGFöãà¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ"FF×6VÆÃÒ"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâƒ’bb7FFRç'Vâæ6ö×ç’æ'W6–æW76W2æÆVæwF‚âò""¢&F—6&ÆVB'ÓâG·B‚'6VÆÂ"—ÓÂö'WGFöãà¢ÂöF—cà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâ&VæFW$FV6—6–öä'W”6&B†'W6–æW72’°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†G·B‚&'W’"—ÒG¶ÖöæW’†'W6–æW72æ6÷7B—ÖÂ&66VçB"—ÒG·Fr†–æGW7G'”æÖR†'W6–æW72æ–æGW7G'’’—ÒG·Fr‡&—6´'V6¶WDÆ&VÂ†'W6–æW72ç&—6²’—ÓÂöF—cà¢Æƒ3âG¶'W6–æW72ææÖWÓÂöƒ3à¢ÇâG¶'W6–æW74&ÇW&"†'W6–æW72—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚&W‡V7FVE&öf—B"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’†'W6–æW72ç&WfVçVRÒ'W6–æW72æW‡Vç6R—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&—6²"—ÓÂ÷7ããÇ7G&öæsâG·W&6VçB†'W6–æW72ç&—6²—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'7–æW&w”†öö·2"—ÓÂ÷7ããÇ7G&öæsâG·7–æW&w”†öö·2†'W6–æW72æ–B—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&Ö7&õ6Vç6—F—f—G’"—ÓÂ÷7ããÇ7G&öæsâG¶Ö7&õ6Vç6—F—f—G’†'W6–æW72—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FFÖ'W“Ò"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâ†'W6–æW72æ6÷7B’ò""¢&F—6&ÆVB'ÓâG·B‚&'W”76WB"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâ&VæFW$FV6—6–öåWw&FT6&B†÷væVB’°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢6öç7BWw&FU&–6RÒWw&FT6÷7B†÷væVB“°¢6öç7B&WfVçVTv–âÒÖF‚ç&÷VæB†'W6–æW72ç&WfVçVR¢ãCR“°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†–æGW7G'”æÖR†'W6–æW72æ–æGW7G'’’Â&66VçB"—ÒG·Fr†G·B‚&ÆWfVÂ"—ÒG¶÷væVBæÆWfVÇÖ—ÓÂöF—cà¢Æƒ3âG¶'W6–æW72ææÖWÓÂöƒ3à¢ÇâG¶'W6–æW74&ÇW&"†'W6–æW72—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚'Ww&FR"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡Ww&FU&–6R—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&WfVçVR"—ÓÂ÷7ããÇ7G&öæsâ²G¶ÖöæW’‡&WfVçVTv–â—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FF×Ww&FSÒ"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâ‡Ww&FU&–6R’ò""¢&F—6&ÆVB'ÓâG·B‚'Ww&FT76WB"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâ&VæFW$FV6—6–öå6VÆÄ6&B†÷væVB’°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢6öç7B6ÆUfÇVRÒÖF‚ç&÷VæB†'W6–æW72æ6÷7B¢ƒãSR²÷væVBæÆWfVÂ¢ãR’“°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†–æGW7G'”æÖR†'W6–æW72æ–æGW7G'’’Â&66VçB"—ÒG·Fr†G·B‚&ÆWfVÂ"—ÒG¶÷væVBæÆWfVÇÖ—ÓÂöF—cà¢Æƒ3âG¶'W6–æW72ææÖWÓÂöƒ3à¢ÇâG¶'W6–æW74&ÇW&"†'W6–æW72—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚'6VÆÂ"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’‡6ÆUfÇVR—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&W‡V7FVE&öf—B"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’†'W6–æW72ç&WfVçVRÒ'W6–æW72æW‡Vç6R—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FF×6VÆÃÒ"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâƒ’ò""¢&F—6&ÆVB'ÓâG·B‚'6VÆÄ76WB"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâ&VæFW$FV6—6–öä6&EÆ’†6&B’°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†6&Bæ6÷7BòG·B‚&'W’"—ÒG¶ÖöæW’†6&Bæ6÷7B—Ö¢B‚&æô6÷7B"’Â&66VçB"—ÓÂöF—cà¢Æƒ3âG¶6&BçF—FÆWÓÂöƒ3à¢ÇâG¶6&BçFW‡GÓÂ÷à¢ÆF—b6Æ73Ò&6†ö–6RÖÖWF7F6¶VB#à¢ÆF—cãÇ7ãâG·B‚&VffV7DÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG¶FW67&–&TVffV7G2†6&B’ÇÂB‚'7G&FVv–56†–gB"—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&—6´Æ&VÅF—FÆR"—ÓÂ÷7ããÇ7G&öæsâG·&—6´Æ&VÂ†6&B—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FF×Æ’Ö6&CÒ"G¶6&Bæ–GÒ"G¶6åF¶T7F–öâ†6&Bæ6÷7BÇÂ’ò""¢&F—6&ÆVB'ÓâG·B‚'Æ”6&D7F–öâ"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâ&VæFW$7F—fU7–æW&w’‡7–æW&w’’°¢&WGW&âÆ'F–6ÆR6Æ73Ò'7–æW&w’Ö6&B#ãÇ7G&öæsâG·7–æW&w’ææÖWÓÂ÷7G&öæsãÇâG·7–æW&w’ç&WV—&W2æÖ‚†–B’Óâ'W6–æW74'”–B†–B’ææÖR’æ¦ö–â‚"²"—ÓÂ÷ãÆF—b6Æ73Ò'Fr×&÷r#âG·7–æW&w’ç&WfVçVUö&öçW2òFr†G·B‚'&WfVçVR"—ÒG·6–væVEW&6VçB‡7–æW&w’ç&WfVçVUö&öçW2—ÖÂ&66VçB"’¢"'ÒG·7–æW&w’æW‡Vç6Uö&öçW2òFr†G·B‚&W‡Vç6W2"—ÒG·6–væVEW&6VçB‡7–æW&w’æW‡Vç6Uö&öçW2—ÖÂ&66VçB"’¢"'ÓÂöF—cãÂö'F–6ÆSæ°§Ğ ¦gVæ7F–öâ&VæFW$æV%7–æW&w’‡7–æW&w’’°¢6öç7BÖ—76–ærÒ7–æW&w’ç&WV—&W2æf–ÇFW"‚†–B’Óâ7FFRç'Vâæ6ö×ç’æ'W6–æW76W2ç6öÖR‚†—FVÒ’Óâ—FVÒæ'W6–æW74–BÓÓÒ–B’“°¢&WGW&âÆ'F–6ÆR6Æ73Ò'7–æW&w’Ö6&B#ãÇ7G&öæsâG·B‚&ÆÖ÷7E&VG’"—Ó¢G·7–æW&w’ææÖWÓÂ÷7G&öæsãÇâG¶Ö—76–æræÖ‚†–B’Óâ'W6–æW74'”–B†–B’ææÖR’æ¦ö–â‚"Â"—ÓÂ÷ãÆF—b6Æ73Ò'Fr×&÷r#âG·7–æW&w’ç&WfVçVUö&öçW2òFr†G·B‚'&WfVçVR"—ÒG·6–væVEW&6VçB‡7–æW&w’ç&WfVçVUö&öçW2—Ö’¢"'ÒG·7–æW&w’æW‡Vç6Uö&öçW2òFr†G·B‚&W‡Vç6W2"—ÒG·6–væVEW&6VçB‡7–æW&w’æW‡Vç6Uö&öçW2—Ö’¢"'ÓÂöF—cãÂö'F–6ÆSæ°§Ğ ¦gVæ7F–öâ&VæFW$Ö&¶WDw&÷W†w&÷W’°¢–b†w&÷WæÆö6¶VB’°¢&WGW&â ¢Ç6V7F–öâ6Æ73Ò&Ö&¶WBÖw&÷W#à¢ÆF—b6Æ73Ò&Ö&¶WBÖw&÷WÖ†VFW"#ãÆƒ3âG¶–æGW7G'”æÖR†w&÷Wæ–æGW7G'’—ÓÂöƒ3ãÇâG·B‚&Æö6¶VB"—ÓÂ÷ãÂöF—cà¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&BÆö6¶VBÖ6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr‡B‚&Æö6¶VB"’—ÓÂöF—cà¢Æƒ3âG¶–æGW7G'”æÖR†w&÷Wæ–æGW7G'’—ÓÂöƒ3à¢ÇâG·B‚'VæÆö6´–äÖWF&öw&W76–öâ"—ÓÂ÷à¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ"FFÖ÷VâÖÖWFâG·B‚&ÖWF&öw&W72"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢Â÷6V7F–öãà¢°¢Ğ¢&WGW&â ¢Ç6V7F–öâ6Æ73Ò&Ö&¶WBÖw&÷W#à¢ÆF—b6Æ73Ò&Ö&¶WBÖw&÷WÖ†VFW"#ãÆƒ3âG¶–æGW7G'”æÖR†w&÷Wæ–æGW7G'’—ÓÂöƒ3ãÇâG¶w&÷Wæ—FV×2æÆVæwF‡ÒG·B‚&öffW'2"—ÓÂ÷ãÂöF—cà¢ÆF—b6Æ73Ò&Ö&¶WBÖw&–B#à¢G¶w&÷Wæ—FV×2æÖ‚†'W6–æW72’Óâ ¢Æ'F–6ÆR6Æ73Ò&'W6–æW72Ö6&B#à¢ÆF—b6Æ73Ò'Fr×&÷r#âG·Fr†G·B‚&'W’"—ÒG¶ÖöæW’†'W6–æW72æ6÷7B—ÖÂ&66VçB"—ÒG·Fr‡&—6´'V6¶WDÆ&VÂ†'W6–æW72ç&—6²’—ÓÂöF—cà¢Æƒ3âG¶'W6–æW72ææÖWÓÂöƒ3à¢ÇâG¶'W6–æW74&ÇW&"†'W6–æW72—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚&W‡V7FVE&öf—B"—ÓÂ÷7ããÇ7G&öæsâG¶ÖöæW’†'W6–æW72ç&WfVçVRÒ'W6–æW72æW‡Vç6R—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&–æGW7G'”Æ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG¶–æGW7G'”æÖR†'W6–æW72æ–æGW7G'’—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&Ö7&õ6Vç6—F—f—G’"—ÓÂ÷7ããÇ7G&öæsâG¶Ö7&õ6Vç6—F—f—G’†'W6–æW72—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'7–æW&w”†öö·2"—ÓÂ÷7ããÇ7G&öæsâG·7–æW&w”†öö·2†'W6–æW72æ–B—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FFÖ'W“Ò"G¶'W6–æW72æ–GÒ"G¶6åF¶T7F–öâ†'W6–æW72æ6÷7B’ò""¢&F—6&ÆVB'ÓâG·B‚&'W’"—ÓÂö'WGFöãà¢Âö'F–6ÆSà¢’æ¦ö–â‚""—Ğ¢ÂöF—cà¢Â÷6V7F–öãà¢°§Ğ ¦gVæ7F–öâ7Fö6´ÆövôÖ&·W‡7Fö6²Â6—¦RÒ'6ÖÆÂ"’°¢6öç7B6Æ74æÖRÒ6—¦RÓÓÒ&Æ&vR"ò'7Fö6²ÖÆövò7Fö6²ÖÆövòÖÆ&vR"¢'7Fö6²ÖÆövò#°¢&WGW&â7Fö6²æÆövğ¢òÆF—b6Æ73Ò"G¶6Æ74æÖWÒ#ãÆ–Ör7&3Ò"G·7Fö6²æÆöv÷Ò"ÇCÒ"G·7Fö6²ææÖWÒ#ãÂöF—cæ ¢¢ÆF—b6Æ73Ò"G¶6Æ74æÖWÒ#âG·7Fö6²çF–6¶W"ç6Æ–6RƒÂ"—ÓÂöF—cæ°§Ğ ¦gVæ7F–öâ7Fö6µfÇVF–öä¶W’‡7Fö6²’°¢6öç7BRÒ7Fö6²çU&F–òÇÂ°¢–b‡7Fö6²ç6V7F÷"ÓÓÒ'FV6‚"’°¢–b‡RÂ#"’&WGW&â&6†VfÇVF–öâ#°¢–b‡RÃÒC‚’&WGW&â&f—%fÇVF–öâ#°¢&WGW&â&W‡Vç6—fUfÇVF–öâ#°¢Ğ¢–b‡RÂR’&WGW&â&6†VfÇVF–öâ#°¢–b‡RÃÒ3R’&WGW&â&f—%fÇVF–öâ#°¢&WGW&â&W‡Vç6—fUfÇVF–öâ#°§Ğ ¦gVæ7F–öâ7Fö6µG—T¶W’‡7Fö6²’°¢&WGW&â7Fö6²ç7Fö6µG—RÓÓÒ&F—f–FVæB"ò&F—f–FVæE7Fö6²"¢&w&÷wF…7Fö6²#°§Ğ ¦gVæ7F–öâ7Fö6µG&VæD¶W’‡7Fö6²’°¢–b‡7Fö6²æÖöÖVçGVÒâãB’&WGW&â'7Fö6µ&—6–ær#°¢–b‡7Fö6²æÖöÖVçGVÒÂÓãB’&WGW&â'7Fö6´fÆÆ–ær#°¢&WGW&â'7Fö6´æWWG&Â#°§Ğ ¦gVæ7F–öâ6†'Eö–çG2‡ö–çG2Âv–GF‚Â†V–v‡BÂFF–ærÒ²ÆVgC¢3‚Â&–v‡C¢BÂF÷¢"Â&÷GFöÓ¢#‚Ò’°¢6öç7BfÇVW2Òö–çG3òæÆVæwF‚òö–çG2¢³ÂÓ°¢6öç7BÖ–âÒÖF‚æÖ–â‚ââçfÇVW2“°¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââçfÇVW2“°¢6öç7B&ævRÒÖF‚æÖ‚ƒãÂÖ‚ÒÖ–â“°¢6öç7BÆ÷Ev–GF‚Òv–GF‚ÒFF–æræÆVgBÒFF–ærç&–v‡C°¢6öç7BÆ÷D†V–v‡BÒ†V–v‡BÒFF–ærçF÷ÒFF–æræ&÷GFöÓ°¢&WGW&âfÇVW2æÖ‚‡ö–çBÂ–æFW‚’Óâ°¢6öç7B‚ÒfÇVW2æÆVæwF‚ÓÓÒòFF–æræÆVgB²‡Æ÷Ev–GF‚ò"’¢FF–æræÆVgB²‚†–æFW‚ò‡fÇVW2æÆVæwF‚Ò’’¢Æ÷Ev–GF‚“°¢6öç7B’ÒFF–ærçF÷²‡Æ÷D†V–v‡BÒ‚‚‡ö–çBÒÖ–â’ò&ævR’¢Æ÷D†V–v‡B’“°¢&WGW&â²‚Â’ÂfÇVS¢ö–çBÂ–æFW‚Ó°¢Ò“°§Ğ ¦gVæ7F–öâ&VæFW$–çFW&7F—fU7Fö6´6†'B‡ö–çG2ÂÖöÖVçGVÒ’°¢–b‚ö–çG3òæÆVæwF‚’&WGW&âÆF—b6Æ73Ò'7Fö6²Ö6†'BÖV×G’#âG·B‚'&–6T†—7F÷'”V×G’"—ÓÂöF—cæ°¢6öç7Bv–GF‚Ò3#°¢6öç7B†V–v‡BÒ##°¢6öç7B6ö÷&G2Ò6†'Eö–çG2‡ö–çG2Âv–GF‚Â†V–v‡B“°¢6öç7BfÇVW2Òö–çG3°¢6öç7BÖ–âÒÖF‚æÖ–â‚ââçfÇVW2“°¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââçfÇVW2“°¢6öç7BÖ–BÒ†Ö–â²Ö‚’ò#°¢6öç7B7G&ö¶RÒÖöÖVçGVÒãÒò"3c†#s""¢"6&#FC"#°¢6öç7Bf–ÆÂÒÖöÖVçGVÒãÒò'&v&ƒRÃ3’ÃBÃã"’"¢'&v&ƒƒrÃsBÃcbÃã"’#°¢6öç7BÆ÷DfÆö÷"Ò†V–v‡BÒ#ƒ°¢6öç7BF‚Ò6ö÷&G2æÖ‚‡ö–çBÂ–æFW‚’ÓâG¶–æFW‚ÓÓÒò$Ò"¢$Â'ÒG·ö–çBç‚çFôf—†VBƒ"—ÒG·ö–çBç’çFôf—†VBƒ"—Ö’æ¦ö–â‚""“°¢6öç7B&VÒG·F‡ÒÂG¶6ö÷&G5¶6ö÷&G2æÆVæwF‚ÒÒç‚çFôf—†VBƒ"—ÒG·Æ÷DfÆö÷"çFôf—†VBƒ"—ÒÂG¶6ö÷&G5³Òç‚çFôf—†VBƒ"—ÒG·Æ÷DfÆö÷"çFôf—†VBƒ"—Ò¦°¢6öç7B”Æ&VÇ2Ò¶Ö‚ÂÖ–BÂÖ–åÓ°¢6öç7B„Æ&VÇ2Ò°¢²ƒ¢6ö÷&G5³Òç‚ÂÆ&VÃ¢G·B‚'GW&äÆ&VÅ6†÷'B"—ÒÒÀ¢²ƒ¢6ö÷&G5´ÖF‚æfÆö÷"‚†6ö÷&G2æÆVæwF‚Ò’ò"•Òç‚ÂÆ&VÃ¢G·B‚'GW&äÆ&VÅ6†÷'B"—ÒG´ÖF‚æfÆö÷"‚†6ö÷&G2æÆVæwF‚²’ò"—ÖÒÀ¢²ƒ¢6ö÷&G5¶6ö÷&G2æÆVæwF‚ÒÒç‚ÂÆ&VÃ¢G·B‚'GW&äÆ&VÅ6†÷'B"—ÒG¶6ö÷&G2æÆVæwF‡ÖĞ¢Ó°¢&WGW&â ¢Ç7fr6Æ73Ò'7Fö6²ÖgVÆÂÖ6†'B"f–Wt&÷ƒÒ#G·v–GF‡ÒG¶†V–v‡GÒ"&–ÖÆ&VÃÒ"G·B‚&÷Vä6†'B"—Ò#à¢G·”Æ&VÇ2æÖ‚‡fÇVRÂ–æFW‚’Óâ°¢6öç7B’Ò"²†–æFW‚¢‚††V–v‡BÒC’ò"’“°¢&WGW&âÆsãÆÆ–æRƒÒ#3‚"“Ò"G·—Ò"ƒ#Ò"G·v–GF‚ÒGÒ"“#Ò"G·—Ò"7G&ö¶SÒ'&v&ƒ#BÃ#2Ã#Ãã‚’"7G&ö¶R×v–GFƒÒ##ãÂöÆ–æSãÇFW‡BƒÒ#""“Ò"G·’²GÒ"6Æ73Ò'7Fö6²Ö†—2×FW‡B#âG·7Fö6´ÖöæW’‡fÇVR—ÓÂ÷FW‡CãÂösæ°¢Ò’æ¦ö–â‚""—Ğ¢ÇF‚CÒ"G¶&VÒ"f–ÆÃÒ"G¶f–ÆÇÒ#ãÂ÷Fƒà¢ÇF‚CÒ"G·F‡Ò"f–ÆÃÒ&æöæR"7G&ö¶SÒ"G·7G&ö¶WÒ"7G&ö¶R×v–GFƒÒ#2ãR"7G&ö¶RÖÆ–æV6Ò'&÷VæB"7G&ö¶RÖÆ–æV¦ö–ãÒ'&÷VæB#ãÂ÷Fƒà¢G·„Æ&VÇ2æÖ‚†—FVÒ’ÓâÇFW‡BƒÒ"G¶—FVÒç‡Ò"“Ò"G¶†V–v‡BÒgÒ"FW‡BÖæ6†÷#Ò&Ö–FFÆR"6Æ73Ò'7Fö6²Ö†—2×FW‡B#âG¶—FVÒæÆ&VÇÓÂ÷FW‡Cæ’æ¦ö–â‚""—Ğ¢Â÷7fsà¢°§Ğ ¦gVæ7F–öâ&VæFW%7Fö6´6&B‡7Fö6²’°¢6öç7B†öÆF–ærÒ7FFRç'Vâæ6ö×ç’ç7Fö6·2æf–æB‚†—FVÒ’Óâ—FVÒç7Fö6´–BÓÓÒ7Fö6²æ–B“°¢&WGW&â ¢Æ'WGFöâ6Æ73Ò'7Fö6²ÖÆ—7BÖ—FVÒ"FFÖ÷Vâ×7Fö6³Ò"G·7Fö6²æ–GÒ#à¢G·7Fö6´ÆövôÖ&·W‡7Fö6²—Ğ¢ÆF—b6Æ73Ò'7Fö6²ÖÖ–â#à¢Ç7G&öæsâG·7Fö6²ææÖWÓÂ÷7G&öæsà¢Ç7ãâG·7Fö6²çF–6¶W'Ò+rG¶–æGW7G'”æÖR‡7Fö6²ç6V7F÷"—ÓÂ÷7ãà¢ÆF—b6Æ73Ò'Fr×&÷r6ö×7B×Fw2#âG·Fr‡B‡7Fö6µG—T¶W’‡7Fö6²’’Â&66VçB"—ÒG·7Fö6²ç7Fö6µG—RÓÓÒ&F—f–FVæB"òFr†G·B‚&F—f–FVæE––VÆDÆ&VÂ"—ÒG·W&6VçB‡7Fö6²æF—f–FVæE÷––VÆB—Ö’¢"'ÓÂöF—câG¶†öÆF–æròÆVÓâG·B‚&÷væVE6†&W2"Â²6÷VçC¢†öÆF–ærç6†&W2Ò—ÓÂöVÓæ¢"'Ğ¢ÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²×6–FR#à¢Ç7G&öæsâG·7Fö6´ÖöæW’‡7Fö6²ç&–6R—ÓÂ÷7G&öæsà¢Ç7â6Æ73Ò"G·7Fö6²æÖöÖVçGVÒãÒò'÷6—F—fR"¢&æVvF—fR'Ò#âG·6–væVE7Fö6µW&6VçB‡7Fö6²æÖöÖVçGVÒ—ÓÂ÷7ãà¢G·&VæFW%7&¶Æ–æR‡7Fö6²ç&–6T†—7F÷'’ÇÂµÒÂ7Fö6²æÖöÖVçGVÒ—Ğ¢ÂöF—cà¢Âö'WGFöãà¢°§Ğ ¦gVæ7F–öâ&VæFW%7&¶Æ–æR‡ö–çG2ÂÖöÖVçGVÒ’°¢6öç7BF‚Ò6†'EF‚‡ö–çG2Â“"Â3B“°¢6öç7BFöæRÒÖöÖVçGVÒãÒò"3c†#s""¢"6&#FC"#°¢&WGW&âÇ7fr6Æ73Ò'7&¶Æ–æR"f–Wt&÷ƒÒ#“"3B"&–Ö†–FFVãÒ'G'VR#ãÇF‚CÒ"G·F‡Ò"f–ÆÃÒ&æöæR"7G&ö¶SÒ"G·FöæWÒ"7G&ö¶R×v–GFƒÒ#"ãR"7G&ö¶RÖÆ–æV6Ò'&÷VæB"7G&ö¶RÖÆ–æV¦ö–ãÒ'&÷VæB"óãÂ÷7fsæ°§Ğ ¦gVæ7F–öâ&VæFW$gVÆÄ6†'B‡ö–çG2ÂÖöÖVçGVÒ’°¢6öç7Bv–GF‚Ò3#°¢6öç7B†V–v‡BÒ#°¢6öç7BF‚Ò6†'EF‚‡ö–çG2Âv–GF‚Â†V–v‡B“°¢6öç7B&VÒ6†'D&V‡ö–çG2Âv–GF‚Â†V–v‡B“°¢6öç7B7G&ö¶RÒÖöÖVçGVÒãÒò"3c†#s""¢"6&#FC"#°¢6öç7Bf–ÆÂÒÖöÖVçGVÒãÒò'&v&ƒRÃ3’ÃBÃã"’"¢'&v&ƒƒrÃsBÃcbÃã"’#°¢&WGW&âÇ7fr6Æ73Ò'7Fö6²ÖgVÆÂÖ6†'B"f–Wt&÷ƒÒ#G·v–GF‡ÒG¶†V–v‡GÒ"&–ÖÆ&VÃÒ"G·B‚&÷Vä6†'B"—Ò#ãÇF‚CÒ"G¶&VÒ"f–ÆÃÒ"G¶f–ÆÇÒ#ãÂ÷FƒãÇF‚CÒ"G·F‡Ò"f–ÆÃÒ&æöæR"7G&ö¶SÒ"G·7G&ö¶WÒ"7G&ö¶R×v–GFƒÒ#B"7G&ö¶RÖÆ–æV6Ò'&÷VæB"7G&ö¶RÖÆ–æV¦ö–ãÒ'&÷VæB#ãÂ÷FƒãÂ÷7fsæ°§Ğ ¦gVæ7F–öâ6†'EF‚‡ö–çG2Âv–GF‚Â†V–v‡B’°¢6öç7BfÇVW2Òö–çG3òæÆVæwF‚òö–çG2¢³ÂÂÂÓ°¢6öç7BÖ–âÒÖF‚æÖ–â‚ââçfÇVW2“°¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââçfÇVW2“°¢6öç7B&ævRÒÖF‚æÖ‚ƒãÂÖ‚ÒÖ–â“°¢&WGW&âfÇVW2æÖ‚‡ö–çBÂ–æFW‚’Óâ°¢6öç7B‚ÒfÇVW2æÆVæwF‚ÓÓÒòv–GF‚ò"¢†–æFW‚ò‡fÇVW2æÆVæwF‚Ò’’¢v–GFƒ°¢6öç7B’Ò†V–v‡BÒ‚‡ö–çBÒÖ–â’ò&ævR’¢††V–v‡BÒ’ÒS°¢&WGW&âG¶–æFW‚ÓÓÒò$Ò"¢$Â'ÒG·‚çFôf—†VBƒ"—ÒG·’çFôf—†VBƒ"—Ö°¢Ò’æ¦ö–â‚""“°§Ğ ¦gVæ7F–öâ6†'D&V‡ö–çG2Âv–GF‚Â†V–v‡B’°¢6öç7BÆ–æRÒ6†'EF‚‡ö–çG2Âv–GF‚Â†V–v‡B“°¢6öç7BfÇVW2Òö–çG3òæÆVæwF‚òö–çG2¢³ÂÂÂÓ°¢&WGW&âG¶Æ–æWÒÂG·v–GF‡ÒG¶†V–v‡GÒÂG¶†V–v‡GÒ¦°§Ğ ¦gVæ7F–öâ&VæFW%7Fö6´FWF–Å6†VWB‚’°¢6öç7B7Fö6²Ò7Fö6´'”–B‡7FFRæ7F—fU7Fö6´–B“°¢–b‚7Fö6²’&WGW&â"#°¢6öç7B†öÆF–ærÒ7Fö6´†öÆF–ær‡7Fö6²æ–B“°¢6öç7B†—7F÷'’Ò‡7Fö6²ç&–6T†—7F÷'’ÇÂ·7Fö6²ç&–6UÒ’ç6Æ–6R‚Ó“°¢6öç7B'W”÷&FW"Ò6Æ7VÆFT'W”÷&FW"‡7Fö6²æ–BÂ7FFRç7Fö6´'W•W&6VçB“°¢6öç7B6VÆÄ÷&FW"Ò6Æ7VÆFU6VÆÄ÷&FW"‡7Fö6²æ–BÂ7FFRç7Fö6µ6VÆÅW&6VçB“°¢6öç7B÷6—F–öåfÇVRÒ†öÆF–ærò²††öÆF–ærç6†&W2¢7Fö6²ç&–6R’çFôf—†VBƒ"’¢°¢6öç7B6÷7D&6—2Ò†öÆF–ærò²††öÆF–æræfW&vU&–6R¢†öÆF–ærç6†&W2’çFôf—†VBƒ"’¢°¢6öç7B&öf—DÆ÷72Ò†öÆF–ærò²‡÷6—F–öåfÇVRÒ6÷7D&6—2’çFôf—†VBƒ"’¢°¢6öç7B&öf—DÆ÷75W&6VçBÒ†öÆF–ærbb6÷7D&6—2âò&öf—DÆ÷72ò6÷7D&6—2¢°¢6öç7BF—f–FVæD–æ6öÖRÒ†öÆF–ærò²‡7Fö6²ç&–6R¢†öÆF–ærç6†&W2¢‡7Fö6²æF—f–FVæE÷––VÆBÇÂ’’çFôf—†VBƒ"’¢°¢6öç7BG&FTÖöFRÒ7FFRç6VÆV7FVEG&FTÖöFS°¢&WGW&â ¢ÆF—b6Æ73Ò'7Fö6²×6†VWBÖ÷fW&Æ’"FFÖ6Æ÷6R×7Fö6²×6†VWCà¢Æ'F–6ÆR6Æ73Ò'7Fö6²×6†VWB"öæ6Æ–6³Ò&WfVçBç7F÷&÷vF–öâ‚’#à¢ÆF—b6Æ73Ò'7Fö6²×6†VWBÖ†VB7Fö6²×6†VWBÖ†VBÖ6ö×7B#à¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ6Æ–Ò7Fö6²Ö6Æ÷6RÖ'WGFöâ"FFÖ6Æ÷6R×7Fö6²×6†VWCâG·B‚&6Æ÷6U6†VWB"—ÓÂö'WGFöãà¢ÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²Ö–FVçF—G’×&÷r#à¢G·7Fö6´ÆövôÖ&·W‡7Fö6²Â&Æ&vR"—Ğ¢ÆF—b6Æ73Ò'7Fö6²Ö–FVçF—G’×FW‡B#à¢Æƒ3âG·7Fö6²ææÖWÓÂöƒ3à¢ÆF—b6Æ73Ò'7Fö6²ÖÖWFÖÆ–æR#à¢Ç6Æ73Ò'7Fö6²×F–6¶W"ÖÆ–æR#âG·7Fö6²çF–6¶W'Ò+rG¶–æGW7G'”æÖR‡7Fö6²ç6V7F÷"—ÓÂ÷à¢Ç7â6Æ73Ò'7Fö6²Öw&÷wF‚×–ÆÂ#âG·B‡7Fö6µG—T¶W’‡7Fö6²’—ÓÂ÷7ãà¢ÂöF—cà¢ÂöF—cà¢ÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²×6†VWB×&–6R#à¢Ç7G&öæsâG·7Fö6´ÖöæW’‡7Fö6²ç&–6R—ÓÂ÷7G&öæsà¢Ç7â6Æ73Ò"G·7Fö6²æÖöÖVçGVÒãÒò'÷6—F—fR"¢&æVvF—fR'Ò#âG·6–væVE7Fö6µW&6VçB‡7Fö6²æÖöÖVçGVÒ—ÒG·B‚'F†—5GW&â"—ÓÂ÷7ãà¢ÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²Ö6†'BÖ6&B#à¢G·&VæFW$–çFW&7F—fU7Fö6´6†'B††—7F÷'’Â7Fö6²æÖöÖVçGVÒ—Ğ¢ÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²×6†VWB×6–FRÖ–æfò#à¢ÆF—cãÇ7ãâG·B‚'U&F–ôÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG·7Fö6²çU&F–òçFôf—†VBƒ—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢G¶†öÆF–ærò ¢Æ'F–6ÆR6Æ73Ò'G&FRÖ6&B#à¢ÆF—b6Æ73Ò'æVÂÖ†VB#ãÇ7G&öæsâG·B‚'–÷W%÷6—F–öâ"—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—b6Æ73Ò'7Fö6²ÖF—f–FVæBÖ–æÆ–æRG¶F—f–FVæD–æ6öÖRâò'÷6—F—fR"¢&×WFVB'Ò#âG¶F—f–FVæD–æ6öÖRâòB‚&F—f–FVæD–æ6öÖUW%GW&â"Â²fÇVS¢7Fö6´ÖöæW’†F—f–FVæD–æ6öÖR’Ò’¢B‚&æôF—f–FVæD–æ6öÖR"—ÓÂöF—cà¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–727Fö6²ÖFWF–ÂÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚'6†&W2"—ÓÂ÷7ããÇ7G&öæsâG¶†öÆF–ærç6†&W7ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&fW&vU&–6R"—ÓÂ÷7ããÇ7G&öæsâG·7Fö6´ÖöæW’††öÆF–æræfW&vU&–6R—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'÷6—F–öåfÇVR"—ÓÂ÷7ããÇ7G&öæsâG·7Fö6´ÖöæW’‡÷6—F–öåfÇVR—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'&öf—DÆ÷72"—ÓÂ÷7ããÇ7G&öær6Æ73Ò"G·&öf—DÆ÷72ãÒò'÷6—F—fR"¢&æVvF—fR'Ò#âG·6–væVE7Fö6´ÖöæW’‡&öf—DÆ÷72—ÒòG·6–væVE7Fö6µW&6VçB‡&öf—DÆ÷75W&6VçB—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&F—f–FVæD–æ6öÖR"—ÓÂ÷7ããÇ7G&öæsâG·7Fö6´ÖöæW’†F—f–FVæD–æ6öÖR—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚&F—f–FVæEW%GW&â"—ÓÂ÷7ããÇ7G&öæsâG·W&6VçB‡7Fö6²æF—f–FVæE÷––VÆB—ÓÂ÷7G&öæsãÂöF—cà¢ÂöF—cà¢Âö'F–6ÆSà¢¢"'Ğ¢Æ'F–6ÆR6Æ73Ò'G&FRÖ6&B#à¢ÆF—b6Æ73Ò'7Fö6²×G&FRÖ7F–öç2#à¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâG·G&FTÖöFRÓÓÒ&'W’"ò'6VÆV7FVB×G&FRÖÖöFR"¢"'Ò"FF×7Fö6²×G&FRÖÖöFSÒ&'W’#âG¶†öÆF–æròB‚&'W•6†&W2"’¢B‚&'W’"—ÓÂö'WGFöãà¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâG·G&FTÖöFRÓÓÒ'6VÆÂ"ò'6VÆV7FVB×G&FRÖÖöFR"¢"'Ò"FF×7Fö6²×G&FRÖÖöFSÒ'6VÆÂ"G¶†öÆF–ærò""¢&F—6&ÆVB'ÓâG·B‚'6VÆÂ"—ÓÂö'WGFöãà¢ÂöF—cà¢G·G&FTÖöFRÓÓÒ&'W’"ò ¢ÆF—b6Æ73Ò'7Fö6²×G&FR×æVÂ#à¢G·&VæFW%G&FUW&6VçD&"‚&'W’"Â7FFRç7Fö6´'W•W&6VçB—Ğ¢ÆF—b6Æ73Ò'G&FR×7VÖÖ'’#ãÇ7âFF×G&FRÖÖ÷VçCÒ&'W’#âG·B‚&Ö÷VçDÆ&VÂ"—ÒG·7Fö6´ÖöæW’†'W”÷&FW"æ6÷7B—ÓÂ÷7ããÇ7G&öærFF×G&FR×6†&W3Ò&'W’#âG¶'W”÷&FW"ç6†&W7ÒG·B‚'6†&W2"’çFôÆ÷vW$66R‚—ÓÂ÷7G&öæsãÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ"FFÖ'W’×7Fö6³Ò"G·7Fö6²æ–GÒ"FF×G&FRÖ7F–öãÒ&'W’"G¶'W”÷&FW"ç6†&W2âbb6åF¶T7F–öâ†'W”÷&FW"æ6÷7B’ò""¢&F—6&ÆVB'ÓâG·B‚&6öæf—&Ô'W’"—ÓÂö'WGFöãà¢ÂöF—cà¢¢"'Ğ¢G·G&FTÖöFRÓÓÒ'6VÆÂ"ò ¢ÆF—b6Æ73Ò'7Fö6²×G&FR×æVÂ#à¢G·&VæFW%G&FUW&6VçD&"‚'6VÆÂ"Â7FFRç7Fö6µ6VÆÅW&6VçB—Ğ¢ÆF—b6Æ73Ò'G&FR×7VÖÖ'’#ãÇ7âFF×G&FRÖÖ÷VçCÒ'6VÆÂ#âG·B‚&Ö÷VçDÆ&VÂ"—ÒG·7Fö6´ÖöæW’‡6VÆÄ÷&FW"çfÇVR—ÓÂ÷7ããÇ7G&öærFF×G&FR×6†&W3Ò'6VÆÂ#âG·6VÆÄ÷&FW"ç6†&W7ÒG·B‚'6†&W2"’çFôÆ÷vW$66R‚—ÓÂ÷7G&öæsãÂöF—cà¢Æ'WGFöâ6Æ73Ò'6V6öæF'’Ö'WGFöâ"FF×6VÆÂ×7Fö6³Ò"G·7Fö6²æ–GÒ"FF×G&FRÖ7F–öãÒ'6VÆÂ"G·6VÆÄ÷&FW"ç6†&W2âbb6åF¶T7F–öâƒ’ò""¢&F—6&ÆVB'ÓâG·B‚&6öæf—&Õ6VÆÂ"—ÓÂö'WGFöãà¢ÂöF—cà¢¢"'Ğ¢Âö'F–6ÆSà¢Âö'F–6ÆSà¢ÂöF—cà¢°§Ğ ¦gVæ7F–öâ&VæFW%G&FUW&6VçD&"†ÖöFRÂfÇVR’°¢&WGW&â ¢ÆF—b6Æ73Ò'G&FRÖ&"Ö&Æö6²#à¢ÆF—b6Æ73Ò'G&FRÖ&""FF×G&FRÖ&#Ò"G¶ÖöFWÒ#à¢ÆF—b6Æ73Ò'G&FRÖ&"Öf–ÆÂ"7G–ÆSÒ'v–GFƒ¢G´ÖF‚ç&÷VæB‡fÇVR¢—ÒR#ãÂöF—cà¢ÆF—b6Æ73Ò'G&FRÖ&"×F‡VÖ""7G–ÆSÒ&ÆVgC¢G´ÖF‚ç&÷VæB‡fÇVR¢—ÒR#ãÂöF—cà¢ÂöF—cà¢ÂöF—cà¢°§Ğ ¦gVæ7F–öâÖ7&ô6&B‡F—FÆRÂfÇVRÂ†VÇW"’°¢&WGW&âÆ'F–6ÆR6Æ73Ò&Ö7&òÖ6&B#ãÆƒ3âG·F—FÆWÓÂöƒ3ãÇ6Æ73Ò&†VÇW"#âG¶†VÇW'ÓÂ÷ãÆF—b6Æ73Ò'Fr×&÷r#âG·Fr‡fÇVRÂ&66VçB"—ÓÂöF—cãÂö'F–6ÆSæ°§Ğ ¦gVæ7F–öâÖ7&õ–ÆÂ†Æ&VÂÂfÇVR’°¢&WGW&âÆF—b6Æ73Ò&Ö7&ò×–ÆÂ#ãÇ7ãâG¶Æ&VÇÓÂ÷7ããÇ7G&öæsâG·fÇVWÓÂ÷7G&öæsãÂöF—cæ°§Ğ ¦gVæ7F–öâV6öæö×•&Vv–ÖR‚’°¢6öç7BÖ7&òÒVffV7F—fTÖ7&ò‚“°¢–b†Ö7&òæVæW&w”6÷7BãÒãR’&WGW&â²æÖS¢B‚&VæW&w”7&—6—2"’ÂFW67&—F–öã¢B‚&VæW&w”7&—6—4FW62"’Âv–ææW'3¢·B‚&VæW&w’"’ÂB‚&66„Æ&VÂ"•ÒÂÆ÷6W'3¢·B‚'G&ç7÷'B"’ÂB‚&ÖçVf7GW&–æt'W6–æW76W2"•ÒÓ°¢–b†Ö7&òæ–çFW&W7E&FRãÒãSR’&WGW&â²æÖS¢B‚&†–v…&FU7VVW¦R"’ÂFW67&—F–öã¢B‚&†–v…&FU7VVW¦TFW62"’Âv–ææW'3¢·B‚&66„Æ&VÂ"’ÂB‚&FVfVç6—fT'W6–æW76W2"•ÒÂÆ÷6W'3¢·B‚'&VÄW7FFT'W6–æW76W2"’ÂB‚&ÆWfW&vVDW‡ç6–öâ"•ÒÓ°¢–b†Ö7&òæ–æfÆF–öâãÒãR’&WGW&â²æÖS¢B‚&–æfÆF–öå6†ö6²"’ÂFW67&—F–öã¢B‚&–æfÆF–öå6†ö6´FW62"’Âv–ææW'3¢·B‚'&–6–æu÷vW""’ÂB‚&ÖVF–"•ÒÂÆ÷6W'3¢·B‚'&WF–Â"’ÂB‚&VæW&w’"•ÒÓ°¢–b†Ö7&òæFVÖæBÃÒã“"’&WGW&â²æÖS¢B‚'&V6W76–öâ"’ÂFW67&—F–öã¢B‚'&V6W76–öäFW62"’Âv–ææW'3¢·B‚&66„Æ&VÂ"’ÂB‚&Vff–6–VçD÷W&F÷'2"•ÒÂÆ÷6W'3¢·B‚'&WF–Â"’ÂB‚'7V7VÆF—fT76WG2"•ÒÓ°¢–b†Ö7&òæ7&VF—Df–Æ&–Æ—G’ãÒã"bbÖ7&òæ–çFW&W7E&FRÃÒã3R’&WGW&â²æÖS¢B‚&6†V7&VF—D&ööÒ"’ÂFW67&—F–öã¢B‚&6†V7&VF—D&ööÔFW62"’Âv–ææW'3¢·B‚'&VÄW7FFT'W6–æW76W2"’ÂB‚&w&÷wF…Æ—2"•ÒÂÆ÷6W'3¢·B‚&–FÆT66‚"’ÂB‚'6Æ÷t÷W&F÷'2"•ÒÓ°¢&WGW&â²æÖS¢B‚&&Ææ6VDW‡ç6–öâ"’ÂFW67&—F–öã¢B‚&&Ææ6VDW‡ç6–öäFW62"’Âv–ææW'3¢·B‚&F—fW'6–f–VE÷'FföÆ–÷2"’ÂB‚'7–æW&w•7F6·2"•ÒÂÆ÷6W'3¢·B‚'6–ævÆT76WE'Vç2"’ÂB‚&ÆWfW&vVDW‡ç6–öâ"•ÒÓ°§Ğ ¦gVæ7F–öâFV6—6–öäFW67&—F–öâ†6†ö–6R’°¢–b†6†ö–6Rç&WfVçVUö&öçW2bb6†ö–6Rç&—6²â’&WGW&âB‚&†–v‚"“°¢–b†6†ö–6RæFV'Bbb6†ö–6RæFV'BÂ’&WGW&âB‚&Æ÷vW""“°¢–b†6†ö–6Ræ66‚bb6†ö–6Ræ66‚â’&WGW&âB‚&66„Æ&VÂ"“°¢–b†6†ö–6RæW‡Vç6Uö&öçW2bb6†ö–6RæW‡Vç6Uö&öçW2Â’&WGW&âB‚&W‡Vç6W2"“°¢&WGW&âB‚'7G&FVv–56†–gB"“°§Ğ ¦gVæ7F–öâ&—6´Æ&VÂ†6†ö–6R’°¢–b‚†6†ö–6Rç&—6²ÇÂ’ãÒãB’&WGW&âB‚&†–v‚"“°¢–b‚†6†ö–6Rç&—6²ÇÂ’â’&WGW&âB‚&ÖVF—VÒ"“°¢–b‚†6†ö–6Rç&—6²ÇÂ’Â’&WGW&âB‚&Æ÷vW""“°¢&WGW&âB‚&æWWG&Â"“°§Ğ ¦gVæ7F–öâ&—6µFöæR†6†ö–6R’°¢–b‚†6†ö–6Rç&—6²ÇÂ’ãÒãB’&WGW&â"#°¢–b‚†6†ö–6Rç&—6²ÇÂ’ÃÒ’&WGW&â&FöæR#°¢&WGW&â&7F—fR#°§Ğ ¦gVæ7F–öâ6åF¶T7F–öâ†6÷7B’°¢6öç7B'VâÒ7FFRç'Vã°¢&WGW&â'VâæWfVçE&W6öÇfVBbb'VâçVæF–æt7F–öäFöæRbb'Vâæf–æ—6†VBbb'Vâæ6ö×ç’æ66‚ãÒ6÷7C°§Ğ ¦gVæ7F–öâWw&FT6÷7B†÷væVB’°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢&WGW&âÖF‚ç&÷VæB†'W6–æW72æ6÷7B¢ƒãSR²÷væVBæÆWfVÂ¢ã#R’“°§Ğ ¦gVæ7F–öâ'W6–æW74'”–B†–B’°¢&WGW&â7FFRæ'W6–æW76W2æf–æB‚†—FVÒ’Óâ—FVÒæ–BÓÓÒ–B“°§Ğ ¦gVæ7F–öâ–æGW7G'”æÖR†–B’°¢6öç7BÖÒ²&WF–Ã¢B‚'&WF–Â"’Â—C¢B‚'FV6‚"’ÂFV6ƒ¢B‚'FV6‚"’ÂÆöv—7F–73¢B‚&Æöv—7F–72"’ÂÖçVf7GW&–æs¢B‚&–æGW7G'’"’Â–æGW7G'“¢B‚&–æGW7G'’"’ÂVæW&w“¢B‚&VæW&w’"’Â&VÅöW7FFS¢B‚'&VÄW7FFR"’ÂÖVF–¢B‚&ÖVF–"’ÂgVæC¢B‚&f–ææ6R"’Ó°¢&WGW&âÖ¶–EÒÇÂ–C°§Ğ ¦gVæ7F–öâ'W6–æW74&ÇW&"†'W6–æW72’°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ'&WF–Â"’&WGW&âB‚&6öç7VÖW$'W6–æW72"“°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ&—B"’&WGW&âB‚'66Æ&ÆUW6–FR"“°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ&Æöv—7F–72"’&WGW&âB‚&–æg&7G'V7GW&UÆ’"“°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ&ÖçVf7GW&–ær"’&WGW&âB‚&†–v„÷WGWD76WB"“°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ&VæW&w’"’&WGW&âB‚&FVfVç6—fT76WB"“°¢–b†'W6–æW72æ–æGW7G'’ÓÓÒ'&VÅöW7FFR"’&WGW&âB‚&ÆöætGW&F–öä76WB"“°¢&WGW&âB‚&VF–Væ6T'W6–æW72"“°§Ğ ¦gVæ7F–öâ7–æW&w”†öö·2†'W6–æW74–B’°¢6öç7B†öö·2Ò7FFRç7–æW&v–W2æf–ÇFW"‚†—FVÒ’Óâ—FVÒç&WV—&W2æ–æ6ÇVFW2†'W6–æW74–B’’æÖ‚†—FVÒ’Óâ—FVÒææÖR“°¢&WGW&â†öö·2æÆVæwF‚ò†öö·2ç6Æ–6RƒÂ"’æ¦ö–â‚"Â"’¢B‚'7FæFÆöæR"“°§Ğ ¦gVæ7F–öâÖ7&õ6Vç6—F—f—G’†'W6–æW72’°¢6öç7B6–væÇ2ÒµÓ°¢–b†'W6–æW72ç&FU÷6Vç6—F—f—G’ãÒãB’6–væÇ2çW6‚‡B‚'&FW2"’“°¢–b†'W6–æW72æFVÖæE÷6Vç6—F—f—G’ãÒãr’6–væÇ2çW6‚‡B‚&FVÖæB"’“°¢–b†'W6–æW72æVæW&w•÷W6RãÒãr’6–væÇ2çW6‚‡B‚&VæW&w’"’“°¢&WGW&â6–væÇ2æÆVæwF‚ò6–væÇ2æ¦ö–â‚"Â"’¢B‚&&Ææ6VB"“°§Ğ ¦gVæ7F–öâÖF6…&—6´f–ÇFW"‡&—6²Âf–ÇFW"’°¢–b†f–ÇFW"ÓÓÒ&Æ÷r"’&WGW&â&—6²ÃÒãS°¢–b†f–ÇFW"ÓÓÒ&Ö–B"’&WGW&â&—6²âãRbb&—6²ÃÒã“°¢–b†f–ÇFW"ÓÓÒ&†–v‚"’&WGW&â&—6²âã“°¢&WGW&âG'VS°§Ğ ¦gVæ7F–öâ&—6´'V6¶WDÆ&VÂ‡&—6²’°¢–b‡&—6²ÃÒãR’&WGW&âB‚&Æ÷u&—6´'V6¶WB"“°¢–b‡&—6²ÃÒã’’&WGW&âB‚&Ö–E&—6´'V6¶WB"“°¢&WGW&âB‚&†–v…&—6´'V6¶WB"“°§Ğ ¦gVæ7F–öâ&FT–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRãÒãSRòB‚'&FT–ç6–v‡D†–v‚"’¢B‚'&FT–ç6–v‡DÆ÷r"“°§Ğ ¦gVæ7F–öâ–æfÆF–öä–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRãÒãRòB‚&–æfÆF–öä–ç6–v‡D†–v‚"’¢B‚&–æfÆF–öä–ç6–v‡DÆ÷r"“°§Ğ ¦gVæ7F–öâFVÖæD–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRÃÒã“"òB‚&FVÖæD–ç6–v‡DÆ÷r"’¢B‚&FVÖæD–ç6–v‡D†–v‚"“°§Ğ ¦gVæ7F–öâVæW&w”–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRãÒãRòB‚&VæW&w”–ç6–v‡D†–v‚"’¢B‚&VæW&w”–ç6–v‡DÆ÷r"“°§Ğ ¦gVæ7F–öâ7&VF—D–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRãÒã"òB‚&7&VF—D–ç6–v‡D†–v‚"’¢B‚&7&VF—D–ç6–v‡DÆ÷r"“°§Ğ ¦gVæ7F–öâÖ&¶WE&—6´–ç6–v‡B‡fÇVR’°¢&WGW&âfÇVRãÒã"òB‚&Ö&¶WE&—6´–ç6–v‡D†–v‚"’¢B‚&Ö&¶WE&—6´–ç6–v‡DÆ÷r"“°§Ğ ¦gVæ7F–öâFW67&–&TVffV7G2‡6÷W&6R’°¢6öç7B'G2ÒµÓ°¢–b‡6÷W&6Ræ66‚’'G2çW6‚†G·B‚&66‚"—ÒG·6–væVDÖöæW’‡6÷W&6Ræ66‚—Ö“°¢–b‡6÷W&6RæFV'B’'G2çW6‚†G·B‚&FV'B"—ÒG·6–væVDÖöæW’‡6÷W&6RæFV'B—Ö“°¢–b‡6÷W&6Rç&—6²’'G2çW6‚†G·B‚'&—6²"—ÒG·6–væVEW&6VçB‡6÷W&6Rç&—6²—Ö“°¢–b‡6÷W&6Rç&WfVçVUö&öçW2’'G2çW6‚†G·B‚'&WfVçVR"—ÒG·6–væVEW&6VçB‡6÷W&6Rç&WfVçVUö&öçW2—Ö“°¢–b‡6÷W&6RæW‡Vç6Uö&öçW2’'G2çW6‚†G·B‚&W‡Vç6W2"—ÒG·6–væVEW&6VçB‡6÷W&6RæW‡Vç6Uö&öçW2—Ö“°¢–b‡6÷W&6Ræ–çFW&W7E÷&FR’'G2çW6‚†G·B‚'&FR"—ÒG·6–væVEW&6VçB‡6÷W&6Ræ–çFW&W7E÷&FR—Ö“°¢–b‡6÷W&6Ræ–æfÆF–öâ’'G2çW6‚†G·B‚&–æfÆF–öâ"—ÒG·6–væVEW&6VçB‡6÷W&6Ræ–æfÆF–öâ—Ö“°¢–b‡6÷W&6RæFVÖæB’'G2çW6‚†G·B‚&FVÖæB"—ÒG·6–væVEW&6VçB‡6÷W&6RæFVÖæB—Ö“°¢–b‡6÷W&6RæVæW&w•ö6÷7B’'G2çW6‚†G·B‚&VæW&w”6÷7B"—ÒG·6–væVEW&6VçB‡6÷W&6RæVæW&w•ö6÷7B—Ö“°¢–b‡6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’’'G2çW6‚†G·B‚&7&VF—Df–Æ&–Æ—G’"—ÒG·6–væVEW&6VçB‡6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’—Ö“°¢–b‡6÷W&6RæÖ&¶WE÷&—6²’'G2çW6‚†G·B‚&Ö&¶WE&—6²"—ÒG·6–væVEW&6VçB‡6÷W&6RæÖ&¶WE÷&—6²—Ö“°¢–b‡6÷W&6RçFV×÷&'•öVffV7G2bb6÷W&6RæGW&F–öå÷GW&ç2’°¢'G2çW6‚†G¶f÷&ÖEFV×÷&'”VffV7G2‡6÷W&6RçFV×÷&'•öVffV7G2—ÒòG·6÷W&6RæGW&F–öå÷GW&ç7×F“°¢Ğ¢&WGW&â'G2æ¦ö–â‚"Â"“°§Ğ ¦gVæ7F–öâ7F—fUFV×÷&'•F÷FÇ2‚’°¢&WGW&â7FFRç'Vâæ7F—fTÖöF–f–W'2ç&VGV6R‚†62ÂÖöF–f–W"’Óâ°¢f÷"†6öç7B¶¶W’ÂfÇVUÒöbö&¦V7BæVçG&–W2†ÖöF–f–W"æVffV7G2’’°¢65¶¶W•ÒÒ†65¶¶W•ÒÇÂ’²fÇVS°¢Ğ¢&WGW&â63°¢ÒÂ²&WfVçVUö&öçW3¢ÂW‡Vç6Uö&öçW3¢Â&—6³¢Â–çFW&W7E÷&FS¢Â–æfÆF–öã¢ÂFVÖæC¢ÂVæW&w•ö6÷7C¢Â7&VF—Eöf–Æ&–Æ—G“¢ÂÖ&¶WE÷&—6³¢Ò“°§Ğ ¦gVæ7F–öâVffV7F—fTÖ7&ò‚’°¢6öç7B&6RÒ7FFRç'VâæÖ7&ó°¢6öç7BFV×÷&'’Ò7F—fUFV×÷&'•F÷FÇ2‚“°¢&WGW&â°¢–çFW&W7E&FS¢ÖF‚æÖ‚ƒãÂ&6Ræ–çFW&W7E&FR²‡FV×÷&'’æ–çFW&W7E÷&FRÇÂ’’À¢–æfÆF–öã¢ÖF‚æÖ‚ƒãÂ&6Ræ–æfÆF–öâ²‡FV×÷&'’æ–æfÆF–öâÇÂ’’À¢FVÖæC¢ÖF‚æÖ‚ƒãÂ&6RæFVÖæB²‡FV×÷&'’æFVÖæBÇÂ’’À¢VæW&w”6÷7C¢ÖF‚æÖ‚ƒãÂ&6RæVæW&w”6÷7B²‡FV×÷&'’æVæW&w•ö6÷7BÇÂ’’À¢7&VF—Df–Æ&–Æ—G“¢ÖF‚æÖ‚ƒãÂ&6Ræ7&VF—Df–Æ&–Æ—G’²‡FV×÷&'’æ7&VF—Eöf–Æ&–Æ—G’ÇÂ’’À¢Ö&¶WE&—6³¢ÖF‚æÖ‚ƒãÂ&6RæÖ&¶WE&—6²²‡FV×÷&'’æÖ&¶WE÷&—6²ÇÂ’¢Ó°§Ğ ¦gVæ7F–öâF–6´ÖöF–f–W'2‚’°¢7FFRç'Vâæ7F—fTÖöF–f–W'2Ò7FFRç'Vâæ7F—fTÖöF–f–W'0¢æÖ‚†ÖöF–f–W"’Óâ‡²ââæÖöF–f–W"Â&VÖ–æ–æuGW&ç3¢ÖöF–f–W"ç&VÖ–æ–æuGW&ç2ÒÒ’¢æf–ÇFW"‚†ÖöF–f–W"’ÓâÖöF–f–W"ç&VÖ–æ–æuGW&ç2â“°§Ğ ¦gVæ7F–öâf÷&ÖEFV×÷&'”VffV7G2†VffV7G2’°¢6öç7B'G2ÒµÓ°¢–b†VffV7G2ç&WfVçVUö&öçW2’'G2çW6‚†G·B‚'&WfVçVR"—ÒG·6–væVEW&6VçB†VffV7G2ç&WfVçVUö&öçW2—Ö“°¢–b†VffV7G2æW‡Vç6Uö&öçW2’'G2çW6‚†G·B‚&W‡Vç6W2"—ÒG·6–væVEW&6VçB†VffV7G2æW‡Vç6Uö&öçW2—Ö“°¢–b†VffV7G2ç&—6²’'G2çW6‚†G·B‚'&—6²"—ÒG·6–væVEW&6VçB†VffV7G2ç&—6²—Ö“°¢–b†VffV7G2æ–çFW&W7E÷&FR’'G2çW6‚†G·B‚'&FR"—ÒG·6–væVEW&6VçB†VffV7G2æ–çFW&W7E÷&FR—Ö“°¢–b†VffV7G2æFVÖæB’'G2çW6‚†G·B‚&FVÖæB"—ÒG·6–væVEW&6VçB†VffV7G2æFVÖæB—Ö“°¢–b†VffV7G2æVæW&w•ö6÷7B’'G2çW6‚†G·B‚&VæW&w”6÷7B"—ÒG·6–væVEW&6VçB†VffV7G2æVæW&w•ö6÷7B—Ö“°¢&WGW&â'G2æ¦ö–â‚"Â"“°§Ğ ¦gVæ7F–öâFW67&–&TÖöF–f–W"†ÖöF–f–W"’°¢&WGW&âG¶ÖöF–f–W"æÆ&VÇÓ¢G¶f÷&ÖEFV×÷&'”VffV7G2†ÖöF–f–W"æVffV7G2—Ò‚G¶ÖöF–f–W"ç&VÖ–æ–æuGW&ç7×B–°§Ğ ¦gVæ7F–öâ†VFW$7F–öç2‚’°¢&WGW&â"#°§Ğ ¦gVæ7F–öâF%F—FÆR‚’°¢6öç7BÖÒ°¢F6†&ö&C¢B‚&F6†&ö&B"’À¢FV6—6–öç3¢B‚&FV6—6–öç2"’À¢÷'FföÆ–ó¢B‚'÷'FföÆ–ò"’À¢Ö&¶WC¢B‚&Ö&¶WB"’À¢V6öæö×“¢B‚&V6öæö×’"’À¢ÖWF¢B‚&ÖWF&öw&W72"’À¢'VäVæC¢B‚''VäVæEF—FÆR"¢Ó°¢&WGW&âÖ·7FFRæ7F—fUF%ÒÇÂB‚&vÖUF—FÆR"“°§Ğ ¦gVæ7F–öâ†VFW%7FGW5FW‡B‡'Vâ’°¢–b‡'Vâæf–æ—6†VB’&WGW&â'Vâç7FGW4ÖW76vS°¢–b‡'VâæWfVçE&W6öÇfVB’&WGW&â'VâçVæF–æt7F–öäFöæRòB‚'GW&å&VG•FôGfæ6R"’¢B‚&6†ö÷6T7F–öâ"“°¢&WGW&âB‚'&W6öÇfTWfVçEF†Vä7F–öâ"“°§Ğ ¦gVæ7F–öâ6ö×7E7FGW46†—‚’°¢–b‚7FFRç'VâæWfVçE&W6öÇfVBbb²&FV6—6–öç2"Â'÷'FföÆ–ò"Â&Ö&¶WB%Òæ–æ6ÇVFW2‡7FFRæ7F—fUF"’’°¢&WGW&âB‚&WfVçDæVVG4FV6—6–öâ"“°¢Ğ¢–b‡7FFRæ7F—fUF"ÓÓÒ&FV6—6–öç2"’°¢–b‚7FFRç'VâæWfVçE&W6öÇfVB’&WGW&âB‚&WfVçDæVVG4FV6—6–öâ"“°¢–b‚7FFRç'VâçVæF–æt7F–öäFöæR’&WGW&âB‚&6†ö÷6T7F–öâ"“°¢&WGW&âB‚'GW&å&VG•FôGfæ6R"“°¢Ğ¢–b‡7FFRæ7F—fUF"ÓÓÒ'÷'FföÆ–ò"’&WGW&â7FFRç'VâçVæF–æt7F–öäFöæRòB‚'GW&å&VG•FôGfæ6R"’¢B‚'÷'FföÆ–õ&VG’"“°¢–b‡7FFRæ7F—fUF"ÓÓÒ&Ö&¶WB"’&WGW&â7FFRç'VâçVæF–æt7F–öäFöæRòB‚'GW&å&VG•FôGfæ6R"’¢B‚&Ö&¶WE&VG’"“°¢–b‡7FFRæ7F—fUF"ÓÓÒ&V6öæö×’"’&WGW&âB‚&V6öæö×•vF6‚"“°¢&WGW&â7FFRç'VâçVæF–æt7F–öäFöæRòB‚'GW&å&VG•FôGfæ6R"’¢B‚&7F—fR"“°§Ğ ¦gVæ7F–öâ7FGW46†—‡FW‡BÂFöæRÒ""’°¢&WGW&âÇ7â6Æ73Ò'7FGW2Ö6†—G·FöæWÒ#âG·FW‡GÓÂ÷7ãæ°§Ğ ¦gVæ7F–öâGW&å&VG’‚’°¢&WGW&â‡7FFRç'Vâbb7FFRç'VâæWfVçE&W6öÇfVBbb7FFRç'VâçVæF–æt7F–öäFöæR“°§Ğ ¦gVæ7F–öâ÷VäÖWF‚’°¢7FFRæ7F—fUF"Ò&ÖWF#°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ&6µFôF6†&ö&B‚’°¢7FFRæ7F—fUF"Ò&F6†&ö&B#°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ&VæFW%VæÆö6´6&B‡VæÆö6²’°¢6öç7BÆWfVÂÒVæÆö6´ÆWfVÂ‡VæÆö6²æ–B“°¢6öç7B7FFT–æfòÒVæÆö6µ7FFR‡VæÆö6²“°¢6öç7B6÷7BÒÖWF6÷7B‡VæÆö6²ÂÆWfVÂ“°¢6öç7BÖ„Æ&VÂÒVæÆö6²æÖ„ÆWfVÂòG¶ÆWfVÇÒòG·VæÆö6²æÖ„ÆWfVÇÖ¢G¶ÆWfVÇÖ°¢&WGW&â ¢Æ'F–6ÆR6Æ73Ò'&W7F–vRÖ6&BG·7FFT–æfòçFöæWÒ#à¢ÆF—b6Æ73Ò'&W7F–vRÖ6&B×F÷#à¢ÆF—b6Æ73Ò'Fr×&÷r#à¢G·Fr†ÖWF6FVv÷'”Æ&VÂ‡VæÆö6²’Â&66VçB"—Ğ¢G·Fr‡7FFT–æfòç7FGW2—Ğ¢G·VæÆö6²ç&WVF&ÆRòFr†G·B‚&ÆWfVÅ&öw&W74Æ&VÂ"—ÒG¶Ö„Æ&VÇÖ’¢"'Ğ¢ÂöF—cà¢Ç7G&öær6Æ73Ò'&W7F–vRÖ6÷7B#âG·7FFRæÖWFçF÷FÄ¶æ÷vÆVFvWÒòG¶6÷7GÓÂ÷7G&öæsà¢ÂöF—cà¢Æƒ3âG·B‡VæÆö6²çF—FÆT¶W’—ÓÂöƒ3à¢ÇâG·B‡VæÆö6²æFW67&—F–öä¶W’—ÓÂ÷à¢ÆF—b6Æ73Ò&'W6–æW72ÖÖWG&–72#à¢ÆF—cãÇ7ãâG·B‚&6÷7DÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG¶6÷7GÒG·B‚&¶æ÷vÆVFvR"’çFôÆ÷vW$66R‚—ÓÂ÷7G&öæsãÂöF—cà¢ÆF—cãÇ7ãâG·B‚'7FGW4Æ&VÂ"’ÇÂ%7FGW2'ÓÂ÷7ããÇ7G&öæsâG·7FFT–æfòç7FGW7ÓÂ÷7G&öæsãÂöF—cà¢G·VæÆö6²ç&WVF&ÆRòÆF—cãÇ7ãâG·B‚&7W'&VçDVffV7DÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG·VæÆö6´7W'&VçDVffV7B‡VæÆö6²ÂÆWfVÂ—ÓÂ÷7G&öæsãÂöF—cæ¢ÆF—cãÇ7ãâG·B‚&7W'&VçDVffV7DÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG·VæÆö6´7W'&VçDVffV7B‡VæÆö6²ÂÖF‚æÖ‚ƒÂÆWfVÂ’—ÓÂ÷7G&öæsãÂöF—cæĞ¢G·VæÆö6²ç&WVF&ÆRbb‡VæÆö6²æÖ„ÆWfVÂbbÆWfVÂãÒVæÆö6²æÖ„ÆWfVÂ’òÆF—cãÇ7ãâG·B‚&æW‡DVffV7DÆ&VÂ"—ÓÂ÷7ããÇ7G&öæsâG·VæÆö6´æW‡DVffV7B‡VæÆö6²ÂÆWfVÂ—ÓÂ÷7G&öæsãÂöF—cæ¢"'Ğ¢ÂöF—cà¢Æ'WGFöâ6Æ73Ò&'W6–æW72Ö'WGFöâ&W7F–vRÖ'WGFöâ"FFÖÖWF×VæÆö6³Ò"G·VæÆö6²æ–GÒ"G·7FFT–æfòæF—6&ÆVBò&F—6&ÆVB"¢"'ÓâG·7FFT–æfòæ'WGFöçÓÂö'WGFöãà¢Âö'F–6ÆSà¢°§Ğ ¦gVæ7F–öâW&6†6UVæÆö6²‡VæÆö6´–B’°¢6öç7BVæÆö6²ÒÔUDõTäÄô4µ2æf–æB‚†—FVÒ’Óâ—FVÒæ–BÓÓÒVæÆö6´–B“°¢6öç7BÆWfVÂÒVæÆö6´ÆWfVÂ‡VæÆö6´–B“°¢6öç7BVffV7F—fT6÷7BÒVæÆö6²òÖWF6÷7B‡VæÆö6²ÂÆWfVÂ’¢°¢–b‚VæÆö6²ÇÂ††5W&6†6VEVæÆö6²‡VæÆö6´–B’bbVæÆö6²ç&WVF&ÆR’’&WGW&ã°¢–b‡VæÆö6²ç&WVF&ÆRbbVæÆö6²æÖ„ÆWfVÂbbÆWfVÂãÒVæÆö6²æÖ„ÆWfVÂ’&WGW&ã°¢–b‡7FFRæÖWFçF÷FÄ¶æ÷vÆVFvRÂVffV7F—fT6÷7B’°¢–b‡7FFRç'Vâ’7FFRç'Vâç7FGW4ÖW76vRÒB‚&æ÷DVæ÷Vv„¶æ÷vÆVFvR"“°¢&VæFW"‚“°¢&WGW&ã°¢Ğ¢7FFRæÖWFçF÷FÄ¶æ÷vÆVFvRÓÒVffV7F—fT6÷7C°¢7FFRæÖWFçW&6†6VEVæÆö6´–G2çW6‚‡VæÆö6²æ–B“°¢7FFRæÖWFçVæÆö6´ÆWfVÇ5·VæÆö6²æ–EÒÒÆWfVÂ²°¢–b‡VæÆö6²çG—RÓÓÒ&–æGW7G'’"’7FFRæÖWFçVæÆö6¶VD–æGW7G&–W2çW6‚‡VæÆö6²ç–ÆöBæ–æGW7G'’“°¢–b‡VæÆö6²çG—RÓÓÒ&6&G2"’7FFRæÖWFçVæÆö6¶VD6&G2çW6‚‚ââçVæÆö6²ç–ÆöBæ6&G2“°¢7FFRæÖWFçVæÆö6¶VD–æGW7G&–W2ÒVæ—VTÆ—7B‡7FFRæÖWFçVæÆö6¶VD–æGW7G&–W2“°¢7FFRæÖWFçVæÆö6¶VD6&G2ÒVæ—VTÆ—7B‡7FFRæÖWFçVæÆö6¶VD6&G2“°¢7FFRæÖWFçW&6†6VEVæÆö6´–G2ÒVæ—VTÆ—7B‡7FFRæÖWFçW&6†6VEVæÆö6´–G2“°¢6fTÖWF&öw&W76–öâ‚“°¢–b‡7FFRç'Vâ’7FFRç'Vâç7FGW4ÖW76vRÒG·B‚'VæÆö6µW&6†6VB"—Ó¢G·B‡VæÆö6²çF—FÆT¶W’—Ö°¢6fT7W'&VçE'Vâ‚“°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâ&W6WDÖWF&öw&W76–öâ‚’°¢–b‚v–æF÷ræ6öæf—&Ò‡B‚&6öæf—&Õ&W6WDÖWF"’’’&WGW&ã°¢7FFRæÖWFÒ7&VFTFVfVÇDÖWF&öw&W76–öâ‚“°¢7FFRæÖWFf–ÇFW"Ò&ÆÂ#°¢6fTÖWF&öw&W76–öâ‚“°¢–b‡7FFRç'Vâ’7FFRç'Vâç7FGW4ÖW76vRÒB‚'&W6WDÖWF6öæf—&Ò"“°¢&VæFW"‚“°§Ğ ¦gVæ7F–öâÖWF7F'F–æt&öçW6W2‚’°¢&WGW&âÔUDõTäÄô4µ2ç&VGV6R‚†62ÂVæÆö6²’Óâ°¢–b‚†5W&6†6VEVæÆö6²‡VæÆö6²æ–B’ÇÂVæÆö6²çG—RÓÒ'7F'F–æuö&öçW2"’&WGW&â63°¢62æW‡G&66‚³ÒVæÆö6²ç–ÆöBæW‡G&66‚ÇÂ°¢62æFV'EF‡&W6†öÆD&öçW2³ÒVæÆö6²ç–ÆöBæFV'EF‡&W6†öÆD&öçW2ÇÂ°¢&WGW&â63°¢ÒÂ²W‡G&66ƒ¢ÂFV'EF‡&W6†öÆD&öçW3¢Ò“°§Ğ ¦gVæ7F–öâ7W'&VçDÖ…GW&ç2‡F&vWE'VâÒ7FFRç'Vâ’°¢&WGW&âF&vWE'VãòæÖ…GW&ç2ÇÂæW‡E'VäÖ…GW&ç2‚“°§Ğ ¦gVæ7F–öâFV'E&W77W&UF‡&W6†öÆB‡'Vâ’°¢6öç7B&6UF‡&W6†öÆBÒÖF‚æÖ‚ƒ²ÖWF7F'F–æt&öçW6W2‚’æFV'EF‡&W6†öÆD&öçW2Â'Vâæ6ö×ç’æ66‚¢B“°¢&WGW&âÇ”F–ff–7VÇG•FôFV'EF‡&W6†öÆB†&6UF‡&W6†öÆBÂ'VâæF–ff–7VÇG”–B“°§Ğ ¦gVæ7F–öâ7VÖÖ&—¦U'Vâ‡'Vâ’°¢6öç7B&W÷'BÒ6Æ7VÆFU&W÷'B‚“°¢&WGW&â°¢GW&å&V6†VC¢ÖF‚æÖ–â‡'VâçGW&âÂ7W'&VçDÖ…GW&ç2‡'Vâ’’À¢66ƒ¢'Vâæ6ö×ç’æ66‚À¢FV'C¢'Vâæ6ö×ç’æFV'BÀ¢&öf—C¢&W÷'Bç&öf—BÀ¢fÇVF–öã¢&W÷'BçfÇVF–öà¢Ó°§Ğ ¦gVæ7F–öâ6Æ7VÆFT¶æ÷vÆVFvU&Wv&B‡'Vâ’°¢6öç7B7VÖÖ'’Ò'Vâç&W7VÇE7VÖÖ'’ÇÂ7VÖÖ&—¦U'Vâ‡'Vâ“°¢–b‡'VâæVæE&V6öâÓÒ&6ö×ÆWFVEöÆÅ÷GW&ç2"bb7VÖÖ'’çGW&å&V6†VBÂ2’&WGW&â°¢ÆWB&Wv&BÒS°¢&Wv&B³Ò7VÖÖ'’çGW&å&V6†VC°¢&Wv&B³ÒÖF‚æfÆö÷"„ÖF‚æÖ‚ƒÂ7VÖÖ'’çfÇVF–öâ’ò#S“°¢–b‡7VÖÖ'’çGW&å&V6†VBãÒ7W'&VçDÖ…GW&ç2‡'Vâ’’&Wv&B³Ò3°¢–b‡7VÖÖ'’çfÇVF–öââS’&Wv&B³ÒS°¢&WGW&âÇ”F–ff–7VÇG•Fô¶æ÷vÆVFvU&Wv&B‡&Wv&BÂ'VâæF–ff–7VÇG”–B“°§Ğ ¦gVæ7F–öâ6Æ–Õ'Vå&Wv&B‡'Vâ’°¢–b‡'Vâç&Wv&D6Æ–ÖVB’&WGW&ã°¢'Vâç&Wv&D6Æ–ÖVBÒG'VS°¢7FFRæÖWFçF÷FÄ¶æ÷vÆVFvR³Ò'Vâæ¶æ÷vÆVFvTV&æVC°¢7FFRæÖWFæ6ö×ÆWFVE'Vç2³Ò°¢7FFRæÖWFæ&W7EfÇVF–öâÒÖF‚æÖ‚‡7FFRæÖWFæ&W7EfÇVF–öâÂ'Vâç&W7VÇE7VÖÖ'’çfÇVF–öâ“°¢7FFRæÖWFæ&W7EGW&å&V6†VBÒÖF‚æÖ‚‡7FFRæÖWFæ&W7EGW&å&V6†VBÂ'Vâç&W7VÇE7VÖÖ'’çGW&å&V6†VB“°¢6fTÖWF&öw&W76–öâ‚“°§Ğ ¦gVæ7F–öâ†5W&6†6VEVæÆö6²‡VæÆö6´–B’°¢&WGW&â7FFRæÖWFçW&6†6VEVæÆö6´–G2æ–æ6ÇVFW2‡VæÆö6´–B“°§Ğ ¦gVæ7F–öâVæÆö6´ÆWfVÂ‡VæÆö6´–B’°¢&WGW&âçVÖ&W"‡7FFRæÖWFçVæÆö6´ÆWfVÇ3òå·VæÆö6´–EÒÇÂ“°§Ğ ¦gVæ7F–öâ–æGW7G'•VæÆö6¶VB†–æGW7G'’’°¢&WGW&â7FFRæÖWFçVæÆö6¶VD–æGW7G&–W2æ–æ6ÇVFW2†–æGW7G'’“°§Ğ ¦gVæ7F–öâ6&EVæÆö6¶VB†6&B’°¢–b‚Edä4TEôd”ää4Uô4$Eô”E2æ–æ6ÇVFW2†6&Bæ–B’’&WGW&âG'VS°¢&WGW&â7FFRæÖWFçVæÆö6¶VD6&G2æ–æ6ÇVFW2†6&Bæ–B“°§Ğ ¦gVæ7F–öâWfVçEVæÆö6¶VB†WfVçB’°¢–b‚WfVçBæÖWF÷VæÆö6µö–B’&WGW&âG'VS°¢&WGW&â7FFRæÖWFçVæÆö6¶VDWfVçG2æ–æ6ÇVFW2†WfVçBæ–B’ÇÂ†5W&6†6VEVæÆö6²†WfVçBæÖWF÷VæÆö6µö–B“°§Ğ ¦gVæ7F–öâVæÆö6¶VD6öçFVçEFw2‚’°¢6öç7BFw2Ò7FFRæÖWFçVæÆö6¶VD–æGW7G&–W0¢æf–ÇFW"‚†–æGW7G'’’Óâ5D%D”äuõTäÄô4´TEô”äEU5E$”U2æ–æ6ÇVFW2†–æGW7G'’’¢æÖ†–æGW7G'”æÖR“°¢–b††5W&6†6VEVæÆö6²‚'VæÆö6µöGfæ6VEöf–ææ6Uö6&G2"’’Fw2çW6‚‡B‚'VæÆö6´Gfæ6VDf–ææ6T6&G2"’“°¢–b††5W&6†6VEVæÆö6²‚'VæÆö6µöW‡G&ö66‚"’’Fw2çW6‚‡B‚'VæÆö6´W‡G&66‚"’“°¢–b††5W&6†6VEVæÆö6²‚'VæÆö6µöÆ÷vW%öFV'E÷&—6²"’’Fw2çW6‚‡B‚'VæÆö6´Æ÷vW$FV'E&—6²"’“°¢–b††5W&6†6VEVæÆö6²‚'VæÆö6µ÷7–æW&w•÷66ææW""’’Fw2çW6‚‡B‚'VæÆö6µ7–æW&w•66ææW""’“°¢&WGW&âFw2æÆVæwF‚òFw2¢·B‚&æõVæÆö6·5–WB"•Ó°§Ğ ¦gVæ7F–öâVæE&V6öäÆ&VÂ‡&V6öâ’°¢–b‡&V6öâÓÓÒ&6ö×ÆWFVEöÆÅ÷GW&ç2"’&WGW&âB‚&6ö×ÆWFVDÆÅGW&ç2"“°¢–b‡&V6öâÓÓÒ&FV'Eö6öÆÆ6R"’&WGW&âB‚&FV'D6öÆÆ6R"“°¢&WGW&âB‚&&æ·'WF7’"“°§Ğ ¦gVæ7F–öâVæ—VTÆ—7B†—FV×2’°¢&WGW&â²ââææWr6WB†—FV×2•Ó°§Ğ ¦gVæ7F–öâfÆ–FFTvÖTFF‚’°¢6öç7BW'&÷'2ÒµÓ°¢6öç7B'W6–æW74–G2ÒæWr6WB‚“°¢6öç7BWfVçD–G2ÒæWr6WB‚“°¢6öç7B6&D–G2ÒæWr6WB‚“°¢6öç7BfÆ–D–æGW7G&–W2ÒæWr6WB…²'&WF–Â"Â&—B"Â&Æöv—7F–72"Â&ÖçVf7GW&–ær"Â&VæW&w’"Â'&VÅöW7FFR"Â&ÖVF–%Ò“° ¢7FFRæ'W6–æW76W2æf÷$V6‚‚†'W6–æW72’Óâ°¢–b‚'W6–æW72æ–B’W'&÷'2çW6‚‚$'W6–æW72Ö—76–ær–B"“°¢–b†'W6–æW74–G2æ†2†'W6–æW72æ–B’’W'&÷'2çW6‚†GWÆ–6FR'W6–æW72–C¢G¶'W6–æW72æ–GÖ“°¢'W6–æW74–G2æFB†'W6–æW72æ–B“°¢–b‚†'W6–æW72æ6÷7Bâ’’W'&÷'2çW6‚†'W6–æW726÷7B–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢–b†'W6–æW72ç&WfVçVRÂ’W'&÷'2çW6‚†'W6–æW72&WfVçVR–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢–b†'W6–æW72æW‡Vç6RÂ’W'&÷'2çW6‚†'W6–æW72W‡Vç6R–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢–b‚fÆ–D–æGW7G&–W2æ†2†'W6–æW72æ–æGW7G'’’’W'&÷'2çW6‚†'W6–æW72–æGW7G'’–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢–b‚†'W6–æW72æÖ…öÆWfVÂâ’’W'&÷'2çW6‚†'W6–æW72Ö…öÆWfVÂ–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢–b†'W6–æW72ç&—6²ÂÇÂ'W6–æW72ç&—6²â’W'&÷'2çW6‚†'W6–æW72&—6²–çfÆ–C¢G¶'W6–æW72æ–GÖ“°¢Ò“° ¢7FFRæWfVçG2æf÷$V6‚‚†WfVçB’Óâ°¢–b‚WfVçBæ–B’W'&÷'2çW6‚‚$WfVçBÖ—76–ær–B"“°¢–b†WfVçD–G2æ†2†WfVçBæ–B’’W'&÷'2çW6‚†GWÆ–6FRWfVçB–C¢G¶WfVçBæ–GÖ“°¢WfVçD–G2æFB†WfVçBæ–B“°¢–b‚†WfVçBçvV–v‡Bâ’’W'&÷'2çW6‚†WfVçBvV–v‡B–çfÆ–C¢G¶WfVçBæ–GÖ“°¢–b‚'&’æ—4'&’†WfVçBæ6†ö–6W2’ÇÂWfVçBæ6†ö–6W2æÆVæwF‚’W'&÷'2çW6‚†WfVçB6†ö–6W2Ö—76–æs¢G¶WfVçBæ–GÖ“°¢†WfVçBæ6†ö–6W2ÇÂµÒ’æf÷$V6‚‚†6†ö–6RÂ–æFW‚’Óâ°¢–b‚6†ö–6RçF—FÆR’W'&÷'2çW6‚†WfVçB6†ö–6RF—FÆRÖ—76–æs¢G¶WfVçBæ–GÓ¢G¶–æFW‡Ö“°¢Ò“°¢Ò“° ¢7FFRæ6&G2æf÷$V6‚‚†6&B’Óâ°¢–b‚6&Bæ–B’W'&÷'2çW6‚‚$6&BÖ—76–ær–B"“°¢–b†6&D–G2æ†2†6&Bæ–B’’W'&÷'2çW6‚†GWÆ–6FR6&B–C¢G¶6&Bæ–GÖ“°¢6&D–G2æFB†6&Bæ–B“°¢–b†6&Bæ6÷7BÒçVÆÂbb6&Bæ6÷7BÂ’W'&÷'2çW6‚†6&B6÷7B–çfÆ–C¢G¶6&Bæ–GÖ“°¢Ò“° ¢7FFRç7–æW&v–W2æf÷$V6‚‚‡7–æW&w’’Óâ°¢‡7–æW&w’ç&WV—&W2ÇÂµÒ’æf÷$V6‚‚†–B’Óâ°¢–b‚'W6–æW74–G2æ†2†–B’’W'&÷'2çW6‚†7–æW&w’&VfW&Væ6W2Ö—76–ær'W6–æW73¢G·7–æW&w’æ–GÓ¢G¶–GÖ“°¢Ò“°¢–b‡G—Vöb7–æW&w’ç&WfVçVUö&öçW2ÓÒ&çVÖ&W""bbG—Vöb7–æW&w’æW‡Vç6Uö&öçW2ÓÒ&çVÖ&W""’°¢W'&÷'2çW6‚†7–æW&w’&öçW2Ö—76–æs¢G·7–æW&w’æ–GÖ“°¢Ğ¢Ò“° ¢ö&¦V7Bæ¶W—2‡G&ç6ÆF–öç2æVâ’æf÷$V6‚‚†¶W’’Óâ°¢–b‚†¶W’–âG&ç6ÆF–öç2ç'R’’W'&÷'2çW6‚†Ö—76–ær'RG&ç6ÆF–öã¢G¶¶W—Ö“°¢Ò“°¢ö&¦V7Bæ¶W—2‡G&ç6ÆF–öç2ç'R’æf÷$V6‚‚†¶W’’Óâ°¢–b‚†¶W’–âG&ç6ÆF–öç2æVâ’’W'&÷'2çW6‚†Ö—76–ærVâG&ç6ÆF–öã¢G¶¶W—Ö“°¢Ò“° ¢–b†W'&÷'2æÆVæwF‚’6öç6öÆRæW'&÷"‚'fÆ–FFTvÖTFF‚’"ÂW'&÷'2“°¢VÇ6R6öç6öÆRæ–æfò‡B‚&FWefÆ–FF–öå76VB"’“°¢&WGW&âW'&÷'3°§Ğ ¦gVæ7F–öâ6–×VÆFU'Vç2†6÷VçBÒ’°¢6öç7B&W7VÇG2Ò'&’æg&öÒ‡²ÆVæwFƒ¢6÷VçBÒÂ‚’Óâ6–×VÆFU6–ævÆU'Vâ‚’“°¢6öç7BfÇVF–öç2Ò&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒçfÇVF–öâ’ç6÷'B‚†Â"’ÓâÒ"“°¢6öç7B6ö×ÆWFVE'Vç2Ò&W7VÇG2æf–ÇFW"‚†—FVÒ’Óâ—FVÒç&V6öâÓÓÒ&6ö×ÆWFVEöÆÅ÷GW&ç2"’æÆVæwFƒ°¢6öç7B7VÖÖ'’Ò°¢'Vç3¢6÷VçBÀ¢fW&vTf–æÅfÇVF–öã¢fW&vR‡&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒçfÇVF–öâ’’À¢ÖVF–äf–æÅfÇVF–öã¢fÇVF–öç5´ÖF‚æfÆö÷"‡fÇVF–öç2æÆVæwF‚ò"•ÒÇÂÀ¢&æ·'WF7•&FS¢G´ÖF‚ç&÷VæB‚‚†6÷VçBÒ6ö×ÆWFVE'Vç2’òÖF‚æÖ‚ƒÂ6÷VçB’’¢—ÒVÀ¢fW&vUGW&å&V6†VC¢fW&vR‡&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒçGW&å&V6†VB’’À¢fW&vTFV'C¢fW&vR‡&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒæFV'B’’À¢fW&vT66ƒ¢fW&vR‡&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒæ66‚’’À¢&W7EfÇVF–öã¢ÖF‚æÖ‚‚ââç&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒçfÇVF–öâ’’À¢v÷'7EfÇVF–öã¢ÖF‚æÖ–â‚ââç&W7VÇG2æÖ‚†—FVÒ’Óâ—FVÒçfÇVF–öâ’’À¢6ö×ÆWFVDÆÃGW&ç3¢G´ÖF‚ç&÷VæB‚†6ö×ÆWFVE'Vç2òÖF‚æÖ‚ƒÂ6÷VçB’’¢—ÒV ¢Ó°¢6öç6öÆRçF&ÆR‡7VÖÖ'’“°¢&WGW&â²7VÖÖ'’Â&W7VÇG2Ó°§Ğ ¦gVæ7F–öâ6–×VÆFU6–ævÆU'Vâ‚’°¢6öç7B6–ÒÒ°¢Ö…GW&ç3¢æW‡E'VäÖ…GW&ç2‚’À¢GW&ã¢À¢6ö×ç“¢°¢66ƒ¢5D%D”äuô44‚²ÖWF7F'F–æt&öçW6W2‚’æW‡G&66‚À¢FV'C¢À¢&—6³¢ãRÀ¢&WfVçVT&öçW3¢À¢W‡Vç6T&öçW3¢À¢'W6–æW76W3¢·²'W6–æW74–C¢6×ÆR…²&6öffVU÷6†÷"Â&Ö–æ•öÖ&¶WB"Â&Öö&–ÆU÷7GVF–ò%Ò’ÂÆWfVÃ¢ÕĞ¢ÒÀ¢Ö7&ó¢²–çFW&W7E&FS¢ãBÂ–æfÆF–öã¢ã2ÂFVÖæC¢ÂVæW&w”6÷7C¢Â7&VF—Df–Æ&–Æ—G“¢ÂÖ&¶WE&—6³¢ãRÒÀ¢7F—fTÖöF–f–W'3¢µĞ¢Ó° ¢v†–ÆR‡6–ÒçGW&âÃÒ7W'&VçDÖ…GW&ç2‡6–Ò’’°¢6öç7B&W÷'BÒ6–×VÆF–öå&W÷'B‡6–Ò“°¢6–Òæ6ö×ç’æ66‚³ÒÖF‚ç&÷VæB‡&W÷'Bç&öf—B“°¢6–Òæ6ö×ç’ç&—6²Ò6Æ×‡6–Òæ6ö×ç’ç&—6²²6–ÒæÖ7&òæÖ&¶WE&—6²¢ãÂãÂã“R“°¢6–Òæ7F—fTÖöF–f–W'2Ò6–Òæ7F—fTÖöF–f–W'2æÖ‚†ÖöF–f–W"’Óâ‡²ââæÖöF–f–W"Â&VÖ–æ–æuGW&ç3¢ÖöF–f–W"ç&VÖ–æ–æuGW&ç2ÒÒ’’æf–ÇFW"‚†ÖöF–f–W"’ÓâÖöF–f–W"ç&VÖ–æ–æuGW&ç2â“° ¢6öç7BWfVçEööÂÒ7FFRæWfVçG2æf–ÇFW"‚†WfVçB’Óâ6–×VÆF–öäWfVçDÆÆ÷vVB‡6–ÒÂWfVçB’’æf–ÇFW"†WfVçEVæÆö6¶VB“°¢6öç7BWfVçBÒWfVçEööÂæÆVæwF‚ò6×ÆR†WfVçEööÂ’¢çVÆÃ°¢–b†WfVçB’°¢6–×VÆF–öäÇ”VffV7G2‡6–ÒÂWfVçB“°¢6öç7B6†ö–6RÒ–6´&W7D6†ö–6R†WfVçBæ6†ö–6W2ÇÂµÒ“°¢–b†6†ö–6R’6–×VÆF–öäÇ”VffV7G2‡6–ÒÂ6†ö–6R“°¢Ğ ¢6öç7B&W7D'W6–æW72Ò–6´&W7D'W6–æW72‡7FFRæ'W6–æW76W2æf–ÇFW"‚†'W6–æW72’Óâ–æGW7G'•VæÆö6¶VB†'W6–æW72æ–æGW7G'’’’Â6–Ò“°¢6öç7B&W7D6&BÒ–6´&W7D6&B‡7FFRæ6&G2æf–ÇFW"†6&EVæÆö6¶VB’Â6–Ò“°¢–b†&W7D'W6–æW72bb6–Òæ6ö×ç’æ66‚ãÒ&W7D'W6–æW72æ6÷7Bbb6–Òæ6ö×ç’æ'W6–æW76W2ç6öÖR‚†÷væVB’Óâ÷væVBæ'W6–æW74–BÓÓÒ&W7D'W6–æW72æ–B’’°¢6–Òæ6ö×ç’æ66‚ÓÒ&W7D'W6–æW72æ6÷7C°¢6–Òæ6ö×ç’æ'W6–æW76W2çW6‚‡²'W6–æW74–C¢&W7D'W6–æW72æ–BÂÆWfVÃ¢Ò“°¢ÒVÇ6R–b†&W7D6&Bbb6–Òæ6ö×ç’æ66‚ãÒ†&W7D6&Bæ6÷7BÇÂ’’°¢6–Òæ6ö×ç’æ66‚ÓÒ&W7D6&Bæ6÷7BÇÂ°¢6–×VÆF–öäÇ”VffV7G2‡6–ÒÂ&W7D6&B“°¢ÒVÇ6R°¢6öç7BWw&FRÒ–6µWw&FUF&vWB‡6–Ò“°¢–b‡Ww&FR’°¢6öç7BWw&FU&–6RÒÖF‚ç&÷VæB†'W6–æW74'”–B‡Ww&FRæ'W6–æW74–B’æ6÷7B¢ƒãSR²Ww&FRæÆWfVÂ¢ã#R’“°¢–b‡6–Òæ6ö×ç’æ66‚ãÒWw&FU&–6R’°¢6–Òæ6ö×ç’æ66‚ÓÒWw&FU&–6S°¢Ww&FRæÆWfVÂ³Ò°¢Ğ¢Ğ¢Ğ ¢6öç7B6–×VÆF–öåF‡&W6†öÆBÒÖF‚æÖ‚ƒ²ÖWF7F'F–æt&öçW6W2‚’æFV'EF‡&W6†öÆD&öçW2Â6–Òæ6ö×ç’æ66‚¢B“°¢6öç7BFV'E&W77W&RÒ6–Òæ6ö×ç’æFV'BâÇ”F–ff–7VÇG•FôFV'EF‡&W6†öÆB‡6–×VÆF–öåF‡&W6†öÆBÂ6–ÒæF–ff–7VÇG”–B“°¢6öç7B66„&æ·'WF7’Ò6–Òæ6ö×ç’æ66‚ÂÓS°¢6öç7BFV'D6öÆÆ6RÒ66„&æ·'WF7’bbFV'E&W77W&RbbÖF‚ç&æFöÒ‚’Â6–Òæ6ö×ç’ç&—6³°¢–b†66„&æ·'WF7’ÇÂFV'D6öÆÆ6R’°¢6öç7Bf–æÅ&W÷'BÒ6–×VÆF–öå&W÷'B‡6–Ò“°¢&WGW&â²&V6öã¢FV'D6öÆÆ6Rò&FV'Eö6öÆÆ6R"¢&&æ·'WF7’"ÂGW&å&V6†VC¢6–ÒçGW&âÂ66ƒ¢6–Òæ6ö×ç’æ66‚ÂFV'C¢6–Òæ6ö×ç’æFV'BÂfÇVF–öã¢f–æÅ&W÷'BçfÇVF–öâÓ°¢Ğ ¢6–ÒçGW&â³Ò°¢Ğ ¢6öç7Bf–æÅ&W÷'BÒ6–×VÆF–öå&W÷'B‡6–Ò“°¢&WGW&â²&V6öã¢&6ö×ÆWFVEöÆÅ÷GW&ç2"ÂGW&å&V6†VC¢7W'&VçDÖ…GW&ç2‡6–Ò’Â66ƒ¢6–Òæ6ö×ç’æ66‚ÂFV'C¢6–Òæ6ö×ç’æFV'BÂfÇVF–öã¢f–æÅ&W÷'BçfÇVF–öâÓ°§Ğ ¦gVæ7F–öâ6–×VÆF–öå&W÷'B‡6–Ò’°¢6öç7BFV×÷&'’Ò6–Òæ7F—fTÖöF–f–W'2ç&VGV6R‚†62ÂÖöF–f–W"’Óâ°¢f÷"†6öç7B¶¶W’ÂfÇVUÒöbö&¦V7BæVçG&–W2†ÖöF–f–W"æVffV7G2’’65¶¶W•ÒÒ†65¶¶W•ÒÇÂ’²fÇVS°¢&WGW&â63°¢ÒÂ²&WfVçVUö&öçW3¢ÂW‡Vç6Uö&öçW3¢Â&—6³¢Â–çFW&W7E÷&FS¢Â–æfÆF–öã¢ÂFVÖæC¢ÂVæW&w•ö6÷7C¢Â7&VF—Eöf–Æ&–Æ—G“¢ÂÖ&¶WE÷&—6³¢Ò“°¢6öç7BÖ7&òÒ°¢–çFW&W7E&FS¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ–çFW&W7E&FR²‡FV×÷&'’æ–çFW&W7E÷&FRÇÂ’’À¢–æfÆF–öã¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ–æfÆF–öâ²‡FV×÷&'’æ–æfÆF–öâÇÂ’’À¢FVÖæC¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæFVÖæB²‡FV×÷&'’æFVÖæBÇÂ’’À¢VæW&w”6÷7C¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæVæW&w”6÷7B²‡FV×÷&'’æVæW&w•ö6÷7BÇÂ’’À¢7&VF—Df–Æ&–Æ—G“¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ7&VF—Df–Æ&–Æ—G’²‡FV×÷&'’æ7&VF—Eöf–Æ&–Æ—G’ÇÂ’’À¢Ö&¶WE&—6³¢ÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæÖ&¶WE&—6²²‡FV×÷&'’æÖ&¶WE÷&—6²ÇÂ’¢Ó°¢ÆWB&WfVçVRÒ°¢ÆWBW‡Vç6W2Ò°¢f÷"†6öç7B÷væVBöb6–Òæ6ö×ç’æ'W6–æW76W2’°¢6öç7B'W6–æW72Ò'W6–æW74'”–B†÷væVBæ'W6–æW74–B“°¢6öç7BÆWfVÄ×VÇF—Æ–W"Ò²†÷væVBæÆWfVÂÒ’¢ãCS°¢&WfVçVR³Ò'W6–æW72ç&WfVçVR¢ÆWfVÄ×VÇF—Æ–W"¢ƒ²‚†Ö7&òæFVÖæBÒ’¢'W6–æW72æFVÖæE÷6Vç6—F—f—G’’’¢ƒ²Ö7&òæ–æfÆF–öâ¢ãr“°¢W‡Vç6W2³Ò'W6–æW72æW‡Vç6R¢ÆWfVÄ×VÇF—Æ–W"¢ÖF‚æÖ‚ƒãRÂ²‚†Ö7&òæVæW&w”6÷7BÒ’¢'W6–æW72æVæW&w•÷W6R’’¢ƒ²Ö7&òæ–æfÆF–öâ“°¢Ğ¢&WfVçVR£Ò²6–Òæ6ö×ç’ç&WfVçVT&öçW2²FV×÷&'’ç&WfVçVUö&öçW3°¢W‡Vç6W2£ÒÖF‚æÖ‚ƒã"Â²6–Òæ6ö×ç’æW‡Vç6T&öçW2²FV×÷&'’æW‡Vç6Uö&öçW2“°¢6öç7B–çFW&W7BÒ6–Òæ6ö×ç’æFV'B¢Ö7&òæ–çFW&W7E&FS°¢6öç7B&öf—BÒ&WfVçVRÒW‡Vç6W2Ò–çFW&W7C°¢6öç7B76WEF÷FÂÒ6–Òæ6ö×ç’æ'W6–æW76W2ç&VGV6R‚‡7VÒÂ÷væVB’Óâ7VÒ²'W6–æW74'”–B†÷væVBæ'W6–æW74–B’æ6÷7B¢ƒ²÷væVBæÆWfVÂ¢ã#R’Â“°¢&WGW&â²&öf—BÂfÇVF–öã¢6–Òæ6ö×ç’æ66‚²76WEF÷FÂ²ÖF‚æÖ‚ƒÂ&öf—B¢‚’Ò6–Òæ6ö×ç’æFV'BÓ°§Ğ ¦gVæ7F–öâ6–×VÆF–öäÇ”VffV7G2‡6–ÒÂ6÷W&6R’°¢6–Òæ6ö×ç’æ66‚³Ò6÷W&6Ræ66‚ÇÂ°¢6–Òæ6ö×ç’æFV'BÒÖF‚æÖ‚ƒÂ6–Òæ6ö×ç’æFV'B²‡6÷W&6RæFV'BÇÂ’“°¢6–Òæ6ö×ç’ç&—6²Ò6Æ×‡6–Òæ6ö×ç’ç&—6²²‡6÷W&6Rç&—6²ÇÂ’ÂãÂã“R“°¢6–Òæ6ö×ç’ç&WfVçVT&öçW2³Ò6÷W&6Rç&WfVçVUö&öçW2ÇÂ°¢6–Òæ6ö×ç’æW‡Vç6T&öçW2³Ò6÷W&6RæW‡Vç6Uö&öçW2ÇÂ°¢–b‡6÷W&6Ræ–çFW&W7E÷&FR’6–ÒæÖ7&òæ–çFW&W7E&FRÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ–çFW&W7E&FR²6÷W&6Ræ–çFW&W7E÷&FR“°¢–b‡6÷W&6Ræ–æfÆF–öâ’6–ÒæÖ7&òæ–æfÆF–öâÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ–æfÆF–öâ²6÷W&6Ræ–æfÆF–öâ“°¢–b‡6÷W&6RæFVÖæB’6–ÒæÖ7&òæFVÖæBÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæFVÖæB²6÷W&6RæFVÖæB“°¢–b‡6÷W&6RæVæW&w•ö6÷7B’6–ÒæÖ7&òæVæW&w”6÷7BÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæVæW&w”6÷7B²6÷W&6RæVæW&w•ö6÷7B“°¢–b‡6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’’6–ÒæÖ7&òæ7&VF—Df–Æ&–Æ—G’ÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæ7&VF—Df–Æ&–Æ—G’²6÷W&6Ræ7&VF—Eöf–Æ&–Æ—G’“°¢–b‡6÷W&6RæÖ&¶WE÷&—6²’6–ÒæÖ7&òæÖ&¶WE&—6²ÒÖF‚æÖ‚ƒãÂ6–ÒæÖ7&òæÖ&¶WE&—6²²6÷W&6RæÖ&¶WE÷&—6²“°¢–b‡6÷W&6RçFV×÷&'•öVffV7G2bb6÷W&6RæGW&F–öå÷GW&ç2’°¢6–Òæ7F—fTÖöF–f–W'2çW6‚‡²VffV7G3¢6÷W&6RçFV×÷&'•öVffV7G2Â&VÖ–æ–æuGW&ç3¢6÷W&6RæGW&F–öå÷GW&ç2Ò“°¢Ğ§Ğ ¦gVæ7F–öâ6–×VÆF–öäWfVçDÆÆ÷vVB‡6–ÒÂWfVçB’°¢–b‡6–ÒçGW&âÂ†WfVçBæÖ–å÷GW&âÇÂ’’&WGW&âfÇ6S°¢–b‡6–ÒçGW&ââ†WfVçBæÖ…÷GW&âÇÂ7W'&VçDÖ…GW&ç2‡6–Ò’’’&WGW&âfÇ6S°¢–b†WfVçBæÖ–åöFV'BÒçVÆÂbb6–Òæ6ö×ç’æFV'BÂWfVçBæÖ–åöFV'B’&WGW&âfÇ6S°¢–b†WfVçBæÖ…öFV'BÒçVÆÂbb6–Òæ6ö×ç’æFV'BâWfVçBæÖ…öFV'B’&WGW&âfÇ6S°¢–b†WfVçBæÆÆ÷vVEö–æGW7G&–W3òæÆVæwF‚’°¢6öç7B÷væVD–æGW7G&–W2ÒæWr6WB‡6–Òæ6ö×ç’æ'W6–æW76W2æÖ‚†—FVÒ’Óâ'W6–æW74'”–B†—FVÒæ'W6–æW74–B’æ–æGW7G'’’“°¢–b‚WfVçBæÆÆ÷vVEö–æGW7G&–W2ç6öÖR‚†–æGW7G'’’Óâ÷væVD–æGW7G&–W2æ†2†–æGW7G'’’’’&WGW&âfÇ6S°¢Ğ¢&WGW&âG'VS°§Ğ ¦gVæ7F–öâ–6´&W7D6†ö–6R†6†ö–6W2’°¢&WGW&â²ââæ6†ö–6W5Òç6÷'B‚†Â"’Óâ6†ö–6U66÷&R†"’Ò6†ö–6U66÷&R†’•³Ó°§Ğ ¦gVæ7F–öâ–6´&W7D6&B†6&G2Â6–Ò’°¢&WGW&â6&G2æf–ÇFW"‚†6&B’Óâ6–Òæ6ö×ç’æ66‚ãÒ†6&Bæ6÷7BÇÂ’’ç6÷'B‚†Â"’Óâ6†ö–6U66÷&R†"’Ò6†ö–6U66÷&R†’•³Ó°§Ğ ¦gVæ7F–öâ–6´&W7D'W6–æW72†'W6–æW76W2Â6–Ò’°¢&WGW&â'W6–æW76W0¢æf–ÇFW"‚†'W6–æW72’Óâ6–Òæ6ö×ç’æ'W6–æW76W2ç6öÖR‚†÷væVB’Óâ÷væVBæ'W6–æW74–BÓÓÒ'W6–æW72æ–B’¢ç6÷'B‚†Â"’Óâ‚†"ç&WfVçVRÒ"æW‡Vç6R’ò"æ6÷7B’Ò‚†ç&WfVçVRÒæW‡Vç6R’òæ6÷7B’•³Ó°§Ğ ¦gVæ7F–öâ–6µWw&FUF&vWB‡6–Ò’°¢&WGW&â²ââç6–Òæ6ö×ç’æ'W6–æW76W5Ğ¢æf–ÇFW"‚†÷væVB’Óâ÷væVBæÆWfVÂÂ'W6–æW74'”–B†÷væVBæ'W6–æW74–B’æÖ…öÆWfVÂ¢ç6÷'B‚†Â"’Óâ†'W6–æW74'”–B†"æ'W6–æW74–B’ç&WfVçVRÒ'W6–æW74'”–B†"æ'W6–æW74–B’æW‡Vç6R’Ò†'W6–æW74'”–B†æ'W6–æW74–B’ç&WfVçVRÒ'W6–æW74'”–B†æ'W6–æW74–B’æW‡Vç6R’•³Ó°§Ğ ¦gVæ7F–öâ6†ö–6U66÷&R†6†ö–6R’°¢&WGW&â†6†ö–6Ræ66‚ÇÂ’²‚†6†ö–6RæFV'BÇÂ’¢ÓãB’²‚†6†ö–6Rç&WfVçVUö&öçW2ÇÂ’¢’Ò‚†6†ö–6RæW‡Vç6Uö&öçW2ÇÂ’¢s’Ò‚†6†ö–6Rç&—6²ÇÂ’¢#“°§Ğ ¦gVæ7F–öâfW&vR‡fÇVW2’°¢&WGW&âfÇVW2æÆVæwF‚òÖF‚ç&÷VæB‡fÇVW2ç&VGV6R‚‡7VÒÂfÇVR’Óâ7VÒ²fÇVRÂ’òfÇVW2æÆVæwF‚’¢°§Ğ ¦gVæ7F–öâÖöæW’‡fÇVR’°¢&WGW&âBG´ÖF‚ç&÷VæB‡fÇVR’çFôÆö6ÆU7G&–ær‚&VâÕU2"—Ö°§Ğ ¦gVæ7F–öâ7Fö6´ÖöæW’‡fÇVR’°¢&WGW&âBG´çVÖ&W"‡fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚&VâÕU2"Â²Ö–æ–×VÔg&7F–öäF–v—G3¢"ÂÖ†–×VÔg&7F–öäF–v—G3¢"Ò—Ö°§Ğ ¦gVæ7F–öâW&6VçB‡fÇVR’°¢&WGW&âG´ÖF‚ç&÷VæB‡fÇVR¢—ÒV°§Ğ ¦gVæ7F–öâ6–væVEW&6VçB‡fÇVR’°¢&WGW&âG·fÇVRãÒò"²"¢"'ÒG´ÖF‚ç&÷VæB‡fÇVR¢—ÒV°§Ğ ¦gVæ7F–öâ6–væVE7Fö6µW&6VçB‡fÇVR’°¢&WGW&âG·fÇVRãÒò"²"¢"'ÒG²‡fÇVR¢’çFôf—†VBƒ—ÒV°§Ğ ¦gVæ7F–öâ6–væVDÖöæW’‡fÇVR’°¢&WGW&âG·fÇVRãÒò"²"¢"Ò'ÒBG´ÖF‚æ'2„ÖF‚ç&÷VæB‡fÇVR’’çFôÆö6ÆU7G&–ær‚&VâÕU2"—Ö°§Ğ ¦gVæ7F–öâ6–væVE7Fö6´ÖöæW’‡fÇVR’°¢&WGW&âG·fÇVRãÒò"²"¢"Ò'ÒBG´ÖF‚æ'2„çVÖ&W"‡fÇVRÇÂ’’çFôÆö6ÆU7G&–ær‚&VâÕU2"Â²Ö–æ–×VÔg&7F–öäF–v—G3¢"ÂÖ†–×VÔg&7F–öäF–v—G3¢"Ò—Ö°§Ğ ¦gVæ7F–öâFr‡FW‡BÂFöæRÒ""’°¢&WGW&âÇ7â6Æ73Ò'FrG·FöæWÒ#âG·FW‡GÓÂ÷7ãæ°§Ğ ¦gVæ7F–öâ6Æ×‡fÇVRÂÖ–âÂÖ‚’°¢&WGW&âÖF‚æÖ‚†Ö–âÂÖF‚æÖ–â†Ö‚ÂfÇVR’“°§Ğ ¦gVæ7F–öâ6×ÆR†—FV×2’°¢&WGW&â—FV×5´ÖF‚æfÆö÷"„ÖF‚ç&æFöÒ‚’¢—FV×2æÆVæwF‚•Ó°§Ğ
