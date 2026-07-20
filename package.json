@@ -16,5 +16,8 @@
   },
   "devDependencies": {
     "vite": "^8.1.4"
+  },
+  "dependencies": {
+    "@fontsource-variable/pixelify-sans": "^5.3.0"
   }
 }

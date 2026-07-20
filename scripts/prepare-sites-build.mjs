@@ -15,7 +15,6 @@ async function copyWebAssets(source, destination) {
 
 await Promise.all([
   copyWebAssets("assets/company-logos", "dist/client/assets/company-logos"),
-  copyWebAssets("assets/icons", "dist/client/assets/icons"),
   cp("data", "dist/client/data", { recursive: true }),
   copyFile(".openai/hosting.json", "dist/.openai/hosting.json"),
 ]);

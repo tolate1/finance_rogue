@@ -1,4 +1,5 @@
-﻿import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
+﻿import "@fontsource-variable/pixelify-sans/wght.css";
+import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
 import {
   RUN_DIFFICULTIES,
   RUN_SCENARIOS,
@@ -1247,14 +1248,11 @@ const ui = {
   bottomNav: document.getElementById("bottom-nav")
 };
 
-let titleAnimationFrame = 0;
-let titleAnimationCanvas = null;
-
 const NAV_ITEMS = [
-  { id: "dashboard", labelKey: "gameTab", icon: "./assets/icons/decisions.webp" },
-  { id: "portfolio", labelKey: "portfolio", icon: "./assets/icons/portfolio.webp" },
-  { id: "market", labelKey: "market", icon: "./assets/icons/market.webp" },
-  { id: "economy", labelKey: "economy", icon: "./assets/icons/economy.webp" }
+  { id: "dashboard", labelKey: "gameTab", icon: "game" },
+  { id: "portfolio", labelKey: "portfolio", icon: "portfolio" },
+  { id: "market", labelKey: "market", icon: "market" },
+  { id: "economy", labelKey: "economy", icon: "economy" }
 ];
 
 boot();
@@ -1544,7 +1542,6 @@ function isTutorialRound() {
 }
 
 function render() {
-  stopTitleScreenAnimation();
   renderHeader();
   renderBottomNav();
   if (!hasSelectedLanguage()) {
@@ -1555,380 +1552,10 @@ function render() {
   if (state.runSetupOpen || !state.run) {
     ui.tabContent.innerHTML = renderRunSetupScreen();
     bindTabEvents();
-    startTitleScreenAnimation();
     return;
   }
   ui.tabContent.innerHTML = `${state.languageModalOpen ? renderLanguageModal() : ""}${renderActiveTab()}`;
   bindTabEvents();
-}
-
-function stopTitleScreenAnimation() {
-  if (titleAnimationFrame) cancelAnimationFrame(titleAnimationFrame);
-  titleAnimationFrame = 0;
-  titleAnimationCanvas = null;
-}
-
-function startTitleScreenAnimation() {
-  const canvas = ui.tabContent.querySelector("[data-title-animation]");
-  if (!canvas) return;
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) return;
-
-  titleAnimationCanvas = canvas;
-  context.imageSmoothingEnabled = false;
-  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  const startedAt = performance.now();
-  let lastPaint = -Infinity;
-
-  const paint = (now) => {
-    if (titleAnimationCanvas !== canvas || !canvas.isConnected) return;
-    if (now - lastPaint >= 1000 / 12 || reduceMotion) {
-      drawTitleAnimationFrame(context, canvas.width, canvas.height, reduceMotion ? 1.6 : (now - startedAt) / 1000);
-      lastPaint = now;
-    }
-    if (!reduceMotion) titleAnimationFrame = requestAnimationFrame(paint);
-  };
-
-  paint(startedAt);
-}
-
-function drawTitleAnimationFrame(context, width, height, elapsed) {
-  const loopDuration = 18;
-  const sceneDuration = loopDuration / 4;
-  const time = elapsed % loopDuration;
-  const scene = Math.floor(time / sceneDuration);
-  const localTime = time - scene * sceneDuration;
-
-  context.save();
-  context.clearRect(0, 0, width, height);
-  if (scene === 0) drawLedgerScene(context, width, height, localTime);
-  if (scene === 1) drawFounderScene(context, width, height, localTime);
-  if (scene === 2) drawMachineScene(context, width, height, localTime);
-  if (scene === 3) drawMarketCorridorScene(context, width, height, localTime);
-  drawFmvArtifacts(context, width, height, time, localTime, sceneDuration);
-  context.restore();
-}
-
-function drawLedgerScene(context, width, height, time) {
-  fillFmvGradient(context, width, height, "#4c331d", "#060909");
-  drawFmvBloom(context, 28, 82, 95, "246, 177, 91", 0.72);
-  drawFmvBloom(context, 138, 124, 70, "92, 136, 148", 0.18);
-
-  const horizon = 168;
-  context.save();
-  context.translate(Math.sin(time * 0.8) * 1.2, Math.cos(time * 0.55) * 0.7);
-  context.strokeStyle = "rgba(197, 165, 104, 0.32)";
-  context.lineWidth = 1;
-  for (let column = -4; column <= 4; column += 1) {
-    context.beginPath();
-    context.moveTo(width / 2 + column * 3, horizon);
-    context.lineTo(width / 2 + column * 34, height + 6);
-    context.stroke();
-  }
-  for (let row = 0; row <= 11; row += 1) {
-    const progress = row / 11;
-    const y = horizon + Math.pow(progress, 1.72) * (height - horizon);
-    context.globalAlpha = 0.18 + progress * 0.3;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y);
-    context.stroke();
-  }
-  context.restore();
-
-  for (let index = 0; index < 28; index += 1) {
-    const x = fmvNoise(index * 4.1 + 2) * width;
-    const drift = (fmvNoise(index * 8.7) * height + time * (4 + fmvNoise(index) * 7)) % height;
-    const size = 1 + Math.floor(fmvNoise(index * 3.3) * 3);
-    context.fillStyle = `rgba(255, ${174 + Math.floor(fmvNoise(index) * 55)}, 111, ${0.08 + fmvNoise(index * 2) * 0.28})`;
-    context.fillRect(Math.round(x), Math.round(drift), size, size);
-  }
-
-  drawPixelFounder(context, width / 2, 137, 1, time, "phone");
-  context.fillStyle = "rgba(0, 0, 0, 0.42)";
-  context.beginPath();
-  context.ellipse(width / 2, 200, 18, 5, 0, 0, Math.PI * 2);
-  context.fill();
-}
-
-function drawFounderScene(context, width, height, time) {
-  fillFmvGradient(context, width, height, "#e9c79a", "#453022");
-  drawFmvBloom(context, width - 28, 132, 114, "255, 239, 190", 0.98);
-  drawFmvBloom(context, 24, 86, 88, "225, 136, 75", 0.5);
-
-  const drift = Math.round(Math.sin(time * 0.6) * 2);
-  context.save();
-  context.translate(drift, 0);
-  drawPixelFounder(context, 82, 116, 2.08, time, "portrait");
-  context.restore();
-
-  context.fillStyle = "rgba(255, 245, 213, 0.22)";
-  context.fillRect(0, 58 + Math.floor((time * 8) % 46), width, 7);
-  context.fillStyle = "rgba(63, 29, 19, 0.35)";
-  context.fillRect(0, 188, 74, 10);
-}
-
-function drawMachineScene(context, width, height, time) {
-  fillFmvGradient(context, width, height, "#766044", "#07090a");
-  drawFmvBloom(context, 120, 124, 112, "255, 225, 157", 0.95);
-  drawGear(context, 22, 151, 47, 12, time * 0.14, "#5d5142");
-  drawGear(context, 148, 222, 59, 14, -time * 0.1, "#3d3934");
-  drawGear(context, 55, 251, 34, 10, -time * 0.17, "#7a6750");
-  drawGear(context, 150, 62, 31, 10, time * 0.2, "#695944");
-
-  drawPixelFounder(context, 91, 139, 0.82, time, "idle");
-  context.fillStyle = "rgba(10, 8, 7, 0.55)";
-  context.fillRect(82, 179, 19, 70);
-}
-
-function drawMarketCorridorScene(context, width, height, time) {
-  fillFmvGradient(context, width, height, "#10211f", "#020405");
-  drawFmvBloom(context, 92, 188, 68, "48, 205, 130", 0.42 + Math.sin(time * 2) * 0.08);
-  drawFmvBloom(context, 78, 99, 58, "225, 45, 61", 0.36);
-
-  context.strokeStyle = "rgba(87, 198, 169, 0.22)";
-  context.lineWidth = 1;
-  for (let offset = -3; offset <= 3; offset += 1) {
-    context.beginPath();
-    context.moveTo(width / 2 + offset * 5, 124);
-    context.lineTo(width / 2 + offset * 42, height);
-    context.stroke();
-  }
-  for (let row = 0; row < 7; row += 1) {
-    const y = 139 + row * row * 4.2;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y);
-    context.stroke();
-  }
-
-  const pulse = Math.round(Math.sin(time * 2.2) * 2);
-  context.save();
-  context.globalAlpha = 0.82;
-  drawPixelFounder(context, 90 + pulse, 140, 0.9, time, "shadow");
-  context.restore();
-
-  for (let index = 0; index < 11; index += 1) {
-    const x = 20 + index * 13;
-    const y = 57 + Math.round(fmvNoise(index + 7) * 32);
-    context.fillStyle = index % 3 === 0 ? "rgba(224, 45, 58, 0.54)" : "rgba(72, 205, 143, 0.42)";
-    context.fillRect(x, y, 7, 2 + Math.floor(fmvNoise(index * 2) * 5));
-  }
-}
-
-function fillFmvGradient(context, width, height, top, bottom) {
-  const gradient = context.createLinearGradient(0, 0, 0, height);
-  gradient.addColorStop(0, top);
-  gradient.addColorStop(1, bottom);
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
-}
-
-function drawFmvBloom(context, x, y, radius, rgb, opacity) {
-  const bloom = context.createRadialGradient(x, y, 0, x, y, radius);
-  bloom.addColorStop(0, `rgba(${rgb}, ${opacity})`);
-  bloom.addColorStop(0.2, `rgba(${rgb}, ${opacity * 0.58})`);
-  bloom.addColorStop(1, `rgba(${rgb}, 0)`);
-  context.fillStyle = bloom;
-  context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-}
-
-function fillPixelPolygon(context, color, points) {
-  context.fillStyle = color;
-  context.beginPath();
-  context.moveTo(points[0][0], points[0][1]);
-  for (let index = 1; index < points.length; index += 1) {
-    context.lineTo(points[index][0], points[index][1]);
-  }
-  context.closePath();
-  context.fill();
-}
-
-function drawPixelFounder(context, x, y, scale, time, pose = "idle") {
-  const shadowPose = pose === "shadow";
-  const portraitPose = pose === "portrait";
-  const handToFace = pose === "phone" || portraitPose;
-  const breath = Math.round(Math.sin(time * 1.55));
-  const headShift = Math.round(Math.sin(time * 0.72 + 0.7));
-  const palette = shadowPose ? {
-    outline: "#020606",
-    hair: "#040708",
-    hairLight: "#17312d",
-    skin: "#273c35",
-    skinLight: "#466258",
-    skinShadow: "#13241f",
-    shirt: "#182b29",
-    shirtLight: "#284840",
-    sleeve: "#17282d",
-    sleeveLight: "#31504f",
-    red: "#b82e3e",
-    eye: "#e93c4e",
-    trousers: "#030707",
-    shoe: "#010303"
-  } : {
-    outline: "#090b0d",
-    hair: "#0b0d10",
-    hairLight: "#2b2e36",
-    skin: "#bd7d5d",
-    skinLight: "#e2a27b",
-    skinShadow: "#7d493d",
-    shirt: "#d8e0df",
-    shirtLight: "#f2eee0",
-    sleeve: "#566fae",
-    sleeveLight: "#8295ca",
-    red: "#a72f3a",
-    eye: "#c63442",
-    trousers: "#0a0c11",
-    shoe: "#040506"
-  };
-
-  context.save();
-  context.translate(Math.round(x), Math.round(y + breath));
-  context.scale(scale, scale);
-
-  // Wide trousers and heavy shoes keep the silhouette readable at 180 px.
-  fillPixelPolygon(context, palette.trousers, [[-17, 32], [-1, 31], [-3, 73], [-8, 82], [-22, 82], [-18, 66]]);
-  fillPixelPolygon(context, palette.trousers, [[1, 31], [17, 32], [20, 68], [23, 82], [7, 82], [3, 73]]);
-  context.fillStyle = palette.shoe;
-  context.fillRect(-24, 79, 18, 7);
-  context.fillRect(7, 79, 19, 7);
-  context.fillStyle = shadowPose ? "#1d4038" : "#343946";
-  context.fillRect(-15, 38, 3, 31);
-  context.fillRect(11, 38, 3, 28);
-
-  // Back arm: one straight sleeve, one bent toward the face.
-  if (handToFace) {
-    fillPixelPolygon(context, palette.sleeve, [[-17, -7], [-29, -1], [-31, 16], [-25, 22], [-18, 12]]);
-    fillPixelPolygon(context, palette.sleeveLight, [[-28, 12], [-23, 10], [-18, -25], [-23, -29], [-31, 4]]);
-    context.fillStyle = palette.skin;
-    context.fillRect(-24, -34, 8, 11);
-    context.fillStyle = palette.skinLight;
-    context.fillRect(-22, -35, 5, 4);
-  } else {
-    fillPixelPolygon(context, palette.sleeve, [[-18, -6], [-28, 0], [-25, 34], [-17, 35], [-13, 10]]);
-    context.fillStyle = palette.skin;
-    context.fillRect(-26, 31, 8, 10);
-  }
-
-  fillPixelPolygon(context, palette.sleeve, [[17, -7], [28, 0], [25, 34], [17, 37], [13, 10]]);
-  context.fillStyle = palette.sleeveLight;
-  context.fillRect(20, -1, 4, 31);
-  context.fillStyle = palette.skin;
-  context.fillRect(18, 34, 8, 10);
-
-  // Oversized white jersey with a single red number mark.
-  fillPixelPolygon(context, palette.outline, [[-19, -10], [18, -10], [23, 5], [18, 38], [-18, 38], [-23, 5]]);
-  fillPixelPolygon(context, palette.shirt, [[-16, -8], [15, -8], [19, 5], [15, 34], [-15, 34], [-19, 5]]);
-  fillPixelPolygon(context, palette.shirtLight, [[-12, -7], [4, -7], [1, 33], [-14, 33], [-17, 4]]);
-  context.fillStyle = palette.red;
-  context.fillRect(-5, 1, 4, 23);
-  context.fillRect(3, 1, 4, 23);
-  context.fillRect(-7, 1, 5, 4);
-  context.fillRect(1, 1, 5, 4);
-  context.fillStyle = shadowPose ? "#28443c" : "#8e999c";
-  context.fillRect(-14, 29, 28, 3);
-
-  // Neck and low-poly face use the same proportions in every scene.
-  context.fillStyle = palette.skinShadow;
-  context.fillRect(-7, -18, 14, 12);
-  fillPixelPolygon(context, palette.outline, [[-18 + headShift, -51], [-9 + headShift, -61], [10 + headShift, -58], [18 + headShift, -47], [15 + headShift, -27], [6 + headShift, -17], [-8 + headShift, -18], [-17 + headShift, -31]]);
-  fillPixelPolygon(context, palette.skin, [[-14 + headShift, -49], [-7 + headShift, -56], [9 + headShift, -54], [14 + headShift, -45], [12 + headShift, -29], [5 + headShift, -21], [-7 + headShift, -22], [-13 + headShift, -32]]);
-  fillPixelPolygon(context, palette.skinLight, [[2 + headShift, -52], [9 + headShift, -50], [12 + headShift, -43], [9 + headShift, -28], [3 + headShift, -24], [-1 + headShift, -31]]);
-  context.fillStyle = palette.skinShadow;
-  context.fillRect(-15 + headShift, -42, 4, 12);
-  context.fillRect(7 + headShift, -31, 6, 4);
-  context.fillStyle = palette.eye;
-  context.fillRect(3 + headShift, -41, 5, 3);
-  context.fillStyle = palette.outline;
-  context.fillRect(-8 + headShift, -40, 5, 3);
-  context.fillRect(1 + headShift, -26, 7, 2);
-
-  // Heavy stepped fringe: large clusters instead of noisy single pixels.
-  fillPixelPolygon(context, palette.hair, [[-20 + headShift, -50], [-13 + headShift, -64], [4 + headShift, -67], [16 + headShift, -58], [19 + headShift, -47], [12 + headShift, -45], [9 + headShift, -52], [5 + headShift, -43], [0 + headShift, -50], [-5 + headShift, -39], [-11 + headShift, -45], [-15 + headShift, -34], [-20 + headShift, -39]]);
-  context.fillStyle = palette.hair;
-  context.fillRect(-23 + headShift, -55, 8, 19);
-  context.fillRect(-15 + headShift, -64, 11, 10);
-  context.fillRect(7 + headShift, -62, 8, 8);
-  context.fillStyle = palette.hairLight;
-  context.fillRect(-10 + headShift, -62, 12, 3);
-  context.fillRect(9 + headShift, -56, 5, 4);
-  context.fillRect(-20 + headShift, -46, 3, 10);
-
-  // One-pixel rim light makes the hero separate from bright FMV bloom.
-  context.fillStyle = shadowPose ? "#4cc98e" : "#f2c27b";
-  context.fillRect(16 + headShift, -52, 2, 12);
-  context.fillRect(18, -4, 2, 22);
-  if (portraitPose) {
-    context.fillStyle = "rgba(255, 236, 195, 0.3)";
-    context.fillRect(-26, -13, 5, 42);
-  }
-  context.restore();
-}
-
-function drawGear(context, x, y, radius, teeth, rotation, color) {
-  context.save();
-  context.translate(x, y);
-  context.rotate(rotation);
-  context.fillStyle = color;
-  for (let tooth = 0; tooth < teeth; tooth += 1) {
-    context.save();
-    context.rotate((Math.PI * 2 * tooth) / teeth);
-    context.fillRect(radius - 3, -5, 11, 10);
-    context.restore();
-  }
-  context.beginPath();
-  context.arc(0, 0, radius, 0, Math.PI * 2);
-  context.fill();
-  context.globalCompositeOperation = "destination-out";
-  context.beginPath();
-  context.arc(0, 0, radius * 0.58, 0, Math.PI * 2);
-  context.fill();
-  context.globalCompositeOperation = "source-over";
-  context.strokeStyle = "rgba(236, 206, 151, 0.34)";
-  context.lineWidth = 2;
-  context.beginPath();
-  context.arc(0, 0, radius * 0.76, 0, Math.PI * 2);
-  context.stroke();
-  context.restore();
-}
-
-function drawFmvArtifacts(context, width, height, time, localTime, sceneDuration) {
-  const frame = Math.floor(time * 12);
-  for (let index = 0; index < 7; index += 1) {
-    const x = Math.floor(fmvNoise(frame * 1.7 + index * 11) * width);
-    const y = Math.floor(fmvNoise(frame * 2.9 + index * 19) * height);
-    const blockWidth = 3 + Math.floor(fmvNoise(index * 7 + frame) * 18);
-    context.fillStyle = `rgba(210, 231, 222, ${0.018 + fmvNoise(index + frame) * 0.035})`;
-    context.fillRect(x, y, blockWidth, 2 + Math.floor(fmvNoise(index * 13) * 5));
-  }
-
-  context.fillStyle = "rgba(0, 0, 0, 0.13)";
-  for (let y = 0; y < height; y += 3) context.fillRect(0, y, width, 1);
-
-  const vignette = context.createRadialGradient(width / 2, height * 0.45, 42, width / 2, height * 0.46, height * 0.64);
-  vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
-  vignette.addColorStop(0.72, "rgba(0, 0, 0, 0.18)");
-  vignette.addColorStop(1, "rgba(0, 0, 0, 0.88)");
-  context.fillStyle = vignette;
-  context.fillRect(0, 0, width, height);
-
-  const edge = Math.min(localTime, sceneDuration - localTime);
-  if (edge < 0.18) {
-    const strength = 1 - edge / 0.18;
-    context.fillStyle = `rgba(255, 239, 198, ${strength * 0.42})`;
-    context.fillRect(0, 0, width, height);
-    for (let line = 0; line < 4; line += 1) {
-      const y = Math.floor(fmvNoise(frame + line * 31) * height);
-      const shift = Math.floor((fmvNoise(frame * 3 + line) - 0.5) * 28);
-      context.fillStyle = line % 2 ? "rgba(29, 202, 153, 0.32)" : "rgba(214, 52, 60, 0.28)";
-      context.fillRect(Math.max(0, shift), y, width - Math.abs(shift), 2 + line);
-    }
-  }
-}
-
-function fmvNoise(seed) {
-  const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-  return value - Math.floor(value);
 }
 
 function primaryFlowStatus(run) {
@@ -2032,7 +1659,7 @@ function renderBottomNav() {
     ui.bottomNav.classList.add("tutorial-bottom-nav");
     ui.bottomNav.innerHTML = `
       <button class="nav-item active" data-tab="dashboard">
-        <img src="${item.icon}" alt="${t(item.labelKey)}" class="nav-icon">
+        ${uiIcon(item.icon)}
         <strong>${t(item.labelKey)}</strong>
       </button>
       <span class="tutorial-nav-message">🔒 ${t("tutorialNavLocked")}</span>
@@ -2046,7 +1673,7 @@ function renderBottomNav() {
   const recommendedMarker = phase === TURN_PHASES.EVENT ? "1" : phase === TURN_PHASES.ACTION ? "2" : "✓";
   ui.bottomNav.innerHTML = NAV_ITEMS.map((item) => `
     <button class="nav-item ${state.activeTab === item.id ? "active" : ""} ${recommendedTab === item.id && state.activeTab !== item.id ? "recommended" : ""}" data-tab="${item.id}">
-      <img src="${item.icon}" alt="${t(item.labelKey)}" class="nav-icon">
+      ${uiIcon(item.icon)}
       <strong>${t(item.labelKey)}</strong>
       ${recommendedTab === item.id && state.activeTab !== item.id ? `<span class="nav-badge" aria-label="${t("recommendedStep")}">${recommendedMarker}</span>` : ""}
     </button>
@@ -2115,26 +1742,38 @@ function difficultyRewardLabel(difficultyId) {
 function renderRunSetupScreen() {
   const preview = previewRunConfiguration();
   return `
-    <section class="run-setup-screen welcome-screen title-screen ${state.runSetupAdvanced ? "settings-open" : ""}">
-      <canvas class="title-screen-art" data-title-animation width="180" height="320" aria-hidden="true"></canvas>
-      <div class="title-screen-light" aria-hidden="true"></div>
-      <div class="title-screen-grain" aria-hidden="true"></div>
-      <div class="run-setup-intro welcome-hero">
-        <p class="eyebrow">${t("titleScreenKicker")}</p>
-        <h2><span>FINANCE</span><strong>ROGUE</strong></h2>
-        <p>${t("titleScreenTagline", { turns: nextRunMaxTurns() })}</p>
-        <div class="welcome-flow" aria-label="${t("roundExplainerTitle")}">
-          <span><b>1</b>${t("welcomeStepOne")}</span>
-          <span><b>2</b>${t("welcomeStepTwo")}</span>
-          <span><b>3</b>${t("welcomeStepThree")}</span>
+    <section class="run-setup-screen menu-screen ${state.runSetupAdvanced ? "settings-open" : ""}">
+      <div class="menu-world" aria-hidden="true">
+        <span class="menu-grid"></span>
+        <span class="menu-skyline menu-skyline-back"></span>
+        <span class="menu-skyline menu-skyline-front"></span>
+        <span class="menu-chart-line"></span>
+      </div>
+      <div class="menu-topbar">
+        <button class="language-inline-button" data-open-language aria-label="${t("changeLanguage")}">${state.selectedLanguage.toUpperCase()}</button>
+        <span class="menu-build">BUILD 01 // LOCAL MARKET</span>
+      </div>
+      <div class="menu-content">
+        <div class="run-setup-intro menu-brand-block">
+          <div class="menu-logo-mark" aria-hidden="true"><span>F</span><span>R</span></div>
+          <p class="eyebrow">${t("titleScreenKicker")}</p>
+          <h2><span>FINANCE</span><strong>ROGUE</strong></h2>
+          <p>${t("titleScreenTagline", { turns: nextRunMaxTurns() })}</p>
+        </div>
+        <div class="menu-loop" aria-label="${t("roundExplainerTitle")}">
+          <span><b>01</b><em>${t("welcomeStepOne")}</em></span>
+          <span><b>02</b><em>${t("welcomeStepTwo")}</em></span>
+          <span><b>03</b><em>${t("welcomeStepThree")}</em></span>
+        </div>
+        <div class="menu-actions">
+          <button class="primary-button setup-quick-start welcome-start-button" data-start-configured-run>${t("titleScreenPlay")}</button>
+          <button class="secondary-button welcome-config-button" data-toggle-run-setup>${t("titleScreenSettings")}</button>
+          ${state.run ? `<button class="ghost-button title-return-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
         </div>
       </div>
-      <button class="primary-button setup-quick-start welcome-start-button" data-start-configured-run>${t("titleScreenPlay")}</button>
-      <button class="secondary-button welcome-config-button" data-toggle-run-setup>${t("titleScreenSettings")}</button>
-      <button class="language-inline-button" data-open-language aria-label="${t("changeLanguage")}">${state.selectedLanguage.toUpperCase()}</button>
 
-      ${state.runSetupAdvanced ? `<div class="run-setup-section setup-advanced-panel">
-        <div class="tab-header"><h2>${t("chooseScenario")}</h2></div>
+      ${state.runSetupAdvanced ? `<div class="setup-overlay"><div class="run-setup-section setup-advanced-panel">
+        <div class="setup-panel-head"><div><span>RUN CONFIG</span><h2>${t("chooseScenario")}</h2></div><button class="ghost-button setup-close-button" data-toggle-run-setup>×</button></div>
         <div class="setup-option-grid scenario-option-grid">
           ${RUN_SCENARIOS.map((scenario) => `
             <button class="setup-option-card ${state.selectedScenarioId === scenario.id ? "selected" : ""}" data-run-scenario="${scenario.id}" aria-pressed="${state.selectedScenarioId === scenario.id}">
@@ -2144,7 +1783,7 @@ function renderRunSetupScreen() {
           `).join("")}
         </div>
 
-      <div class="run-setup-section">
+      <div class="run-setup-section setup-difficulty-section">
         <div class="tab-header"><h2>${t("chooseDifficulty")}</h2></div>
         <div class="setup-option-grid difficulty-option-grid">
           ${RUN_DIFFICULTIES.map((difficulty) => `
@@ -2166,7 +1805,7 @@ function renderRunSetupScreen() {
       <div class="setup-actions">
         <button class="primary-button" data-start-configured-run>${t("startConfiguredRun")}</button>
         ${state.run ? `<button class="secondary-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
-      </div></div>` : state.run ? `<button class="secondary-button title-return-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
+      </div></div></div>` : ""}
       ${state.languageModalOpen ? renderLanguageModal() : ""}
     </section>
   `;
@@ -2210,26 +1849,20 @@ function renderTutorialTask(phase) {
   `;
 }
 
-function visualIcon(type) {
-  const paths = {
-    consumer: '<path d="M6.5 8.5h11l-1 11h-9l-1-11Z"/><path d="M9 9V6.5a3 3 0 0 1 6 0V9"/>',
-    monetary: '<path d="M3.5 9h17L12 4 3.5 9Z"/><path d="M5 19h14M6.5 10.5v6.5M10.2 10.5v6.5M13.8 10.5v6.5M17.5 10.5v6.5"/>',
-    prices: '<circle cx="9" cy="9" r="4.5"/><circle cx="15" cy="15" r="4.5"/><path d="M9 6.8v4.4M7.8 8h2.4M15 12.8v4.4M13.8 14h2.4"/>',
-    energy: '<path d="M13.5 2.5 5.5 13h6l-1 8.5L18.5 11h-6l1-8.5Z"/>',
-    markets: '<path d="M4 18 9 12l4 3 7-9"/><path d="M15.5 6H20v4.5"/><path d="M4 21h16"/>',
-    growth: '<path d="M4 18 9 13l4 3 7-9"/><path d="M15.5 7H20v4.5"/>',
-    supply: '<path d="M3.5 7.5h10v9h-10zM13.5 11h3l3 3v2.5h-6z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>',
-    regulation: '<path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 12h6M9 15h6"/>',
-    labor: '<circle cx="9" cy="8" r="3"/><circle cx="16.5" cy="9" r="2.3"/><path d="M3.5 19c.4-4 2.3-6 5.5-6s5.1 2 5.5 6M14 14c3.7-.3 5.7 1.4 6 5"/>',
-    technology: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 9h6v6H9zM9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M18.5 9h3M2.5 15h3M18.5 15h3"/>',
-    property: '<path d="M4 20V8l6-3v15M10 20V3l10 4v13M7 11h1M7 14h1M13 8h2M17 9h1M13 12h2M17 13h1M13 16h2M17 17h1M2.5 20h19"/>',
-    defense: '<path d="M12 3 19 6v5c0 4.5-2.5 7.8-7 10-4.5-2.2-7-5.5-7-10V6l7-3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/>',
-    liquidity: '<path d="M4 7h14a2 2 0 0 1 2 2v9H4z"/><path d="M4 7V5h12v2M15 12h5"/><circle cx="16" cy="14.5" r=".7"/>',
-    leverage: '<path d="M3.5 9h17L12 4 3.5 9Z"/><path d="M6 11v6M10 11v6M14 11v6M18 11v6M4 20h16"/>',
-    efficiency: '<path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h7M15 17h5"/><circle cx="16" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="17" r="2"/>',
-    balanced: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/>'
+function uiIcon(type) {
+  const glyphs = {
+    game: "◆", portfolio: "▦", market: "↗", economy: "≋",
+    buy: "+", upgrade: "↑", sell: "−", cards: "▤", hold: "■", debt: "↓",
+    businesses: "▦", real_estate: "▥", stocks: "↗", collection: "◆",
+    consumer: "◫", monetary: "$", prices: "%", energy: "ϟ", markets: "↗",
+    growth: "▲", supply: "▣", regulation: "§", labor: "●", technology: "⌘",
+    property: "▥", defense: "◇", liquidity: "▰", leverage: "▲", efficiency: "≡", balanced: "+"
   };
-  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${paths[type] || paths.balanced}</svg>`;
+  return `<span class="ui-icon ui-icon--${type}" aria-hidden="true">${glyphs[type] || glyphs.balanced}</span>`;
+}
+
+function visualIcon(type) {
+  return uiIcon(type);
 }
 
 function eventPresentation(event) {
@@ -2337,14 +1970,14 @@ function renderEventStage() {
 
 function actionCategories() {
   let categories = [
-    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), kicker: t("market"), tone: "market", icon: "./assets/icons/market.webp" },
-    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), kicker: t("portfolio"), tone: "portfolio", icon: "./assets/icons/portfolio.webp" },
-    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), kicker: t("cash"), tone: "liquidity", icon: "./assets/icons/dashboard.webp" },
-    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), kicker: t("actionCards"), tone: "cards", icon: "./assets/icons/decisions.webp" },
-    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), kicker: t("strategyDefense"), tone: "defense", icon: "./assets/icons/economy.webp" }
+    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), kicker: t("market"), tone: "market", icon: "buy" },
+    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), kicker: t("portfolio"), tone: "portfolio", icon: "upgrade" },
+    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), kicker: t("cash"), tone: "liquidity", icon: "sell" },
+    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), kicker: t("actionCards"), tone: "cards", icon: "cards" },
+    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), kicker: t("strategyDefense"), tone: "defense", icon: "hold" }
   ];
   if (state.run.company.debt > 0) {
-    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), kicker: t("debt"), tone: "debt", icon: "./assets/icons/economy.webp" });
+    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), kicker: t("debt"), tone: "debt", icon: "debt" });
   }
   if (isTutorialRound()) categories = categories.filter((category) => ["buy", "upgrade", "hold"].includes(category.id));
   return categories;
@@ -2408,7 +2041,7 @@ function renderActionStage() {
           return `
             <button class="action-type-button motion-card action-tone--${category.tone} ${availability.disabled ? "unavailable" : ""}" style="--card-index:${index}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
               <span class="action-card-visual">
-                <span class="action-icon-wrap"><img src="${category.icon}" alt="" class="action-type-icon"></span>
+                <span class="action-icon-wrap">${uiIcon(category.icon)}</span>
               </span>
               <strong>${category.label}</strong>
               <span class="action-card-description">${availability.reason || category.hint}</span>
@@ -2742,10 +2375,10 @@ function renderPortfolioTab() {
 function renderMarketTab() {
   if (state.pendingActionType === "buy_asset") return renderMarketActionTable();
   const marketTiles = [
-    { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "./assets/icons/market.webp" },
-    { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "./assets/icons/portfolio.webp" },
-    { id: "stocks", label: t("stockMarketCategory"), description: t("stockMarketCategoryDesc"), icon: "./assets/icons/economy.webp" },
-    { id: "collection", label: t("assetCollection"), description: t("assetCollectionDesc"), icon: "./assets/icons/decisions.webp" }
+    { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "businesses" },
+    { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "real_estate" },
+    { id: "stocks", label: t("stockMarketCategory"), description: t("stockMarketCategoryDesc"), icon: "stocks" },
+    { id: "collection", label: t("assetCollection"), description: t("assetCollectionDesc"), icon: "collection" }
   ];
   const categoryView = state.marketView !== "root";
   const browseOffers = currentMarketActionOffers().filter((business) => state.marketView === "businesses"
@@ -2766,7 +2399,7 @@ function renderMarketTab() {
           <div class="market-category-grid">
             ${marketTiles.map((item, index) => `
               <button class="market-category-card motion-card" style="--card-index:${index}" data-market-category="${item.id}">
-                <img src="${item.icon}" alt="${item.label}" class="action-type-icon">
+                ${uiIcon(item.icon)}
                 <strong>${item.label}</strong>
                 <span>${item.description}</span>
               </button>
@@ -3856,8 +3489,8 @@ function renderInteractiveStockChart(points, momentum) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const mid = (min + max) / 2;
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
+  const stroke = momentum >= 0 ? "#70b78f" : "#d87370";
+  const fill = momentum >= 0 ? "rgba(112,183,143,0.12)" : "rgba(216,115,112,0.12)";
   const plotFloor = height - 28;
   const path = coords.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
   const area = `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${plotFloor.toFixed(2)} L ${coords[0].x.toFixed(2)} ${plotFloor.toFixed(2)} Z`;
@@ -3901,7 +3534,7 @@ function renderStockCard(stock) {
 
 function renderSparkline(points, momentum) {
   const path = chartPath(points, 92, 34);
-  const tone = momentum >= 0 ? "#0f8b72" : "#bb4a42";
+  const tone = momentum >= 0 ? "#70b78f" : "#d87370";
   return `<svg class="sparkline" viewBox="0 0 92 34" aria-hidden="true"><path d="${path}" fill="none" stroke="${tone}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
@@ -3910,8 +3543,8 @@ function renderFullChart(points, momentum) {
   const height = 200;
   const path = chartPath(points, width, height);
   const area = chartArea(points, width, height);
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
+  const stroke = momentum >= 0 ? "#70b78f" : "#d87370";
+  const fill = momentum >= 0 ? "rgba(112,183,143,0.12)" : "rgba(216,115,112,0.12)";
   return `<svg class="stock-full-chart" viewBox="0 0 ${width} ${height}" aria-label="${t("openChart")}"><path d="${area}" fill="${fill}"></path><path d="${path}" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 }
 
