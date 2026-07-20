@@ -723,74 +723,6 @@ button:disabled,
   border-top: 2px solid var(--line);
 }
 
-.menu-grid {
-  position: absolute;
-  inset: 44% -70% -15%;
-  opacity: .48;
-  background-image:
-    linear-gradient(var(--teal) 1px, transparent 1px),
-    linear-gradient(90deg, var(--teal) 1px, transparent 1px);
-  background-size: 32px 22px;
-  transform: perspective(240px) rotateX(62deg);
-  transform-origin: center top;
-  mask-image: linear-gradient(to bottom, black, transparent 75%);
-}
-
-.menu-skyline {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 22%;
-  height: 31%;
-  background: var(--ink-2);
-  clip-path: polygon(0 100%, 0 55%, 8% 55%, 8% 30%, 18% 30%, 18% 74%, 26% 74%, 26% 12%, 35% 12%, 35% 62%, 45% 62%, 45% 38%, 54% 38%, 54% 82%, 66% 82%, 66% 25%, 75% 25%, 75% 58%, 86% 58%, 86% 6%, 94% 6%, 94% 48%, 100% 48%, 100% 100%);
-}
-
-.menu-skyline-back {
-  bottom: 29%;
-  opacity: .35;
-  transform: scaleX(1.1);
-}
-
-.menu-skyline-front {
-  background: #0a1016;
-  border-top: 1px solid var(--gold-dark);
-}
-
-.menu-chart-line {
-  position: absolute;
-  top: 34%;
-  left: 7%;
-  width: 86%;
-  height: 18%;
-  opacity: .48;
-  border-top: 3px solid var(--gold);
-  transform: skewY(-9deg);
-  filter: drop-shadow(0 3px 0 var(--shadow));
-}
-
-.menu-chart-line::before,
-.menu-chart-line::after {
-  position: absolute;
-  content: "";
-  background: var(--gold);
-}
-
-.menu-chart-line::before {
-  left: 37%;
-  top: -25px;
-  width: 3px;
-  height: 44px;
-}
-
-.menu-chart-line::after {
-  right: 11%;
-  top: -3px;
-  width: 34px;
-  height: 3px;
-  transform: rotate(-42deg);
-  transform-origin: right;
-}
-
 .menu-topbar {
   position: absolute;
   z-index: 3;
@@ -2849,4 +2781,688 @@ button:disabled,
 
 @keyframes status-pulse {
   50% { opacity: .35; }
+}
+
+/* --------------------------------------------------------------------------
+   Cinematic console skin
+   The reference is a warm, low-resolution FMV menu with blue enamel controls
+   set into chunky gold pixel frames. These overrides carry that language
+   through the complete game without reintroducing a central character.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --ink-0: #030609;
+  --ink-1: #061016;
+  --ink-2: #091923;
+  --ink-3: #0d2733;
+  --ink-4: #123747;
+  --line: #6f4c22;
+  --line-soft: #253e48;
+  --paper: #fff5d8;
+  --paper-dim: #c9c1ac;
+  --paper-faint: #7f8e91;
+  --gold: #d69b43;
+  --gold-hi: #ffd078;
+  --gold-dark: #6f3512;
+  --teal: #078cb2;
+  --teal-hi: #38c9ee;
+  --green: #69c98e;
+  --red: #e26d62;
+  --blue: #149bc5;
+  --shadow: #020304;
+  --pixel-button-shape: polygon(12px 0, calc(100% - 12px) 0, calc(100% - 12px) 3px, calc(100% - 4px) 3px, calc(100% - 4px) 9px, 100% 9px, 100% calc(100% - 9px), calc(100% - 4px) calc(100% - 9px), calc(100% - 4px) calc(100% - 3px), calc(100% - 12px) calc(100% - 3px), calc(100% - 12px) 100%, 12px 100%, 12px calc(100% - 3px), 4px calc(100% - 3px), 4px calc(100% - 9px), 0 calc(100% - 9px), 0 9px, 4px 9px, 4px 3px, 12px 3px);
+  --pixel-panel-shape: polygon(8px 0, calc(100% - 8px) 0, calc(100% - 8px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 8px, 100% 8px, 100% calc(100% - 8px), calc(100% - 3px) calc(100% - 8px), calc(100% - 3px) calc(100% - 3px), calc(100% - 8px) calc(100% - 3px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 8px), 0 calc(100% - 8px), 0 8px, 3px 8px, 3px 3px, 8px 3px);
+}
+
+body,
+.device-shell {
+  background:
+    radial-gradient(circle at 50% 14%, rgba(188, 119, 46, .09), transparent 35%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px),
+    #020405;
+}
+
+.app-shell {
+  background:
+    radial-gradient(circle at 50% -15%, rgba(24, 153, 190, .16), transparent 38%),
+    linear-gradient(180deg, #06131a, #04090d 72%);
+  border-inline-color: #51351a;
+  box-shadow: 0 0 0 3px #1c1008, 0 0 0 5px #050303, 0 25px 90px #000;
+}
+
+.app-shell::after {
+  position: absolute;
+  z-index: 200;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: .13;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(0, 0, 0, .52) 2px 3px);
+  mix-blend-mode: multiply;
+}
+
+.app-header {
+  background:
+    linear-gradient(180deg, rgba(11, 47, 59, .98), rgba(4, 18, 25, .98)),
+    #07151d;
+  border-bottom: 3px solid var(--gold);
+  box-shadow: inset 0 -1px 0 var(--gold-hi), 0 4px 0 #2d1608, 0 8px 18px rgba(0,0,0,.72);
+}
+
+.app-header::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  opacity: .19;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 15px, rgba(56, 201, 238, .18) 16px),
+    linear-gradient(transparent 15px, rgba(56, 201, 238, .13) 16px);
+  background-size: 16px 16px;
+}
+
+.header-top,
+.run-bar,
+.turn-guide,
+.stats-grid {
+  position: relative;
+}
+
+.header-brand-mark,
+.stage-number,
+.turn-guide-index,
+.result-check,
+.ui-icon {
+  color: #fff6d4;
+  background: linear-gradient(180deg, #159fc7, #075d79 62%, #043447);
+  border-color: var(--gold-hi);
+  box-shadow: inset 0 0 0 2px var(--gold-dark), 2px 2px 0 #231006, 0 0 9px rgba(30, 178, 220, .25);
+  clip-path: var(--pixel-panel-shape);
+}
+
+.eyebrow,
+.event-card-kicker,
+.menu-build,
+.setup-panel-head span,
+.section-heading-v3 > div > span,
+.subsection-heading-v3 > span {
+  color: var(--gold-hi);
+  text-shadow: 1px 1px 0 #321707;
+}
+
+.turn-guide-step,
+.stat-tile {
+  background: linear-gradient(180deg, rgba(8, 37, 48, .96), rgba(3, 17, 23, .96));
+  border-color: #38515a;
+  box-shadow: inset 0 0 0 1px rgba(3, 9, 12, .9), 2px 2px 0 #020303;
+  clip-path: var(--pixel-panel-shape);
+}
+
+.turn-guide-step.active,
+.turn-guide-step.done {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #10556a, #072f3f);
+}
+
+.stat-tile strong {
+  color: #fff8df;
+  text-shadow: 1px 2px 0 #041014;
+}
+
+.tab-content {
+  background:
+    radial-gradient(circle at 50% 4%, rgba(17, 118, 147, .10), transparent 34%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 5px);
+}
+
+/* Gold frame + blue enamel for every interactive control. */
+.primary-button,
+.secondary-button,
+.ghost-button,
+.business-button,
+.icon-button,
+.language-button,
+.language-inline-button,
+.screen-back-button,
+.market-back-button,
+.filter-chip,
+.prestige-button {
+  --frame-top: #ffe08a;
+  --frame-mid: #d98f32;
+  --frame-bottom: #6b2f0d;
+  --fill-top: #2bc5ec;
+  --fill-mid: #087ea6;
+  --fill-bottom: #03445f;
+  isolation: isolate;
+  overflow: hidden;
+  color: #f9ffff !important;
+  border: 0 !important;
+  background: linear-gradient(180deg, var(--frame-top), var(--frame-mid) 52%, var(--frame-bottom)) !important;
+  clip-path: var(--pixel-button-shape);
+  box-shadow: none !important;
+  filter: drop-shadow(0 3px 0 #3a1807) drop-shadow(0 7px 9px rgba(0,0,0,.45));
+  text-shadow: 0 2px 0 #02364b, 1px 0 0 rgba(255,255,255,.28);
+}
+
+.primary-button::before,
+.secondary-button::before,
+.ghost-button::before,
+.business-button::before,
+.icon-button::before,
+.language-button::before,
+.language-inline-button::before,
+.screen-back-button::before,
+.market-back-button::before,
+.filter-chip::before,
+.prestige-button::before {
+  position: absolute;
+  z-index: -1;
+  inset: 4px;
+  content: "";
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.31), transparent 36%),
+    linear-gradient(180deg, var(--fill-top), var(--fill-mid) 58%, var(--fill-bottom));
+  box-shadow: inset 0 0 0 2px #4d260d, inset 0 2px 0 rgba(255,255,255,.18);
+  clip-path: var(--pixel-panel-shape);
+}
+
+.secondary-button,
+.ghost-button,
+.screen-back-button,
+.market-back-button,
+.filter-chip,
+.language-button:not(.primary) {
+  --frame-top: #d9b066;
+  --frame-mid: #a56728;
+  --frame-bottom: #4a240d;
+  --fill-top: #177e9c;
+  --fill-mid: #074d65;
+  --fill-bottom: #032b39;
+}
+
+.ghost-button,
+.filter-chip {
+  --fill-top: #173c49;
+  --fill-mid: #0a2833;
+  --fill-bottom: #06171e;
+}
+
+.primary-button:hover,
+.business-button:hover,
+.language-button.primary:hover,
+.prestige-button:not(:disabled):hover {
+  filter: brightness(1.18) drop-shadow(0 3px 0 #3a1807) drop-shadow(0 0 13px rgba(43,197,236,.38));
+}
+
+.secondary-button:hover,
+.ghost-button:hover,
+.screen-back-button:hover,
+.market-back-button:hover,
+.filter-chip:hover,
+.filter-chip.active {
+  filter: brightness(1.24) drop-shadow(0 3px 0 #311506);
+}
+
+.filter-chip.active {
+  --fill-top: #24b6da;
+  --fill-mid: #076b8d;
+  --fill-bottom: #033b50;
+  color: #fff8d9 !important;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(3px);
+  filter: brightness(1.08) drop-shadow(0 1px 0 #321506) !important;
+}
+
+button:disabled,
+.unavailable,
+.locked-card {
+  --frame-top: #756b5a !important;
+  --frame-mid: #494238 !important;
+  --frame-bottom: #25211d !important;
+  --fill-top: #43545a !important;
+  --fill-mid: #2a3539 !important;
+  --fill-bottom: #161d20 !important;
+  color: #9ba4a3 !important;
+  background: linear-gradient(180deg, var(--frame-top), var(--frame-bottom)) !important;
+  opacity: .66;
+  filter: none !important;
+}
+
+/* Shared framed surfaces across every tab. */
+.setup-preview-card,
+.overview-card,
+.regime-card,
+.business-card,
+.synergy-card,
+.timeline-item,
+.tutorial-task-card,
+.unlock-banner,
+.round-result-card,
+.choice-result-strip,
+.empty-state,
+.choice-card,
+.selectable-action-card,
+.market-table-card,
+.action-type-button,
+.market-category-card,
+.stock-list-item,
+.collection-card,
+.prestige-card,
+.macro-card,
+.event-hero-card,
+.setup-option-card,
+.trade-card,
+.stock-chart-card {
+  background:
+    linear-gradient(180deg, rgba(13, 46, 58, .98), rgba(4, 18, 25, .98));
+  border: 2px solid #a46b2a;
+  box-shadow: inset 0 0 0 1px #2b1609, inset 0 3px 0 rgba(255,208,120,.14), 3px 4px 0 #160b05, 0 8px 17px rgba(0,0,0,.35);
+  clip-path: var(--pixel-panel-shape);
+}
+
+.motion-card:hover:not(:disabled) {
+  border-color: var(--gold-hi);
+  box-shadow: inset 0 0 0 1px #2b1609, inset 0 3px 0 rgba(255,208,120,.2), 4px 6px 0 #160b05, 0 0 16px rgba(19,160,199,.24);
+}
+
+.choice-visual,
+.action-choice-cover,
+.business-card-visual,
+.event-visual,
+.result-mini-visual,
+.stock-chart-card {
+  background:
+    linear-gradient(rgba(44,197,236,.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44,197,236,.10) 1px, transparent 1px),
+    radial-gradient(circle at 80% 10%, rgba(255,184,77,.16), transparent 35%),
+    #061820;
+  background-size: 12px 12px, 12px 12px, auto, auto;
+}
+
+.card-select-label {
+  color: #fff7db;
+  background: linear-gradient(180deg, #19aace, #065a77);
+  border: 2px solid var(--gold);
+  box-shadow: inset 0 0 0 1px #57290e, 0 3px 0 #2a1206;
+  clip-path: var(--pixel-panel-shape);
+  text-shadow: 0 2px #02374b;
+}
+
+.bottom-nav {
+  background: linear-gradient(180deg, rgba(7,36,46,.99), rgba(2,12,17,.99));
+  border-top: 3px solid var(--gold);
+  box-shadow: inset 0 1px 0 var(--gold-hi), 0 -4px 0 #321706, 0 -9px 22px rgba(0,0,0,.54);
+}
+
+.nav-item {
+  clip-path: var(--pixel-panel-shape);
+}
+
+.nav-item.active {
+  color: #fff7d9;
+  background: linear-gradient(180deg, #126f8a, #073b4e);
+  border-color: var(--gold-hi);
+  box-shadow: inset 0 0 0 1px #51270e, inset 0 3px 0 rgba(53,201,238,.25);
+}
+
+/* Main menu: three low-resolution FMV-like scenes cross-fade behind the UI. */
+.run-setup-screen,
+.language-screen {
+  background: #050505;
+}
+
+.menu-world {
+  background: #090706;
+}
+
+.menu-world::before {
+  z-index: 20;
+  inset: 0;
+  opacity: .24;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 3px, transparent 3px 12px),
+    repeating-linear-gradient(0deg, rgba(255,214,154,.055) 0 2px, transparent 2px 9px);
+  background-size: auto;
+  mix-blend-mode: overlay;
+}
+
+.menu-world::after {
+  z-index: 19;
+  inset: 0;
+  height: auto;
+  opacity: .34;
+  background: linear-gradient(105deg, transparent 0 35%, rgba(255,242,204,.28) 47%, transparent 61%);
+  clip-path: none;
+  border: 0;
+  animation: fmv-glitch 7s steps(2, end) infinite;
+}
+
+.menu-scene {
+  position: absolute;
+  inset: -3%;
+  overflow: hidden;
+  opacity: 0;
+  transform: scale(1.04);
+  filter: saturate(.72) contrast(1.09) blur(.5px);
+  animation: fmv-scene 18s steps(1, end) infinite;
+}
+
+.menu-scene::before,
+.menu-scene::after,
+.menu-scene i {
+  position: absolute;
+  display: block;
+  content: "";
+}
+
+.menu-scene--ledger {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 23% 22%, #ffe3a0 0 2%, rgba(236,150,69,.58) 9%, transparent 31%),
+    radial-gradient(circle at 76% 32%, rgba(237,177,88,.46), transparent 24%),
+    linear-gradient(145deg, #55402b, #171411 44%, #080809 78%);
+}
+
+.menu-scene--ledger::before {
+  inset: 54% -20% -18%;
+  background:
+    repeating-linear-gradient(90deg, #4c4435 0 18px, #161718 18px 25px, #81725a 25px 28px),
+    #26231e;
+  transform: perspective(230px) rotateX(57deg) rotateZ(-4deg);
+  transform-origin: center top;
+  box-shadow: inset 0 8px 25px rgba(255,216,151,.15);
+}
+
+.menu-scene--ledger::after {
+  left: -9%;
+  bottom: 9%;
+  width: 62%;
+  height: 29%;
+  opacity: .78;
+  background: repeating-linear-gradient(0deg, #1c1b18 0 7px, #83745d 7px 10px, #40382d 10px 20px);
+  transform: skewY(9deg);
+  box-shadow: 30px -14px 20px rgba(0,0,0,.45);
+}
+
+.scene-bloom {
+  z-index: 7;
+  top: -10%;
+  left: -12%;
+  width: 75%;
+  height: 72%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,244,198,.72), rgba(224,137,55,.22) 44%, transparent 70%);
+  filter: blur(22px);
+  mix-blend-mode: screen;
+  animation: bloom-breathe 4s steps(8, end) infinite;
+}
+
+.scene-ledgers {
+  z-index: 4;
+  right: -5%;
+  bottom: 8%;
+  width: 58%;
+  height: 34%;
+  background: repeating-linear-gradient(90deg, #75664e 0 23px, #1c1b19 23px 29px, #9a8665 29px 32px);
+  transform: perspective(260px) rotateX(58deg) rotateZ(4deg);
+  box-shadow: -18px -10px 28px rgba(0,0,0,.6);
+}
+
+.menu-scene--gears {
+  animation-delay: 6s;
+  background:
+    radial-gradient(circle at 62% 45%, rgba(255,242,190,.92), rgba(229,142,54,.54) 20%, transparent 44%),
+    radial-gradient(circle at 20% 12%, #a9875f, #211c16 38%, #080807 72%);
+}
+
+.scene-gear {
+  z-index: 5;
+  width: 155px;
+  height: 155px;
+  border: 15px dashed #9c825b;
+  border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 21%, #463c31 22% 31%, transparent 32% 47%, #726149 48% 58%, transparent 59%);
+  box-shadow: inset 0 0 0 8px #2b2721, 0 0 24px rgba(255,190,93,.25);
+  animation: gear-turn 9s steps(18, end) infinite;
+}
+
+.scene-gear--one { left: -34px; bottom: 7%; }
+.scene-gear--two { right: -48px; bottom: 22%; transform: scale(1.28); animation-direction: reverse; }
+.scene-gear--three { left: 20%; top: -40px; transform: scale(.66); animation-duration: 6s; }
+
+.menu-scene--market {
+  animation-delay: 12s;
+  background:
+    radial-gradient(circle at 78% 22%, rgba(255,181,94,.62), transparent 25%),
+    linear-gradient(125deg, #151917, #06110f 52%, #180d0c);
+}
+
+.scene-board {
+  z-index: 3;
+  inset: 12% 8% 38%;
+  background:
+    linear-gradient(115deg, transparent 0 15%, #36bd8d 16% 18%, transparent 19% 33%, #d64d4c 34% 37%, transparent 38%),
+    repeating-linear-gradient(0deg, rgba(31,203,147,.18) 0 3px, transparent 3px 28px),
+    #07100f;
+  border: 6px solid #44301f;
+  box-shadow: 0 12px 24px #000, inset 0 0 30px rgba(48,209,154,.12);
+  transform: perspective(320px) rotateY(-8deg);
+}
+
+.scene-coins {
+  z-index: 6;
+  right: -8%;
+  bottom: 4%;
+  width: 64%;
+  height: 32%;
+  background:
+    repeating-linear-gradient(0deg, #c4994d 0 5px, #573513 5px 8px, transparent 8px 13px),
+    linear-gradient(90deg, transparent 0 11%, #a77b35 11% 34%, transparent 34% 41%, #d2ad60 41% 63%, transparent 63%);
+  clip-path: polygon(0 72%, 10% 72%, 10% 46%, 33% 46%, 33% 66%, 42% 66%, 42% 18%, 67% 18%, 67% 52%, 77% 52%, 77% 0, 100% 0, 100% 100%, 0 100%);
+  filter: blur(.4px);
+}
+
+.menu-pixels {
+  position: absolute;
+  z-index: 15;
+  inset: 0;
+  opacity: .6;
+  background:
+    linear-gradient(90deg, transparent 8%, rgba(255,220,155,.55) 8% 9%, transparent 9% 78%, rgba(228,141,70,.4) 78% 81%, transparent 81%),
+    linear-gradient(0deg, transparent 28%, rgba(255,242,194,.24) 28% 29%, transparent 29% 67%, rgba(55,194,151,.25) 67% 69%, transparent 69%);
+  background-size: 73px 91px, 109px 67px;
+  animation: pixel-drift 5s steps(5, end) infinite;
+}
+
+.menu-scanlines {
+  position: absolute;
+  z-index: 17;
+  inset: 0;
+  opacity: .18;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(10,4,2,.7) 2px 4px);
+  mix-blend-mode: multiply;
+}
+
+.menu-vignette {
+  position: absolute;
+  z-index: 18;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 18%, rgba(0,0,0,.2) 57%, rgba(0,0,0,.88) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.28), transparent 24% 76%, rgba(0,0,0,.5));
+}
+
+.menu-content {
+  justify-content: flex-start;
+  padding-top: max(76px, calc(env(safe-area-inset-top) + 58px));
+}
+
+.menu-brand-block {
+  text-shadow: 0 3px 0 #261307, 0 0 20px rgba(255,206,117,.32);
+}
+
+.menu-logo-mark {
+  width: 52px;
+  height: 44px;
+  margin-bottom: 7px;
+  color: #fff9e7;
+  background: linear-gradient(180deg, #1bb5da, #075f7d);
+  border-color: var(--gold-hi);
+  box-shadow: inset 0 0 0 3px var(--gold-dark), 0 4px 0 #3b1807, 0 0 16px rgba(40,194,229,.35);
+  font-size: 20px;
+  clip-path: var(--pixel-button-shape);
+}
+
+.menu-logo-mark span:last-child {
+  background: rgba(4,32,42,.72);
+}
+
+.menu-brand-block h2 {
+  font-size: clamp(34px, 10vw, 47px);
+  line-height: .82;
+}
+
+.menu-brand-block h2 strong {
+  color: #fff2bf;
+  text-shadow: 0 3px 0 #6d3411, 0 0 15px rgba(255,198,100,.38);
+}
+
+.menu-brand-block > p:last-child {
+  max-width: 260px;
+  margin-top: 8px;
+  color: rgba(255,245,217,.74);
+  font-size: 12px;
+  text-shadow: 0 2px 3px #000;
+}
+
+.menu-loop {
+  order: 3;
+  width: min(100%, 330px);
+  margin: auto auto 0;
+  opacity: .74;
+}
+
+.menu-loop span {
+  padding: 6px 3px;
+  color: #d9d4c5;
+  background: rgba(2,15,20,.74);
+  border-color: #775023;
+  box-shadow: inset 0 0 0 1px rgba(4,14,18,.9), 0 3px 0 rgba(32,14,5,.8);
+  backdrop-filter: blur(3px);
+  clip-path: var(--pixel-panel-shape);
+}
+
+.menu-actions {
+  position: absolute;
+  top: 52%;
+  left: 50%;
+  width: 100%;
+  transform: translate(-50%, -7%);
+  align-items: center;
+  justify-items: center;
+  gap: 12px;
+}
+
+.menu-actions > button {
+  height: 54px;
+  font-size: 17px;
+  text-transform: uppercase;
+}
+
+.menu-actions > button:nth-child(1) { width: min(78%, 310px); }
+.menu-actions > button:nth-child(2) { width: min(64%, 250px); }
+.menu-actions > button:nth-child(3) { width: min(52%, 205px); }
+
+.menu-topbar {
+  z-index: 30;
+}
+
+.menu-build {
+  padding: 5px 8px;
+  color: #f5d89f;
+  background: rgba(5,17,21,.65);
+  border: 1px solid #8f6029;
+  clip-path: var(--pixel-panel-shape);
+  backdrop-filter: blur(3px);
+}
+
+.setup-overlay,
+.language-modal,
+.stock-sheet-overlay {
+  background: rgba(1,3,4,.77);
+  backdrop-filter: blur(6px) saturate(.7);
+}
+
+.setup-advanced-panel,
+.language-card,
+.stock-sheet {
+  background:
+    radial-gradient(circle at 50% 0, rgba(27,138,166,.2), transparent 35%),
+    linear-gradient(180deg, #09232d, #041218);
+  border: 3px solid var(--gold);
+  box-shadow: inset 0 2px 0 var(--gold-hi), inset 0 0 0 2px #55270c, 0 -5px 0 #321506, 0 -14px 35px rgba(0,0,0,.7);
+  clip-path: var(--pixel-panel-shape);
+}
+
+@keyframes fmv-scene {
+  0%, 32% { opacity: 1; transform: scale(1.04) translate(0, 0); }
+  33%, 100% { opacity: 0; transform: scale(1.075) translate(-1.5%, 1%); }
+}
+
+@keyframes fmv-glitch {
+  0%, 91%, 100% { transform: translateX(0); opacity: .22; }
+  92% { transform: translateX(7px); opacity: .55; }
+  94% { transform: translateX(-4px); opacity: .3; }
+}
+
+@keyframes bloom-breathe {
+  50% { opacity: .7; transform: scale(1.08); }
+}
+
+@keyframes gear-turn {
+  to { rotate: 360deg; }
+}
+
+@keyframes pixel-drift {
+  to { background-position: 31px -19px, -27px 23px; }
+}
+
+@media (max-height: 740px) {
+  .menu-content {
+    padding-top: max(58px, calc(env(safe-area-inset-top) + 42px));
+  }
+
+  .menu-logo-mark {
+    width: 44px;
+    height: 38px;
+  }
+
+  .menu-brand-block h2 {
+    font-size: 34px;
+  }
+
+  .menu-brand-block > p:last-child {
+    display: none;
+  }
+
+  .menu-actions {
+    top: 48%;
+    gap: 9px;
+  }
+
+  .menu-actions > button {
+    height: 48px;
+  }
+
+  .menu-loop {
+    margin-bottom: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-scene--ledger { opacity: 1; }
+  .menu-scene--gears,
+  .menu-scene--market { opacity: 0; }
 }

@@ -1744,10 +1744,18 @@ function renderRunSetupScreen() {
   return `
     <section class="run-setup-screen menu-screen ${state.runSetupAdvanced ? "settings-open" : ""}">
       <div class="menu-world" aria-hidden="true">
-        <span class="menu-grid"></span>
-        <span class="menu-skyline menu-skyline-back"></span>
-        <span class="menu-skyline menu-skyline-front"></span>
-        <span class="menu-chart-line"></span>
+        <span class="menu-scene menu-scene--ledger">
+          <i class="scene-bloom"></i><i class="scene-desk"></i><i class="scene-ledgers"></i>
+        </span>
+        <span class="menu-scene menu-scene--gears">
+          <i class="scene-bloom"></i><i class="scene-gear scene-gear--one"></i><i class="scene-gear scene-gear--two"></i><i class="scene-gear scene-gear--three"></i>
+        </span>
+        <span class="menu-scene menu-scene--market">
+          <i class="scene-bloom"></i><i class="scene-board"></i><i class="scene-coins"></i>
+        </span>
+        <span class="menu-pixels"></span>
+        <span class="menu-scanlines"></span>
+        <span class="menu-vignette"></span>
       </div>
       <div class="menu-topbar">
         <button class="language-inline-button" data-open-language aria-label="${t("changeLanguage")}">${state.selectedLanguage.toUpperCase()}</button>
