@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280" role="img" aria-label="Детальный латунный финансовый механизм">
+  <defs>
+    <radialGradient id="heat" cx=".65" cy=".33" r=".7"><stop stop-color="#fff0b6"/><stop offset=".18" stop-color="#e39a46"/><stop offset=".48" stop-color="#56351f"/><stop offset="1" stop-color="#08090a"/></radialGradient>
+    <linearGradient id="steel" x2="1" y2="1"><stop stop-color="#9e8158"/><stop offset=".23" stop-color="#3d342a"/><stop offset=".54" stop-color="#b29363"/><stop offset="1" stop-color="#211d19"/></linearGradient>
+    <pattern id="plates" width="120" height="90" patternUnits="userSpaceOnUse"><rect width="118" height="88" fill="#171717" stroke="#5f4b32" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="#b1854f"/><circle cx="108" cy="76" r="4" fill="#795a37"/><path d="M22 20h76M18 68h84" stroke="#ae8c60" stroke-opacity=".12" stroke-width="3"/></pattern>
+  </defs>
+  <rect width="720" height="1280" fill="#08090a"/>
+  <rect width="720" height="1280" fill="url(#heat)" opacity=".82"/>
+  <rect width="720" height="1280" fill="url(#plates)" opacity=".66"/>
+  <g fill="none" stroke="url(#steel)">
+    <g transform="translate(74 350)"><circle r="178" stroke-width="34" stroke-dasharray="55 16"/><circle r="116" stroke-width="25"/><circle r="45" stroke-width="28"/><path d="M-120 0h240M0-120v240M-84-84 84 84M84-84-84 84" stroke-width="18"/></g>
+    <g transform="translate(568 520)"><circle r="154" stroke-width="30" stroke-dasharray="43 15"/><circle r="94" stroke-width="22"/><circle r="35" stroke-width="23"/><path d="M-96 0H96M0-96V96M-68-68 68 68M68-68-68 68" stroke-width="15"/></g>
+    <g transform="translate(292 730)"><circle r="116" stroke-width="24" stroke-dasharray="34 12"/><circle r="66" stroke-width="18"/><circle r="25" stroke-width="17"/><path d="M-67 0H67M0-67V67M-47-47 47 47M47-47-47 47" stroke-width="12"/></g>
+    <g transform="translate(621 922)"><circle r="126" stroke-width="26" stroke-dasharray="38 13"/><circle r="74" stroke-width="18"/><circle r="27" stroke-width="18"/><path d="M-73 0H73M0-73V73M-52-52 52 52M52-52-52 52" stroke-width="13"/></g>
+  </g>
+  <g fill="#120f0d" stroke="#c0965a" stroke-width="5">
+    <path d="M245 0h70v1280h-70z" opacity=".48"/><path d="M0 945h720v54H0z" opacity=".72"/>
+    <path d="M360 76h248v150H360z"/><path d="M388 104h192v94H388z" fill="#0b262b" stroke="#3b9cac"/>
+  </g>
+  <path d="M414 167 448 137l34 18 34-42 38 21" fill="none" stroke="#f0bd63" stroke-width="7"/>
+  <g fill="#d39d52"><circle cx="280" cy="93" r="10"/><circle cx="280" cy="1190" r="10"/><circle cx="26" cy="972" r="9"/><circle cx="694" cy="972" r="9"/></g>
+  <g stroke="#d4a05a" stroke-width="8" opacity=".65"><path d="M68 78v183M90 78v183M648 265v118M670 265v118"/><path d="M60 105h40M60 228h40M638 286h42M638 361h42"/></g>
+  <path d="M0 1090h720v190H0z" fill="#050607" opacity=".75"/>
+  <path d="M0 0h720v1280H0z" fill="none" stroke="#050505" stroke-width="34" stroke-opacity=".5"/>
+</svg>

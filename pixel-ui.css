@@ -3494,3 +3494,822 @@ button:disabled,
   .menu-scene--gears,
   .menu-scene--market { opacity: 0; }
 }
+
+/* --------------------------------------------------------------------------
+   Strategy desk — gameplay-only visual system
+   A restrained command console replaces the previous stack of ornate cards.
+   -------------------------------------------------------------------------- */
+
+/* High-resolution, hand-built vector scenery. Menu controls remain unchanged. */
+.menu-scene {
+  background-color: #080807;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  image-rendering: auto;
+}
+
+.menu-scene--ledger {
+  background-image: linear-gradient(rgba(16, 8, 3, .06), rgba(0, 0, 0, .24)), url("./assets/menu/ledger-room.svg");
+}
+
+.menu-scene--gears {
+  background-image: linear-gradient(rgba(14, 8, 3, .04), rgba(0, 0, 0, .28)), url("./assets/menu/clockwork-room.svg");
+}
+
+.menu-scene--market {
+  background-image: linear-gradient(rgba(2, 12, 11, .04), rgba(0, 0, 0, .3)), url("./assets/menu/market-room.svg");
+}
+
+.menu-scene::before,
+.menu-scene::after,
+.menu-scene > i {
+  display: none;
+}
+
+.is-playing {
+  --header-h: 178px;
+  --nav-h: 60px;
+  --desk-bg: #03090c;
+  --desk-panel: #07171e;
+  --desk-panel-hi: #0a222b;
+  --desk-line: #244751;
+  --desk-line-soft: #142f37;
+  --desk-cyan: #30bad7;
+  --desk-cyan-dim: #176c80;
+  --desk-brass: #c69247;
+  --desk-brass-hi: #e4bd72;
+  --desk-cream: #f2ead3;
+  --desk-muted: #83979b;
+  background: var(--desk-bg);
+}
+
+.is-playing::before {
+  opacity: .12;
+  background-image:
+    linear-gradient(rgba(63, 153, 169, .12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 153, 169, .09) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.is-playing::after {
+  z-index: 90;
+  opacity: .07;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #000 3px 4px);
+}
+
+.is-playing .play-header {
+  height: var(--header-h);
+  padding: max(8px, env(safe-area-inset-top)) 14px 8px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(48, 186, 215, .04) 1px, transparent 1px),
+    linear-gradient(180deg, #08212a 0, #06171d 72%, #040d11 100%);
+  background-size: 20px 100%, auto;
+  border-bottom: 1px solid var(--desk-brass);
+  box-shadow: 0 3px 0 #3b210d, 0 10px 24px rgba(0, 0, 0, .45);
+}
+
+.is-playing .play-header::before {
+  inset: auto 14px 0;
+  height: 3px;
+  opacity: 1;
+  background: linear-gradient(90deg, var(--desk-brass), var(--desk-brass-hi) 38%, var(--desk-brass) 68%, transparent);
+}
+
+.is-playing .play-header::after {
+  display: none;
+}
+
+.is-playing .header-top {
+  height: 31px;
+  padding-bottom: 4px;
+}
+
+.is-playing .header-brand {
+  gap: 9px;
+}
+
+.is-playing .header-brand-mark {
+  width: 28px;
+  height: 25px;
+  color: var(--desk-brass-hi);
+  background: transparent;
+  border: 1px solid var(--desk-brass);
+  box-shadow: none;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  font-size: 11px;
+}
+
+.is-playing .header-brand .eyebrow {
+  color: var(--desk-brass-hi);
+  font-size: 8px;
+  letter-spacing: .18em;
+}
+
+.is-playing .header-brand h1 {
+  margin-top: 0;
+  color: var(--desk-cream);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.is-playing #new-run-button {
+  min-width: 64px;
+  min-height: 28px;
+  padding: 4px 9px;
+  color: var(--desk-muted) !important;
+  background: transparent !important;
+  border: 1px solid var(--desk-line) !important;
+  box-shadow: none !important;
+  clip-path: none;
+  text-shadow: none;
+  font-size: 11px;
+}
+
+.is-playing #new-run-button::before {
+  display: none;
+}
+
+.is-playing #new-run-button:hover {
+  color: var(--desk-cream) !important;
+  border-color: var(--desk-brass) !important;
+  transform: none;
+}
+
+.is-playing .run-bar {
+  height: 31px;
+  margin-top: 0;
+  padding: 3px 0 4px;
+  border-top: 1px solid var(--desk-line-soft);
+}
+
+.is-playing .run-title {
+  color: var(--desk-cream);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.is-playing .run-subtitle {
+  color: var(--desk-muted);
+  font-size: 10px;
+}
+
+.is-playing .turn-guide-track {
+  position: relative;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  min-height: 29px;
+  padding: 2px;
+  background: #041116;
+  border: 1px solid var(--desk-line);
+  box-shadow: inset 0 0 0 1px #02080a;
+}
+
+.is-playing .turn-guide-step {
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 23px;
+  padding: 2px 6px;
+  gap: 5px;
+  color: #66797d;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.is-playing .turn-guide-step + .turn-guide-step {
+  border-left: 1px solid var(--desk-line-soft);
+}
+
+.is-playing .turn-guide-step::after {
+  inset: auto 6px 0;
+  height: 1px;
+  background: transparent;
+}
+
+.is-playing .turn-guide-step.active {
+  color: var(--desk-cream);
+  background: rgba(48, 186, 215, .08);
+}
+
+.is-playing .turn-guide-step.active::after {
+  background: var(--desk-cyan);
+  box-shadow: 0 0 7px rgba(48, 186, 215, .45);
+}
+
+.is-playing .turn-guide-step.done {
+  color: var(--desk-cyan);
+}
+
+.is-playing .turn-guide-index {
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+  background: transparent;
+  border: 1px solid currentColor;
+  box-shadow: none;
+  clip-path: none;
+  font-size: 8px;
+}
+
+.is-playing .turn-guide-step strong {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.is-playing .turn-guide-step small {
+  display: none;
+}
+
+.is-playing .stats-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 5px;
+  background: rgba(2, 10, 13, .72);
+  border-block: 1px solid var(--desk-line);
+}
+
+.is-playing .stat-tile {
+  min-height: 40px;
+  padding: 4px 8px 5px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.is-playing .stat-tile + .stat-tile {
+  border-left: 1px solid var(--desk-line);
+}
+
+.is-playing .stat-tile span {
+  color: var(--desk-muted);
+  font-size: 8px;
+  letter-spacing: .1em;
+}
+
+.is-playing .stat-tile strong {
+  margin-top: 1px;
+  color: var(--desk-cream);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+}
+
+.is-playing .tab-content {
+  background:
+    linear-gradient(90deg, rgba(48, 186, 215, .035) 1px, transparent 1px),
+    linear-gradient(rgba(48, 186, 215, .025) 1px, transparent 1px),
+    var(--desk-bg);
+  background-size: 20px 20px;
+}
+
+.is-playing .tab-screen,
+.is-playing .tab-content-wrap,
+.is-playing .asset-collection-screen {
+  padding: 12px 14px calc(16px + env(safe-area-inset-bottom));
+}
+
+.is-playing .game-screen,
+.is-playing .market-action-screen-v3 {
+  padding-top: 11px;
+}
+
+.is-playing .game-stage,
+.is-playing .section-screen-v3,
+.is-playing .stock-market-v3 {
+  gap: 9px;
+}
+
+.is-playing .stage-heading,
+.is-playing .section-heading-v3,
+.is-playing .subsection-heading-v3,
+.is-playing .tab-header {
+  position: relative;
+  min-height: 42px;
+  padding: 2px 0 7px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--desk-line);
+}
+
+.is-playing .stage-heading::before,
+.is-playing .section-heading-v3::before,
+.is-playing .subsection-heading-v3::before,
+.is-playing .tab-header::before {
+  position: absolute;
+  inset: 5px auto 10px 0;
+  width: 2px;
+  content: "";
+  background: var(--desk-brass);
+}
+
+.is-playing .stage-number {
+  width: 25px;
+  height: 25px;
+  color: var(--desk-brass-hi);
+  background: transparent;
+  border: 1px solid var(--desk-brass);
+  box-shadow: none;
+  clip-path: none;
+  font-size: 12px;
+}
+
+.is-playing .stage-heading h2,
+.is-playing .section-heading-v3 h2,
+.is-playing .subsection-heading-v3 h2,
+.is-playing .tab-header h2 {
+  color: var(--desk-cream);
+  font-size: 20px;
+  line-height: 1.05;
+}
+
+.is-playing .stage-heading p,
+.is-playing .section-heading-v3 p,
+.is-playing .subsection-heading-v3 p,
+.is-playing .tab-header p {
+  color: var(--desk-muted);
+  font-size: 10px;
+}
+
+.is-playing .section-heading-v3 > div > span,
+.is-playing .subsection-heading-v3 > span,
+.is-playing .event-card-kicker {
+  color: var(--desk-brass-hi);
+  font-size: 8px;
+  letter-spacing: .16em;
+  text-shadow: none;
+}
+
+/* One deliberate surface language instead of nested gold frames. */
+.is-playing .setup-preview-card,
+.is-playing .overview-card,
+.is-playing .regime-card,
+.is-playing .business-card,
+.is-playing .synergy-card,
+.is-playing .timeline-item,
+.is-playing .tutorial-task-card,
+.is-playing .unlock-banner,
+.is-playing .round-result-card,
+.is-playing .choice-result-strip,
+.is-playing .empty-state,
+.is-playing .choice-card,
+.is-playing .selectable-action-card,
+.is-playing .market-table-card,
+.is-playing .action-type-button,
+.is-playing .market-category-card,
+.is-playing .stock-list-item,
+.is-playing .collection-card,
+.is-playing .prestige-card,
+.is-playing .macro-card,
+.is-playing .event-hero-card,
+.is-playing .trade-card,
+.is-playing .stock-chart-card {
+  color: var(--desk-cream);
+  background: linear-gradient(135deg, rgba(12, 39, 48, .98), rgba(5, 19, 25, .98));
+  border: 1px solid var(--desk-line);
+  box-shadow: 0 4px 0 #020608, 0 9px 18px rgba(0, 0, 0, .22);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+}
+
+.is-playing .choice-card,
+.is-playing .market-table-card,
+.is-playing .business-card,
+.is-playing .stock-list-item,
+.is-playing .macro-card {
+  border-top-color: #37626c;
+}
+
+.is-playing .choice-result-strip {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 53px;
+  padding: 7px 9px;
+  background: #061318;
+  border-color: var(--desk-brass);
+  box-shadow: inset 3px 0 0 var(--desk-brass), 0 3px 0 #020608;
+  clip-path: none;
+}
+
+.is-playing .choice-result-title > span {
+  width: 23px;
+  height: 23px;
+  color: #041014;
+  background: var(--desk-cyan);
+}
+
+.is-playing .choice-result-title small {
+  color: var(--desk-muted);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.is-playing .choice-result-title strong {
+  font-size: 12px;
+}
+
+.is-playing .choice-result-metrics > span {
+  padding: 2px 7px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--desk-line);
+}
+
+.is-playing .choice-result-metrics small,
+.is-playing .choice-result-metrics strong {
+  font-size: 9px;
+}
+
+/* Action board: six purpose-built command keys. */
+.is-playing .action-type-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.is-playing .action-type-button {
+  --action-accent: var(--desk-cyan);
+  position: relative;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 14px;
+  grid-template-rows: 15px auto 16px;
+  align-items: center;
+  min-height: 99px;
+  padding: 9px 8px 8px 10px;
+  overflow: hidden;
+  text-align: left;
+  border-color: #28515c;
+  border-left: 3px solid var(--action-accent);
+}
+
+.is-playing .action-type-button::after {
+  position: absolute;
+  right: -18px;
+  bottom: -24px;
+  width: 76px;
+  height: 76px;
+  content: "";
+  opacity: .08;
+  border: 14px solid var(--action-accent);
+  transform: rotate(45deg);
+}
+
+.is-playing .action-tone--market { --action-accent: #55c5a1; }
+.is-playing .action-tone--portfolio { --action-accent: #4bb7dc; }
+.is-playing .action-tone--liquidity { --action-accent: #d0a254; }
+.is-playing .action-tone--cards { --action-accent: #c7785e; }
+.is-playing .action-tone--defense { --action-accent: #92a59e; }
+.is-playing .action-tone--debt { --action-accent: #d56b63; }
+
+.is-playing .action-card-index {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  color: var(--action-accent);
+  font-family: "Pixelify Sans Variable", "Pixelify Sans", monospace;
+  font-size: 9px;
+  letter-spacing: .1em;
+}
+
+.is-playing .action-card-visual {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  align-self: center;
+  display: grid;
+  place-items: start;
+  margin: 0;
+  background: transparent;
+  border: 0;
+}
+
+.is-playing .action-card-kicker {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  overflow: hidden;
+  color: var(--action-accent);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.is-playing .action-type-button > strong {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  color: var(--desk-cream);
+  font-size: 15px;
+  line-height: 1.08;
+}
+
+.is-playing .action-card-description {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--desk-muted);
+  font-size: 9px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.is-playing .action-type-button > em {
+  z-index: 1;
+  grid-column: 3;
+  grid-row: 1 / 4;
+  color: var(--action-accent);
+  font-size: 15px;
+}
+
+.is-playing .ui-icon {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  color: currentColor;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.is-playing .ui-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.is-playing .action-type-button .ui-icon {
+  color: var(--action-accent);
+}
+
+.is-playing button.action-type-button:disabled,
+.is-playing button.action-type-button.unavailable {
+  --action-accent: #586368;
+  color: #627075 !important;
+  background: linear-gradient(135deg, #10191c, #090f11) !important;
+  border-color: #253238 !important;
+  border-left-color: #586368 !important;
+  opacity: .56;
+}
+
+.is-playing button.action-type-button:disabled > strong,
+.is-playing button.action-type-button:disabled .action-card-description {
+  color: #697579;
+}
+
+.is-playing .motion-card:hover:not(:disabled) {
+  border-color: var(--action-accent, var(--desk-cyan));
+  box-shadow: 0 5px 0 #020608, 0 0 18px rgba(48, 186, 215, .13);
+  transform: translateY(-2px);
+}
+
+/* Metrics read like a ledger, not cards nested inside cards. */
+.is-playing .choice-impact-row,
+.is-playing .action-choice-impact > span,
+.is-playing .market-table-metrics > span,
+.is-playing .business-metrics > div,
+.is-playing .stock-detail-metrics > div,
+.is-playing .setup-preview-card > div {
+  padding: 6px 2px;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--desk-line-soft);
+}
+
+.is-playing .choice-impact-row small,
+.is-playing .action-choice-impact small,
+.is-playing .market-table-metrics small,
+.is-playing .business-metrics span,
+.is-playing .stock-detail-metrics span {
+  color: var(--desk-muted);
+  font-size: 9px;
+}
+
+.is-playing .choice-impact-row strong,
+.is-playing .action-choice-impact strong,
+.is-playing .market-table-metrics strong,
+.is-playing .business-metrics strong,
+.is-playing .stock-detail-metrics strong {
+  color: var(--desk-cream);
+  font-size: 12px;
+}
+
+.is-playing .choice-visual,
+.is-playing .action-choice-cover,
+.is-playing .business-card-visual,
+.is-playing .event-visual,
+.is-playing .result-mini-visual,
+.is-playing .stock-chart-card {
+  background:
+    linear-gradient(rgba(48, 186, 215, .07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(48, 186, 215, .06) 1px, transparent 1px),
+    #061419;
+  background-size: 16px 16px;
+}
+
+/* Gameplay buttons use compact command-bar treatment; title buttons are untouched. */
+.is-playing .primary-button,
+.is-playing .secondary-button,
+.is-playing .ghost-button,
+.is-playing .business-button,
+.is-playing .language-button,
+.is-playing .screen-back-button,
+.is-playing .market-back-button,
+.is-playing .filter-chip,
+.is-playing .prestige-button {
+  min-height: 39px;
+  color: var(--desk-cream) !important;
+  background: #0a2a34 !important;
+  border: 1px solid var(--desk-cyan-dim) !important;
+  box-shadow: 0 3px 0 #02080a !important;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  text-shadow: none;
+}
+
+.is-playing .primary-button {
+  background: #0b7187 !important;
+  border-color: var(--desk-cyan) !important;
+}
+
+.is-playing .primary-button::before,
+.is-playing .secondary-button::before,
+.is-playing .ghost-button::before,
+.is-playing .business-button::before,
+.is-playing .language-button::before,
+.is-playing .screen-back-button::before,
+.is-playing .market-back-button::before,
+.is-playing .filter-chip::before,
+.is-playing .prestige-button::before {
+  display: none;
+}
+
+.is-playing .filter-chip.active {
+  color: #061318 !important;
+  background: var(--desk-brass-hi) !important;
+  border-color: var(--desk-brass) !important;
+}
+
+/* A single low command dock fixes the clipped, mixed bottom navigation. */
+.is-playing .bottom-nav {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding: 5px 7px max(5px, env(safe-area-inset-bottom));
+  gap: 4px;
+  background: #041116;
+  border-top: 1px solid var(--desk-brass);
+  box-shadow: 0 -3px 0 #241507, 0 -10px 22px rgba(0, 0, 0, .38);
+}
+
+.is-playing .nav-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, auto);
+  grid-template-rows: 1fr;
+  place-content: center;
+  place-items: center;
+  min-height: 45px;
+  padding: 4px 5px;
+  gap: 4px;
+  color: #64787c;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  clip-path: none;
+}
+
+.is-playing .nav-item .ui-icon {
+  width: 21px;
+  height: 21px;
+  color: currentColor;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.is-playing .nav-item .ui-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.is-playing .nav-item strong {
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.is-playing .nav-item.active {
+  color: var(--desk-cream);
+  background: #0a303b;
+  border-top: 2px solid var(--desk-cyan);
+  box-shadow: inset 0 0 0 1px #164954;
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
+
+.is-playing .nav-item.active .ui-icon {
+  color: var(--desk-cyan);
+  background: transparent;
+  border: 0;
+}
+
+.is-playing .nav-item.recommended {
+  color: var(--desk-brass-hi);
+}
+
+.is-playing .nav-badge {
+  top: 3px;
+  right: 4px;
+  width: 15px;
+  height: 15px;
+  color: #061116;
+  background: var(--desk-brass-hi);
+  border: 0;
+  box-shadow: none;
+  font-size: 8px;
+}
+
+@media (max-width: 380px) {
+  .is-playing {
+    --header-h: 172px;
+    --nav-h: 58px;
+  }
+
+  .is-playing .play-header {
+    padding-inline: 10px;
+  }
+
+  .is-playing .tab-screen,
+  .is-playing .tab-content-wrap,
+  .is-playing .asset-collection-screen {
+    padding-inline: 10px;
+  }
+
+  .is-playing .action-type-grid {
+    gap: 7px;
+  }
+
+  .is-playing .action-type-button {
+    grid-template-columns: 29px minmax(0, 1fr) 11px;
+    min-height: 94px;
+    padding-inline: 7px;
+  }
+
+  .is-playing .action-type-button > strong {
+    font-size: 14px;
+  }
+
+  .is-playing .nav-item {
+    grid-template-columns: 20px minmax(0, auto);
+    padding-inline: 2px;
+  }
+
+  .is-playing .nav-item strong {
+    font-size: 9px;
+  }
+}
+
+@media (max-height: 740px) {
+  .is-playing {
+    --header-h: 168px;
+    --nav-h: 56px;
+  }
+
+  .is-playing .header-top,
+  .is-playing .run-bar {
+    height: 28px;
+  }
+
+  .is-playing .turn-guide-track {
+    min-height: 26px;
+  }
+
+  .is-playing .stats-grid {
+    margin-top: 4px;
+  }
+
+  .is-playing .stat-tile {
+    min-height: 36px;
+    padding-block: 3px;
+  }
+
+  .is-playing .stage-heading,
+  .is-playing .section-heading-v3 {
+    min-height: 36px;
+  }
+
+  .is-playing .stage-heading p,
+  .is-playing .section-heading-v3 > p {
+    display: none;
+  }
+
+  .is-playing .action-type-button {
+    min-height: 86px;
+  }
+
+  .is-playing .nav-item {
+    min-height: 42px;
+  }
+}

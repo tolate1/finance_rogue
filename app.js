@@ -1236,6 +1236,7 @@ const state = {
 };
 
 const ui = {
+  appShell: document.querySelector(".app-shell"),
   appHeader: document.querySelector(".app-header"),
   eyebrow: document.querySelector(".eyebrow"),
   headerTitle: document.querySelector(".header-top h1"),
@@ -1594,6 +1595,7 @@ function renderTurnGuide(run) {
 
 function renderHeader() {
   document.title = t("gameTitle");
+  ui.appShell.classList.toggle("is-playing", Boolean(hasSelectedLanguage() && state.run && !state.runSetupOpen));
   ui.appHeader.classList.toggle("onboarding-header-hidden", !hasSelectedLanguage() || state.runSetupOpen || !state.run);
   ui.eyebrow.textContent = t("gameTitle");
   ui.newRunButton.textContent = t("reset");
@@ -1860,14 +1862,39 @@ function renderTutorialTask(phase) {
 
 function uiIcon(type) {
   const glyphs = {
-    game: "◆", portfolio: "▦", market: "↗", economy: "≋",
-    buy: "+", upgrade: "↑", sell: "−", cards: "▤", hold: "■", debt: "↓",
-    businesses: "▦", real_estate: "▥", stocks: "↗", collection: "◆",
-    consumer: "◫", monetary: "$", prices: "%", energy: "ϟ", markets: "↗",
-    growth: "▲", supply: "▣", regulation: "§", labor: "●", technology: "⌘",
-    property: "▥", defense: "◇", liquidity: "▰", leverage: "▲", efficiency: "≡", balanced: "+"
+    game: '<path d="M4 7h16v12H4zM8 7V4h8v3M8 13h4M10 11v4M16 12h.01M18 15h.01"/>',
+    portfolio: '<path d="M3 8h18v11H3zM8 8V5h8v3M3 12h18M10 12v2h4v-2"/>',
+    market: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7M16 6h4v4"/>',
+    economy: '<path d="M4 19h16M6 19v-6h3v6M11 19V9h3v10M16 19V5h3v14"/>',
+    buy: '<path d="M4 7h16v12H4zM8 7V4h8v3M12 10v6M9 13h6"/>',
+    upgrade: '<path d="M5 19h14M7 16l5-5 5 5M12 11V4"/>',
+    sell: '<path d="M4 7h16v12H4zM8 7V4h8v3M8 13h8"/>',
+    cards: '<path d="m7 5 11-2 2 14-11 2zM4 8v13h11"/>',
+    hold: '<path d="M5 6h14v14H5zM8 3h8M8 11h8M8 15h5"/>',
+    debt: '<path d="M5 5h14v14H5zM12 7v8M8 12l4 4 4-4"/>',
+    businesses: '<path d="M4 20V8h6v12M10 20V4h10v16M7 11h.01M14 8h2M14 12h2M14 16h2"/>',
+    real_estate: '<path d="m3 11 9-7 9 7M5 10v10h14V10M9 20v-6h6v6"/>',
+    stocks: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7"/>',
+    collection: '<path d="m12 3 8 5v8l-8 5-8-5V8zM8 10h8M8 14h8"/>',
+    consumer: '<path d="M5 8h14l-1 12H6zM8 8a4 4 0 0 1 8 0"/>',
+    monetary: '<path d="M12 3v18M16 7c0-2-2-3-4-3S8 5 8 7s2 3 4 3 4 1 4 3-2 4-4 4-4-1-4-3"/>',
+    prices: '<path d="M7 18 17 6M8 6h.01M16 18h.01"/>',
+    energy: '<path d="m13 2-7 12h6l-1 8 7-12h-6z"/>',
+    markets: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7"/>',
+    growth: '<path d="M5 17 12 5l7 12zM12 9v8"/>',
+    supply: '<path d="m12 3 8 4-8 4-8-4zM4 12l8 4 8-4M4 17l8 4 8-4"/>',
+    regulation: '<path d="M12 3v18M5 7h14M7 7l-3 6h6zM17 7l-3 6h6z"/>',
+    labor: '<path d="M8 5h8l2 4v11H6V9zM9 5V3h6v2M6 12h12"/>',
+    technology: '<path d="M7 7h10v10H7zM9 2v5M15 2v5M9 17v5M15 17v5M2 9h5M17 9h5M2 15h5M17 15h5"/>',
+    property: '<path d="m3 11 9-7 9 7M5 10v10h14V10M9 20v-6h6v6"/>',
+    defense: '<path d="m12 3 7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+    liquidity: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+    leverage: '<path d="M4 18h16M7 15l5-9 5 9"/>',
+    efficiency: '<path d="M4 8h16M4 12h12M4 16h8"/>',
+    balanced: '<path d="M12 4v16M4 12h16"/>'
   };
-  return `<span class="ui-icon ui-icon--${type}" aria-hidden="true">${glyphs[type] || glyphs.balanced}</span>`;
+  const paths = glyphs[type] || glyphs.balanced;
+  return `<span class="ui-icon ui-icon--${type}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter">${paths}</svg></span>`;
 }
 
 function visualIcon(type) {
@@ -2049,9 +2076,11 @@ function renderActionStage() {
           const availability = actionCategoryState(category.id);
           return `
             <button class="action-type-button motion-card action-tone--${category.tone} ${availability.disabled ? "unavailable" : ""}" style="--card-index:${index}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
+              <span class="action-card-index">${String(index + 1).padStart(2, "0")}</span>
               <span class="action-card-visual">
                 <span class="action-icon-wrap">${uiIcon(category.icon)}</span>
               </span>
+              <span class="action-card-kicker">${category.kicker}</span>
               <strong>${category.label}</strong>
               <span class="action-card-description">${availability.reason || category.hint}</span>
               <em>${availability.disabled ? "—" : "→"}</em>

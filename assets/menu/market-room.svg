@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280" role="img" aria-label="Детальный ночной рыночный зал">
+  <defs>
+    <linearGradient id="night" x2="0" y2="1"><stop stop-color="#162421"/><stop offset=".5" stop-color="#081210"/><stop offset="1" stop-color="#050607"/></linearGradient>
+    <radialGradient id="glow" cx=".76" cy=".18" r=".62"><stop stop-color="#f5bf71" stop-opacity=".85"/><stop offset=".23" stop-color="#89552d" stop-opacity=".35"/><stop offset="1" stop-color="#050607" stop-opacity="0"/></radialGradient>
+    <pattern id="boardGrid" width="52" height="42" patternUnits="userSpaceOnUse"><path d="M0 1h52M1 0v42" stroke="#36927c" stroke-opacity=".24"/><circle cx="43" cy="13" r="2" fill="#e8ad5d"/></pattern>
+    <linearGradient id="coin" x2="0" y2="1"><stop stop-color="#f0ca77"/><stop offset=".45" stop-color="#a36c2f"/><stop offset="1" stop-color="#4b2810"/></linearGradient>
+  </defs>
+  <rect width="720" height="1280" fill="url(#night)"/>
+  <rect width="720" height="900" fill="url(#glow)"/>
+  <g transform="translate(36 192)">
+    <path d="M0 42 616 0l28 505-609 36Z" fill="#06100f" stroke="#725037" stroke-width="12"/>
+    <path d="M31 70 585 33l20 429-548 31Z" fill="url(#boardGrid)" stroke="#1d5049" stroke-width="4"/>
+    <path d="M66 407 134 342l55 18 71-108 66 33 68-132 56 38 98-116" fill="none" stroke="#47c89e" stroke-width="9"/>
+    <path d="m66 407 68-65 55 18 71-108 66 33" fill="none" stroke="#e7b45f" stroke-width="3"/>
+    <g fill="#4bd09d"><rect x="72" y="104" width="76" height="17"/><rect x="72" y="139" width="124" height="12"/><rect x="72" y="174" width="93" height="12"/></g>
+    <g fill="#d45a52"><rect x="406" y="319" width="132" height="15"/><rect x="431" y="352" width="107" height="12"/><rect x="455" y="384" width="83" height="12"/></g>
+    <g fill="#d7a454"><circle cx="102" cy="439" r="8"/><circle cx="260" cy="252" r="8"/><circle cx="394" cy="153" r="8"/><circle cx="548" cy="75" r="8"/></g>
+  </g>
+  <g opacity=".82">
+    <path d="M0 770 720 690v590H0Z" fill="#171717"/>
+    <path d="M0 813 720 729" stroke="#7c5b38" stroke-width="6"/>
+    <path d="M54 923 654 860l26 287-608 45Z" fill="#0b1314" stroke="#5f4930" stroke-width="7"/>
+    <path d="M98 960 317 936l13 144-220 20Z" fill="#09272a" stroke="#2f8a88" stroke-width="4"/>
+    <path d="M124 1054 168 1018l37 15 44-51 51 23" fill="none" stroke="#54cab0" stroke-width="7"/>
+    <g fill="url(#coin)" stroke="#edc779" stroke-width="2">
+      <ellipse cx="471" cy="1052" rx="74" ry="22"/><path d="M397 1022v30c0 13 33 23 74 23s74-10 74-23v-30"/>
+      <ellipse cx="528" cy="997" rx="67" ry="20"/><path d="M461 951v46c0 12 30 21 67 21s67-9 67-21v-46"/>
+      <ellipse cx="584" cy="919" rx="56" ry="17"/><path d="M528 870v49c0 10 25 18 56 18s56-8 56-18v-49"/>
+    </g>
+  </g>
+  <g fill="#163e3b" stroke="#5f8d77" stroke-width="3" opacity=".5"><path d="M18 74h170v72H18z"/><path d="M528 82h174v74H528z"/></g>
+  <path d="M0 0h720v1280H0z" fill="none" stroke="#050505" stroke-width="34" stroke-opacity=".55"/>
+</svg>
