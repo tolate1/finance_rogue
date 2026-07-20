@@ -1644,7 +1644,7 @@ function drawLedgerScene(context, width, height, time) {
     context.fillRect(Math.round(x), Math.round(drift), size, size);
   }
 
-  drawLowPolyFounder(context, width / 2, 138 + Math.sin(time * 1.1), 0.72, "#d8e3e6", "#6e83bc");
+  drawPixelFounder(context, width / 2, 137, 1, time, "phone");
   context.fillStyle = "rgba(0, 0, 0, 0.42)";
   context.beginPath();
   context.ellipse(width / 2, 200, 18, 5, 0, 0, Math.PI * 2);
@@ -1656,51 +1656,10 @@ function drawFounderScene(context, width, height, time) {
   drawFmvBloom(context, width - 28, 132, 114, "255, 239, 190", 0.98);
   drawFmvBloom(context, 24, 86, 88, "225, 136, 75", 0.5);
 
-  const drift = Math.sin(time * 0.6) * 2;
+  const drift = Math.round(Math.sin(time * 0.6) * 2);
   context.save();
   context.translate(drift, 0);
-  context.fillStyle = "#111012";
-  context.beginPath();
-  context.moveTo(8, 0);
-  context.lineTo(136, 0);
-  context.lineTo(126, 86);
-  context.lineTo(104, 109);
-  context.lineTo(38, 104);
-  context.lineTo(14, 73);
-  context.closePath();
-  context.fill();
-
-  context.fillStyle = "#b87955";
-  context.beginPath();
-  context.moveTo(42, 82);
-  context.lineTo(118, 77);
-  context.lineTo(112, 160);
-  context.lineTo(78, 178);
-  context.lineTo(43, 151);
-  context.closePath();
-  context.fill();
-
-  context.fillStyle = "#08090b";
-  context.fillRect(38, 87, 85, 22);
-  context.fillRect(28, 105, 26, 63);
-  context.fillRect(106, 101, 19, 57);
-  context.fillStyle = "#b73637";
-  context.fillRect(51, 112, 14, 4);
-  context.fillStyle = "#91a5d4";
-  context.fillRect(91, 110, 15, 5);
-  context.fillStyle = "rgba(255, 239, 207, 0.72)";
-  context.fillRect(73, 141, 17, 3);
-
-  context.fillStyle = "#0b0c0f";
-  context.beginPath();
-  context.moveTo(10, height);
-  context.lineTo(32, 180);
-  context.lineTo(80, 164);
-  context.lineTo(134, 178);
-  context.lineTo(width, 224);
-  context.lineTo(width, height);
-  context.closePath();
-  context.fill();
+  drawPixelFounder(context, 82, 116, 2.08, time, "portrait");
   context.restore();
 
   context.fillStyle = "rgba(255, 245, 213, 0.22)";
@@ -1717,7 +1676,7 @@ function drawMachineScene(context, width, height, time) {
   drawGear(context, 55, 251, 34, 10, -time * 0.17, "#7a6750");
   drawGear(context, 150, 62, 31, 10, time * 0.2, "#695944");
 
-  drawLowPolyFounder(context, 91, 137 + Math.sin(time * 1.2), 0.6, "#c9d6d8", "#7183b9");
+  drawPixelFounder(context, 91, 139, 0.82, time, "idle");
   context.fillStyle = "rgba(10, 8, 7, 0.55)";
   context.fillRect(82, 179, 19, 70);
 }
@@ -1744,22 +1703,10 @@ function drawMarketCorridorScene(context, width, height, time) {
   }
 
   const pulse = Math.round(Math.sin(time * 2.2) * 2);
-  context.fillStyle = "#030706";
-  context.fillRect(67 + pulse, 80, 47, 109);
-  context.fillStyle = "#1a2421";
-  context.fillRect(73 + pulse, 90, 35, 82);
-  context.fillStyle = "#b62837";
-  context.fillRect(76 + pulse, 112, 28, 7);
-  context.fillStyle = "#55d096";
-  context.fillRect(83 + pulse, 104, 20, 4);
-  context.fillStyle = "#050707";
-  context.beginPath();
-  context.moveTo(61, 198);
-  context.lineTo(119, 198);
-  context.lineTo(134, 254);
-  context.lineTo(45, 254);
-  context.closePath();
-  context.fill();
+  context.save();
+  context.globalAlpha = 0.82;
+  drawPixelFounder(context, 90 + pulse, 140, 0.9, time, "shadow");
+  context.restore();
 
   for (let index = 0; index < 11; index += 1) {
     const x = 20 + index * 13;
@@ -1786,30 +1733,135 @@ function drawFmvBloom(context, x, y, radius, rgb, opacity) {
   context.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 }
 
-function drawLowPolyFounder(context, x, y, scale, shirt, accent) {
+function fillPixelPolygon(context, color, points) {
+  context.fillStyle = color;
+  context.beginPath();
+  context.moveTo(points[0][0], points[0][1]);
+  for (let index = 1; index < points.length; index += 1) {
+    context.lineTo(points[index][0], points[index][1]);
+  }
+  context.closePath();
+  context.fill();
+}
+
+function drawPixelFounder(context, x, y, scale, time, pose = "idle") {
+  const shadowPose = pose === "shadow";
+  const portraitPose = pose === "portrait";
+  const handToFace = pose === "phone" || portraitPose;
+  const breath = Math.round(Math.sin(time * 1.55));
+  const headShift = Math.round(Math.sin(time * 0.72 + 0.7));
+  const palette = shadowPose ? {
+    outline: "#020606",
+    hair: "#040708",
+    hairLight: "#17312d",
+    skin: "#273c35",
+    skinLight: "#466258",
+    skinShadow: "#13241f",
+    shirt: "#182b29",
+    shirtLight: "#284840",
+    sleeve: "#17282d",
+    sleeveLight: "#31504f",
+    red: "#b82e3e",
+    eye: "#e93c4e",
+    trousers: "#030707",
+    shoe: "#010303"
+  } : {
+    outline: "#090b0d",
+    hair: "#0b0d10",
+    hairLight: "#2b2e36",
+    skin: "#bd7d5d",
+    skinLight: "#e2a27b",
+    skinShadow: "#7d493d",
+    shirt: "#d8e0df",
+    shirtLight: "#f2eee0",
+    sleeve: "#566fae",
+    sleeveLight: "#8295ca",
+    red: "#a72f3a",
+    eye: "#c63442",
+    trousers: "#0a0c11",
+    shoe: "#040506"
+  };
+
   context.save();
-  context.translate(Math.round(x), Math.round(y));
+  context.translate(Math.round(x), Math.round(y + breath));
   context.scale(scale, scale);
-  context.fillStyle = "rgba(0, 0, 0, 0.76)";
-  context.fillRect(-13, -25, 26, 25);
-  context.fillRect(-17, -20, 8, 17);
-  context.fillStyle = "#a76d4c";
-  context.fillRect(-9, -18, 18, 20);
-  context.fillStyle = "#0a0b0c";
-  context.fillRect(-10, -23, 22, 10);
-  context.fillRect(-13, -20, 7, 17);
-  context.fillStyle = "#912d38";
-  context.fillRect(-6, -10, 5, 3);
-  context.fillStyle = "#8294c6";
-  context.fillRect(4, -10, 5, 3);
-  context.fillStyle = shirt;
-  context.fillRect(-17, 3, 34, 45);
-  context.fillStyle = accent;
-  context.fillRect(-14, 8, 7, 36);
-  context.fillRect(7, 8, 7, 36);
-  context.fillStyle = "#080a0b";
-  context.fillRect(-11, 48, 9, 31);
-  context.fillRect(3, 48, 9, 31);
+
+  // Wide trousers and heavy shoes keep the silhouette readable at 180 px.
+  fillPixelPolygon(context, palette.trousers, [[-17, 32], [-1, 31], [-3, 73], [-8, 82], [-22, 82], [-18, 66]]);
+  fillPixelPolygon(context, palette.trousers, [[1, 31], [17, 32], [20, 68], [23, 82], [7, 82], [3, 73]]);
+  context.fillStyle = palette.shoe;
+  context.fillRect(-24, 79, 18, 7);
+  context.fillRect(7, 79, 19, 7);
+  context.fillStyle = shadowPose ? "#1d4038" : "#343946";
+  context.fillRect(-15, 38, 3, 31);
+  context.fillRect(11, 38, 3, 28);
+
+  // Back arm: one straight sleeve, one bent toward the face.
+  if (handToFace) {
+    fillPixelPolygon(context, palette.sleeve, [[-17, -7], [-29, -1], [-31, 16], [-25, 22], [-18, 12]]);
+    fillPixelPolygon(context, palette.sleeveLight, [[-28, 12], [-23, 10], [-18, -25], [-23, -29], [-31, 4]]);
+    context.fillStyle = palette.skin;
+    context.fillRect(-24, -34, 8, 11);
+    context.fillStyle = palette.skinLight;
+    context.fillRect(-22, -35, 5, 4);
+  } else {
+    fillPixelPolygon(context, palette.sleeve, [[-18, -6], [-28, 0], [-25, 34], [-17, 35], [-13, 10]]);
+    context.fillStyle = palette.skin;
+    context.fillRect(-26, 31, 8, 10);
+  }
+
+  fillPixelPolygon(context, palette.sleeve, [[17, -7], [28, 0], [25, 34], [17, 37], [13, 10]]);
+  context.fillStyle = palette.sleeveLight;
+  context.fillRect(20, -1, 4, 31);
+  context.fillStyle = palette.skin;
+  context.fillRect(18, 34, 8, 10);
+
+  // Oversized white jersey with a single red number mark.
+  fillPixelPolygon(context, palette.outline, [[-19, -10], [18, -10], [23, 5], [18, 38], [-18, 38], [-23, 5]]);
+  fillPixelPolygon(context, palette.shirt, [[-16, -8], [15, -8], [19, 5], [15, 34], [-15, 34], [-19, 5]]);
+  fillPixelPolygon(context, palette.shirtLight, [[-12, -7], [4, -7], [1, 33], [-14, 33], [-17, 4]]);
+  context.fillStyle = palette.red;
+  context.fillRect(-5, 1, 4, 23);
+  context.fillRect(3, 1, 4, 23);
+  context.fillRect(-7, 1, 5, 4);
+  context.fillRect(1, 1, 5, 4);
+  context.fillStyle = shadowPose ? "#28443c" : "#8e999c";
+  context.fillRect(-14, 29, 28, 3);
+
+  // Neck and low-poly face use the same proportions in every scene.
+  context.fillStyle = palette.skinShadow;
+  context.fillRect(-7, -18, 14, 12);
+  fillPixelPolygon(context, palette.outline, [[-18 + headShift, -51], [-9 + headShift, -61], [10 + headShift, -58], [18 + headShift, -47], [15 + headShift, -27], [6 + headShift, -17], [-8 + headShift, -18], [-17 + headShift, -31]]);
+  fillPixelPolygon(context, palette.skin, [[-14 + headShift, -49], [-7 + headShift, -56], [9 + headShift, -54], [14 + headShift, -45], [12 + headShift, -29], [5 + headShift, -21], [-7 + headShift, -22], [-13 + headShift, -32]]);
+  fillPixelPolygon(context, palette.skinLight, [[2 + headShift, -52], [9 + headShift, -50], [12 + headShift, -43], [9 + headShift, -28], [3 + headShift, -24], [-1 + headShift, -31]]);
+  context.fillStyle = palette.skinShadow;
+  context.fillRect(-15 + headShift, -42, 4, 12);
+  context.fillRect(7 + headShift, -31, 6, 4);
+  context.fillStyle = palette.eye;
+  context.fillRect(3 + headShift, -41, 5, 3);
+  context.fillStyle = palette.outline;
+  context.fillRect(-8 + headShift, -40, 5, 3);
+  context.fillRect(1 + headShift, -26, 7, 2);
+
+  // Heavy stepped fringe: large clusters instead of noisy single pixels.
+  fillPixelPolygon(context, palette.hair, [[-20 + headShift, -50], [-13 + headShift, -64], [4 + headShift, -67], [16 + headShift, -58], [19 + headShift, -47], [12 + headShift, -45], [9 + headShift, -52], [5 + headShift, -43], [0 + headShift, -50], [-5 + headShift, -39], [-11 + headShift, -45], [-15 + headShift, -34], [-20 + headShift, -39]]);
+  context.fillStyle = palette.hair;
+  context.fillRect(-23 + headShift, -55, 8, 19);
+  context.fillRect(-15 + headShift, -64, 11, 10);
+  context.fillRect(7 + headShift, -62, 8, 8);
+  context.fillStyle = palette.hairLight;
+  context.fillRect(-10 + headShift, -62, 12, 3);
+  context.fillRect(9 + headShift, -56, 5, 4);
+  context.fillRect(-20 + headShift, -46, 3, 10);
+
+  // One-pixel rim light makes the hero separate from bright FMV bloom.
+  context.fillStyle = shadowPose ? "#4cc98e" : "#f2c27b";
+  context.fillRect(16 + headShift, -52, 2, 12);
+  context.fillRect(18, -4, 2, 22);
+  if (portraitPose) {
+    context.fillStyle = "rgba(255, 236, 195, 0.3)";
+    context.fillRect(-26, -13, 5, 42);
+  }
   context.restore();
 }
 

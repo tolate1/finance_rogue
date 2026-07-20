@@ -7652,3 +7652,306 @@ body {
   .app-shell.fmv-skin { border-width: 0; border-radius: 0; box-shadow: none; }
   .app-shell.fmv-skin::after { border-radius: 0; }
 }
+
+/* Pixel-control pass: every interactive surface now follows the same PS2-era menu grammar. */
+.fmv-skin {
+  --pixel-button-shape: polygon(
+    12px 0,
+    calc(100% - 12px) 0,
+    calc(100% - 12px) 4px,
+    calc(100% - 4px) 4px,
+    calc(100% - 4px) 10px,
+    100% 10px,
+    100% calc(100% - 10px),
+    calc(100% - 4px) calc(100% - 10px),
+    calc(100% - 4px) calc(100% - 4px),
+    calc(100% - 12px) calc(100% - 4px),
+    calc(100% - 12px) 100%,
+    12px 100%,
+    12px calc(100% - 4px),
+    4px calc(100% - 4px),
+    4px calc(100% - 10px),
+    0 calc(100% - 10px),
+    0 10px,
+    4px 10px,
+    4px 4px,
+    12px 4px
+  );
+  --pixel-inner-shape: polygon(
+    8px 0,
+    calc(100% - 8px) 0,
+    calc(100% - 8px) 3px,
+    calc(100% - 3px) 3px,
+    calc(100% - 3px) 7px,
+    100% 7px,
+    100% calc(100% - 7px),
+    calc(100% - 3px) calc(100% - 7px),
+    calc(100% - 3px) calc(100% - 3px),
+    calc(100% - 8px) calc(100% - 3px),
+    calc(100% - 8px) 100%,
+    8px 100%,
+    8px calc(100% - 3px),
+    3px calc(100% - 3px),
+    3px calc(100% - 7px),
+    0 calc(100% - 7px),
+    0 7px,
+    3px 7px,
+    3px 3px,
+    8px 3px
+  );
+  --pixel-card-shape: polygon(8px 0, calc(100% - 8px) 0, calc(100% - 8px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 8px, 100% 8px, 100% calc(100% - 8px), calc(100% - 3px) calc(100% - 8px), calc(100% - 3px) calc(100% - 3px), calc(100% - 8px) calc(100% - 3px), calc(100% - 8px) 100%, 8px 100%, 8px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 8px), 0 calc(100% - 8px), 0 8px, 3px 8px, 3px 3px, 8px 3px);
+}
+
+.fmv-skin button {
+  border-radius: 0 !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fmv-skin :is(
+  .primary-button,
+  .secondary-button,
+  .business-button,
+  .icon-button,
+  .screen-back-button,
+  .market-back-button,
+  .filter-chip,
+  .language-inline-button,
+  .language-button,
+  .modal-close,
+  .stock-close-button,
+  .nav-item
+) {
+  --pixel-outer-top: #f2bd65;
+  --pixel-outer-mid: #c67d27;
+  --pixel-outer-bottom: #633312;
+  --pixel-fill-top: #25c1ef;
+  --pixel-fill-mid: #087ead;
+  --pixel-fill-bottom: #034867;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  overflow: hidden;
+  color: #fbffff !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  clip-path: var(--pixel-button-shape);
+  background: linear-gradient(180deg, var(--pixel-outer-top), var(--pixel-outer-mid) 48%, var(--pixel-outer-bottom)) !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 3px 0 #3a1c09) drop-shadow(0 7px 8px rgba(0, 0, 0, 0.4));
+  font-family: "Arial Black", "Trebuchet MS", "Segoe UI", sans-serif;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  text-shadow: 0 2px 0 #02384f, 1px 0 0 rgba(255, 255, 255, 0.22);
+}
+
+.fmv-skin :is(
+  .primary-button,
+  .secondary-button,
+  .business-button,
+  .icon-button,
+  .screen-back-button,
+  .market-back-button,
+  .filter-chip,
+  .language-inline-button,
+  .language-button,
+  .modal-close,
+  .stock-close-button,
+  .nav-item
+)::before {
+  content: "" !important;
+  position: absolute !important;
+  z-index: -1 !important;
+  inset: 3px !important;
+  width: auto !important;
+  height: auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  clip-path: var(--pixel-inner-shape);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 37%),
+    linear-gradient(180deg, var(--pixel-fill-top), var(--pixel-fill-mid) 58%, var(--pixel-fill-bottom)) !important;
+  box-shadow: inset 0 0 0 2px rgba(67, 31, 8, 0.72), inset 0 2px rgba(255, 255, 255, 0.2) !important;
+  transform: none !important;
+  pointer-events: none;
+}
+
+.fmv-skin :is(
+  .primary-button,
+  .secondary-button,
+  .business-button,
+  .icon-button,
+  .screen-back-button,
+  .market-back-button,
+  .filter-chip,
+  .language-inline-button,
+  .language-button,
+  .modal-close,
+  .stock-close-button,
+  .nav-item
+)::after {
+  content: none !important;
+}
+
+.fmv-skin :is(.secondary-button, .screen-back-button, .market-back-button, .filter-chip, .language-button, .modal-close, .stock-close-button) {
+  --pixel-outer-top: #c99a4c;
+  --pixel-outer-mid: #8c5521;
+  --pixel-outer-bottom: #42220e;
+  --pixel-fill-top: #126c86;
+  --pixel-fill-mid: #06475d;
+  --pixel-fill-bottom: #032733;
+}
+
+.fmv-skin :is(.icon-button, .language-inline-button) {
+  --pixel-outer-top: #f0bd65;
+  --pixel-outer-mid: #bd7627;
+  --pixel-fill-top: #1597bf;
+  --pixel-fill-mid: #075d78;
+  --pixel-fill-bottom: #032f3d;
+  min-width: 40px;
+  min-height: 36px;
+  padding-inline: 9px;
+}
+
+.fmv-skin .title-screen .language-inline-button {
+  width: 44px;
+  height: 38px;
+  border-radius: 0 !important;
+  backdrop-filter: none;
+}
+
+.fmv-skin .title-screen :is(.welcome-start-button, .welcome-config-button, .title-return-button) {
+  border-radius: 0 !important;
+  clip-path: var(--pixel-button-shape);
+  backdrop-filter: none;
+}
+
+.fmv-skin .title-screen .welcome-start-button {
+  --pixel-outer-top: #ffd47f;
+  --pixel-outer-mid: #d48a2e;
+  --pixel-fill-top: #33cef5;
+  --pixel-fill-mid: #0984b6;
+  --pixel-fill-bottom: #034a6c;
+}
+
+.fmv-skin .title-screen .welcome-config-button {
+  --pixel-fill-top: #1caed9;
+  --pixel-fill-mid: #076b8d;
+  --pixel-fill-bottom: #033b50;
+}
+
+.fmv-skin :is(.primary-button, .secondary-button, .business-button, .screen-back-button, .market-back-button, .filter-chip, .language-button):not(:disabled):active {
+  translate: 0 3px;
+  filter: brightness(1.12) drop-shadow(0 1px 0 #3a1c09);
+}
+
+.fmv-skin .title-screen :is(.welcome-start-button, .welcome-config-button, .title-return-button):active {
+  translate: 0;
+  transform: translateX(-50%) translateY(4px);
+}
+
+.fmv-skin :is(.primary-button, .secondary-button, .business-button, .icon-button, .screen-back-button, .market-back-button, .filter-chip, .language-button, .nav-item):disabled {
+  --pixel-outer-top: #71695b;
+  --pixel-outer-mid: #4b453d;
+  --pixel-outer-bottom: #27231f;
+  --pixel-fill-top: #445154;
+  --pixel-fill-mid: #2d3739;
+  --pixel-fill-bottom: #182022;
+  color: #9ca6a4 !important;
+  filter: none;
+}
+
+.fmv-skin .bottom-nav .nav-item {
+  --pixel-outer-top: #72532a;
+  --pixel-outer-mid: #4d3218;
+  --pixel-outer-bottom: #1c1209;
+  --pixel-fill-top: #102d35;
+  --pixel-fill-mid: #071b21;
+  --pixel-fill-bottom: #030b0e;
+  color: #89a3a6 !important;
+  min-height: 52px;
+  padding: 5px 4px 4px;
+  filter: none;
+}
+
+.fmv-skin .bottom-nav .nav-item.active {
+  --pixel-outer-top: #f0bd65;
+  --pixel-outer-mid: #b97025;
+  --pixel-outer-bottom: #512a10;
+  --pixel-fill-top: #189ec5;
+  --pixel-fill-mid: #075d78;
+  --pixel-fill-bottom: #032f3d;
+  color: #fff8e5 !important;
+  filter: drop-shadow(0 3px 0 #2d1608);
+}
+
+.fmv-skin .filter-chip {
+  --pixel-button-shape: polygon(7px 0, calc(100% - 7px) 0, calc(100% - 7px) 3px, calc(100% - 3px) 3px, calc(100% - 3px) 7px, 100% 7px, 100% calc(100% - 7px), calc(100% - 3px) calc(100% - 7px), calc(100% - 3px) calc(100% - 3px), calc(100% - 7px) calc(100% - 3px), calc(100% - 7px) 100%, 7px 100%, 7px calc(100% - 3px), 3px calc(100% - 3px), 3px calc(100% - 7px), 0 calc(100% - 7px), 0 7px, 3px 7px, 3px 3px, 7px 3px);
+  --pixel-inner-shape: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+
+.fmv-skin .filter-chip.active {
+  --pixel-outer-top: #f0bd65;
+  --pixel-outer-mid: #b97025;
+  --pixel-fill-top: #22b8e2;
+  --pixel-fill-mid: #08759a;
+  --pixel-fill-bottom: #03445d;
+}
+
+/* Clickable cards use squared, stepped corners rather than mobile-app pills. */
+.fmv-skin :is(
+  .choice-card,
+  .decision-option-card,
+  .selectable-action-card,
+  .action-type-button,
+  .market-table-card,
+  .market-category-card,
+  .stock-list-item,
+  .setup-option-card
+) {
+  border-radius: 0 !important;
+  clip-path: var(--pixel-card-shape);
+}
+
+.fmv-skin :is(
+  .event-hero-card,
+  .market-deal-card,
+  .asset-card-v3,
+  .macro-card-v3,
+  .economy-note-v3,
+  .timeline-item,
+  .stock-cycle-v3,
+  .collection-card,
+  .synergy-card,
+  .choice-result-strip,
+  .round-result-card,
+  .prestige-summary,
+  .unlock-card,
+  .empty-state,
+  .stock-sheet,
+  .language-card,
+  .setup-advanced-panel
+) {
+  border-radius: 0 !important;
+  clip-path: var(--pixel-card-shape);
+}
+
+.fmv-skin :is(.app-header .stat-tile, .app-header .turn-guide-step, .action-icon-wrap, .event-visual-icon, .business-visual-icon, .collection-icon) {
+  border-radius: 0 !important;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+.fmv-skin :is(.turn-guide-index, .nav-badge, .stage-number, .result-check) {
+  border-radius: 0 !important;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+
+.fmv-skin :is(.card-select-label, .selected-trade-mode) {
+  border-radius: 0 !important;
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+}
+
+@media (max-width: 370px) {
+  .fmv-skin :is(.primary-button, .secondary-button, .business-button, .screen-back-button, .market-back-button) {
+    letter-spacing: 0.015em;
+  }
+}
