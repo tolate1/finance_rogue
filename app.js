@@ -1,4 +1,5 @@
-﻿import "@fontsource-variable/pixelify-sans/wght.css";
+﻿import "@fontsource-variable/rubik/wght.css";
+import "@fontsource-variable/pixelify-sans/wght.css";
 import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
 import {
   RUN_DIFFICULTIES,
@@ -2689,7 +2690,7 @@ function resolveEventChoice(choiceIndex) {
   });
   state.transitionLocked = true;
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  window.setTimeout(() => commitEventChoice(choiceIndex), reducedMotion ? 0 : 420);
+  window.setTimeout(() => commitEventChoice(choiceIndex), reducedMotion ? 0 : 280);
 }
 
 function commitEventChoice(choiceIndex) {
