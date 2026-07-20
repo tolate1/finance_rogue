@@ -1,6 +1,6 @@
-# Finance Roguelike Text Prototype
+# Finance Roguelike
 
-Minimal text prototype for the finance/business roguelike.
+Mobile-first browser prototype of a finance/business roguelike.
 
 ## Run
 
@@ -10,32 +10,55 @@ python finance_roguelike.py
 
 ## Web UI
 
-Run a local static server in the project root, then open `index.html`.
+Install dependencies and start the Vite development server:
 
 ```bash
-python -m http.server 4173
+npm install
+npm run dev
+```
+
+The browser version is the primary playable build.
+
+Public beta:
+
+https://finance-rogue-tolate1-play.perky-squid-7719.chatgpt.site
+
+## Checks
+
+Node.js 22 or newer is required for repository checks.
+
+```bash
+npm test
+npm run check
 ```
 
 ## Current scope
 
-- 10-turn run
+- 10-turn run with prestige extensions
 - business purchase and upgrades
 - debt and interest
 - macro state changes
 - 20 events with choices
 - 20 decision cards
-- simple synergies
-- temporary modifiers with duration
+- public stock market with seven fictional listings
+- synergies and temporary modifiers with duration
 - industry data validation
 - bankruptcy check
 - playable browser UI
+- unified card-first game screen for event, action, and round result
+- vertical tap targets instead of nested horizontal carousels
 - first-launch language selection
 - RU/EN localization
-- PNG bottom-nav icons
+- mobile-optimized WebP icons and company logos
+- persistent prestige progression
+- automatic recovery of an unfinished run
+- three starting scenarios and three difficulty levels
+- shared economy engine for live play and simulation
+- public HTTPS production deployment
 
 ## Roadmap status
 
-Current stage: browser UI prototype with temporary modifiers and localization.
+Current stage: canonical game engine for the first public beta.
 
 Done:
 
@@ -44,13 +67,23 @@ Done:
 - simple economy formula
 - debt, interest, risk, valuation
 - MVP-sized first content set
-- tab-based browser UI
+- four-section mobile navigation with full-screen action drill-downs
 - language select and RU/EN translations
 - temporary turn-based modifiers
+- stocks, dividends, and market cycles
+- meta progression and persistent unlocks
+- automated persistence and content-integrity tests
+- GitHub Actions CI
+- canonical calculations for revenue, expenses, interest, dividends, valuation, and insolvency
+- public mobile beta deployment
+- guided round flow with vertical choice cards and a projected settlement card
 
 Next:
 
-- improve balance and action usefulness
-- add simple meta progression
-- add tests for economy/content validation
-- tune temporary modifiers and debt pressure
+- continue extracting actions, events, stocks, and seeded randomness into the canonical engine
+- make the simulator match all live game mechanics
+- run the first measured balance pass
+- continue onboarding, action previews, and mobile feedback
+- add PWA installation support and graceful loading errors
+
+See [ROADMAP.user.ru.md](ROADMAP.user.ru.md) for goals, acceptance criteria, and the detailed delivery order.

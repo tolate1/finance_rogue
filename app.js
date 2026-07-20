@@ -1,7 +1,42 @@
-﻿const MAX_TURNS = 10;
+﻿import "@fontsource-variable/rubik/wght.css";
+import "@fontsource-variable/pixelify-sans/wght.css";
+import { clearRunState, loadRunState, saveRunState } from "./src/persistence.js";
+import {
+  RUN_DIFFICULTIES,
+  RUN_SCENARIOS,
+  applyDifficultyToDebtThreshold,
+  applyDifficultyToKnowledgeReward,
+  createRunConfiguration,
+  difficultyById,
+  scenarioById
+} from "./src/engine/run-config.js";
+import {
+  assessSolvency,
+  calculateBaseDebtThreshold,
+  calculateEconomyReport,
+  calculateEffectiveMacro,
+  sumModifierEffects
+} from "./src/engine/economy.js";
+import {
+  MARKET_OFFER_COUNT,
+  createMarketOffers,
+  discoveredIndustriesForTurn,
+  industryDiscoveryTurn,
+  newlyDiscoveredIndustries
+} from "./src/engine/market-offers.js";
+import {
+  TURN_PHASES,
+  getRecommendedTab,
+  getRoundResultSummary,
+  getTurnPhase,
+  getTurnStepStates
+} from "./src/ui/turn-flow.js";
+
+const MAX_TURNS = 10;
 const STARTING_CASH = 12000;
 const LANGUAGE_KEY = "financeRoguelike.language";
 const META_KEY = "financeRoguelike.meta";
+const RUN_KEY = "financeRoguelike.currentRun";
 const STARTING_UNLOCKED_INDUSTRIES = ["retail", "it", "logistics", "manufacturing"];
 const ADVANCED_FINANCE_CARD_IDS = ["fixed_rate", "bridge_loan", "repay_package", "refinance"];
 const META_UNLOCKS = [
@@ -15,10 +50,152 @@ const META_UNLOCKS = [
   { id: "unlock_extended_run", titleKey: "unlockExtendedRun", descriptionKey: "unlockExtendedRunDesc", cost: 18, type: "run_bonus", category: "meta", payload: { extraTurns: 2 }, repeatable: true, maxLevel: 5, costScaling: 1.25 }
 ];
 
+const EVENT_PRESENTATIONS = {
+  rate_hike: ["monetary", "categoryMonetary", "down"],
+  rate_cut: ["monetary", "categoryMonetary", "up"],
+  inflation_jump: ["prices", "categoryPrices", "up"],
+  demand_slump: ["consumer", "categoryConsumer", "down"],
+  consumer_boom: ["consumer", "categoryConsumer", "up"],
+  energy_spike: ["energy", "categoryEnergy", "up"],
+  energy_relief: ["energy", "categoryEnergy", "down"],
+  cheap_credit: ["monetary", "categoryMonetary", "up"],
+  credit_crunch: ["monetary", "categoryMonetary", "down"],
+  market_panic: ["markets", "categoryMarkets", "down"],
+  viral_trend: ["technology", "categoryTechnology", "up"],
+  supply_shock: ["supply", "categorySupply", "down"],
+  new_fee: ["regulation", "categoryRegulation", "down"],
+  tax_audit: ["regulation", "categoryRegulation", "down"],
+  labor_shortage: ["labor", "categoryLabor", "down"],
+  tech_breakthrough: ["technology", "categoryTechnology", "up"],
+  rent_crisis: ["property", "categoryProperty", "down"],
+  construction_boom: ["property", "categoryProperty", "up"],
+  online_sales_growth: ["technology", "categoryTechnology", "up"],
+  recession: ["markets", "categoryMarkets", "down"]
+};
+
+const RU_BUSINESS_NAMES = {
+  coffee_shop: "Кофейня",
+  mini_market: "Мини-маркет",
+  courier_service: "Служба доставки",
+  saas_tool: "Онлайн-сервис",
+  mobile_studio: "Студия приложений",
+  warehouse: "Склад",
+  rental_block: "Доходный дом",
+  small_factory: "Небольшая фабрика",
+  solar_farm: "Солнечная станция",
+  online_media: "Онлайн-медиа",
+  cowork_hub: "Коворкинг",
+  storage_lots: "Складские боксы",
+  suburban_offices: "Офисный центр"
+};
+
+const RU_EVENT_COPY = {
+  rate_hike: ["Банк поднял ставку", "Кредиты стали дороже."],
+  rate_cut: ["Кредиты подешевели", "Банки снизили цену кредита."],
+  inflation_jump: ["Цены растут", "Товары и услуги дорожают быстрее обычного."],
+  demand_slump: ["Покупатели экономят", "Люди стали тратить меньше."],
+  consumer_boom: ["Покупатели тратят больше", "Спрос на товары быстро вырос."],
+  energy_spike: ["Энергия подорожала", "Доставка и производство теперь стоят дороже."],
+  energy_relief: ["Энергия дешевеет", "Расходы на энергию снижаются."],
+  cheap_credit: ["Банки дают дешёвые кредиты", "Занять деньги стало проще."],
+  credit_crunch: ["Кредит получить сложнее", "Банки стали осторожнее выдавать деньги."],
+  market_panic: ["Рынок в панике", "Инвесторы избегают рискованных компаний."],
+  viral_trend: ["Ваш товар заметили", "В интернете появилось короткое окно для роста."],
+  supply_shock: ["Поставки задерживаются", "Поставщики не успевают привезти товар."],
+  new_fee: ["Новый обязательный сбор", "Работа по новым правилам потребует денег."],
+  tax_audit: ["Налоговая проверка", "Государство проверяет счета компании."],
+  labor_shortage: ["Не хватает сотрудников", "Нанимать людей стало дороже."],
+  tech_breakthrough: ["Новая технология", "Новые инструменты помогают работать быстрее."],
+  rent_crisis: ["Аренда подорожала", "Владельцы помещений подняли цены."],
+  construction_boom: ["Строительный бум", "На рынке недвижимости стало больше сделок."],
+  online_sales_growth: ["Онлайн-продажи растут", "Покупатели чаще заказывают через интернет."],
+  recession: ["Экономика замедляется", "Спрос падает, а банки выдают меньше кредитов."]
+};
+
+const RU_CHOICE_TITLES = {
+  "Repay early": "Погасить долг раньше",
+  "Keep expanding": "Продолжить рост",
+  Refinance: "Снизить долг",
+  "Borrow for growth": "Взять кредит на рост",
+  "Raise prices": "Поднять цены",
+  "Protect customers": "Не поднимать цены",
+  "Discount products": "Сделать скидку",
+  "Preserve margin": "Сохранить наценку",
+  "Launch marketing": "Запустить рекламу",
+  "Save cash": "Сохранить деньги",
+  "Cut routes": "Сократить маршруты",
+  "Absorb costs": "Оплатить расходы",
+  "Lock contracts": "Зафиксировать цену",
+  "Enjoy margin": "Забрать выгоду",
+  "Take loan": "Взять кредит",
+  "Negotiate rates": "Снизить ставку",
+  "Build cash buffer": "Собрать запас денег",
+  "Pressure banks": "Занять, несмотря на риск",
+  "De-risk": "Снизить риск",
+  "Buy the dip": "Купить на падении",
+  "Push online": "Усилить рекламу",
+  "License the trend": "Продать права",
+  "Pay premium": "Заплатить за быструю поставку",
+  "Wait it out": "Переждать",
+  "Comply fast": "Заплатить сразу",
+  "Delay paperwork": "Отложить документы",
+  "Settle cleanly": "Заплатить по правилам",
+  "Fight it": "Спорить",
+  "Raise wages": "Поднять зарплаты",
+  Automate: "Автоматизировать",
+  "Adopt fast": "Внедрить сейчас",
+  "Sell consulting": "Продать консультации",
+  "Renegotiate leases": "Пересмотреть аренду",
+  "Pass costs on": "Перенести расходы в цены",
+  "Enter property deals": "Войти в недвижимость",
+  "Provide services": "Заработать на услугах",
+  "Build online channel": "Открыть онлайн-продажи",
+  "Partner up": "Найти партнёра",
+  "Survival mode": "Сократить расходы",
+  "Contrarian bet": "Рискнуть на падении"
+};
+
+const RU_CARD_COPY = {
+  marketing_push: ["Рекламная кампания", "Заплатите сейчас: доход +6% на 2 раунда."],
+  cost_cutting: ["Сокращение расходов", "Расходы −5% на 2 раунда, риск немного вырастет."],
+  automation: ["Автоматизация", "Расходы −8% на 3 раунда."],
+  brand_deal: ["Сделка с брендом", "Сразу получите деньги."],
+  fixed_rate: ["Фиксированная ставка", "Снизьте долг и риск."],
+  aggressive_growth: ["Быстрый рост", "Доход +9% на 2 раунда, но риск вырастет."],
+  supplier_contract: ["Договор с поставщиком", "Расходы −6% на 3 раунда."],
+  online_channel: ["Онлайн-продажи", "Доход +6% на 3 раунда."],
+  hire_manager: ["Нанять управляющего", "Риск компании станет ниже."],
+  bridge_loan: ["Быстрый кредит", "Получите деньги сейчас, но долг вырастет."],
+  repay_package: ["Погашение долга", "Заплатите часть долга и снизьте риск."],
+  price_increase: ["Поднять цены", "Доход +4% на 2 раунда, риск немного вырастет."],
+  insurance: ["Страховка", "Риск банкротства ниже на 3 раунда."],
+  lean_ops: ["Простая работа", "Расходы −5% на 2 раунда."],
+  premium_product: ["Дорогой продукт", "Доход +7% на 2 раунда."],
+  cash_reserve: ["Запас денег", "Получите деньги и немного снизьте риск."],
+  refinance: ["Новый кредит вместо старого", "Снизьте долг и риск."],
+  viral_ad: ["Вирусная реклама", "Доход +12% на 2 раунда, но риск станет выше."],
+  energy_saving: ["Экономия энергии", "Расходы −6% на 3 раунда."],
+  wait_out: ["Переждать", "Получите немного денег и снизьте риск."]
+};
+
+const RU_SYNERGY_NAMES = {
+  coffee_media: "Местная известность",
+  retail_delivery: "Доставка из магазина",
+  studio_saas: "Общая технология",
+  warehouse_delivery: "Сеть складов",
+  factory_warehouse: "Своя цепочка поставок",
+  solar_factory: "Дешёвая энергия",
+  solar_rental: "Зелёные здания",
+  media_saas: "Поток клиентов",
+  market_warehouse: "Свои поставки",
+  energy_logistics: "Защищённая доставка"
+};
+
 const translations = {
   en: {
     gameTitle: "Finance Roguelike",
     chooseLanguage: "Choose language",
+    languageWelcome: "Choose a language to start your first run.",
     russian: "Russian",
     english: "English",
     currentRun: "Current Run",
@@ -28,12 +205,57 @@ const translations = {
     debt: "Debt",
     valuation: "Valuation",
     dashboard: "Dashboard",
+    gameTab: "Game",
     decisions: "Decisions",
-    portfolio: "Portfolio",
+    portfolio: "Assets",
     market: "Market",
     stocks: "Stocks",
     economy: "Economy",
+    cashNow: "Cash now",
+    profitAfterChoice: "Profit after choice",
+    cashAfterAction: "Cash after",
+    debtAfterAction: "Debt after",
+    profitAfterAction: "Profit after",
+    receiveNow: "You receive",
     nextTurn: "Next",
+    currentRoundStatus: "Round {turn} of {maxTurns}",
+    flowEventButton: "1. Resolve event",
+    flowActionButton: "2. Choose action",
+    flowFinishButton: "Round {turn} result",
+    finishStep: "Result",
+    eventStepBrief: "Choose outcome",
+    actionStepBrief: "Make one move",
+    finishStepBrief: "Review settlement",
+    roundExplainerTitle: "How a round works",
+    roundExplainerText: "Resolve one event, then take one action. Finish the round to collect profit, move the market, and receive a new event.",
+    finishRoundHint: "Your action is complete. Review the settlement and continue.",
+    continueRound: "Continue round",
+    eventStageTitle: "Event",
+    eventStageHint: "Read the situation and choose one response.",
+    eventImpact: "Market impact",
+    chooseResponse: "Choose a response",
+    tapCardToChoose: "Tap a card to lock this decision.",
+    actionStageTitle: "Choose one action",
+    actionStageHint: "You can make exactly one move before the round ends.",
+    backToGame: "Back to game",
+    roundResultTitle: "Round {turn} result",
+    roundResultSubtitle: "Projected settlement from your current assets and decisions.",
+    operatingRevenue: "Operating revenue",
+    operatingExpenses: "Operating expenses",
+    interestPaid: "Debt interest",
+    dividendsReceived: "Dividends",
+    projectedCash: "Cash after settlement",
+    startNextRound: "Start round {turn}",
+    completeRun: "Complete the run",
+    noUpgradesAvailable: "No businesses can be upgraded right now.",
+    lastBusinessLocked: "Your last business cannot be sold.",
+    noCardsAvailable: "No action cards are available.",
+    insufficientFunds: "Not enough cash",
+    holdCash: "Hold cash",
+    holdCashHint: "Skip expansion and preserve liquidity this round.",
+    heldCash: "Cash preserved. No capital was deployed.",
+    quickStartRun: "Start with selected settings",
+    recommendedStep: "Next",
     reset: "Reset",
     language: "Language",
     resolveEventBeforeNextTurn: "Resolve the event before next turn",
@@ -92,7 +314,7 @@ const translations = {
     whoWinsAndLoses: "Who wins and loses",
     positive: "Positive",
     negative: "Negative",
-    noCost: "No cost",
+    noCost: "Free",
     strategicShift: "Strategic shift",
     lower: "Lower",
     neutral: "Neutral",
@@ -105,6 +327,7 @@ const translations = {
     chooseLanguageLater: "Change language without resetting the current run.",
     actionCompleted: "Action completed",
     runStarted: "Run started",
+    runRestored: "Saved run restored",
     choiceSelected: "Choice selected",
     boughtBusiness: "Bought {name}",
     upgradedBusiness: "Upgraded {name} to L{level}",
@@ -365,7 +588,26 @@ const translations = {
     maxAction: "Max.",
     currentEffectLabel: "Current effect",
     nextEffectLabel: "Next level",
-    costLabel: "Cost",
+    costLabel: "Price",
+    marketSignal: "Market signal",
+    financialStatement: "Financial statement",
+    strategyLabel: "Strategy",
+    strategyGrowth: "Growth",
+    strategyDefense: "Defense",
+    strategyLiquidity: "Liquidity",
+    strategyLeverage: "Leverage",
+    strategyEfficiency: "Efficiency",
+    strategyBalanced: "Balanced",
+    categoryConsumer: "Consumer",
+    categoryMonetary: "Rates & credit",
+    categoryPrices: "Prices",
+    categoryEnergy: "Energy",
+    categoryMarkets: "Markets",
+    categorySupply: "Supply chain",
+    categoryRegulation: "Regulation",
+    categoryLabor: "Labor",
+    categoryTechnology: "Technology",
+    categoryProperty: "Property",
     statusLabel: "Status",
     levelProgressLabel: "Level",
     repeatableLabel: "Repeatable",
@@ -374,11 +616,91 @@ const translations = {
     noMetaItemsMatchFilter: "No prestige upgrades match this filter.",
     stockRising: "Stock rising",
     stockFalling: "Stock falling",
-    stockNeutral: "Neutral"
+    stockNeutral: "Neutral",
+    newRunSetup: "New Run",
+    newRunSetupDesc: "Choose the opening position and how much pressure the run should apply.",
+    chooseScenario: "Starting scenario",
+    chooseDifficulty: "Difficulty",
+    startConfiguredRun: "Start run",
+    cancelSetup: "Keep current run",
+    scenarioLabel: "Scenario",
+    difficultyLabel: "Difficulty",
+    scenarioBalancedTitle: "Balanced Start",
+    scenarioBalancedDesc: "A classic opening with one random operating business and no debt.",
+    scenarioLeveragedTitle: "Leveraged Growth",
+    scenarioLeveragedDesc: "Start with a SaaS business, extra liquidity, and dangerous debt pressure.",
+    scenarioTraderTitle: "Market Trader",
+    scenarioTraderDesc: "Start with a tech business and an Aplix stock position in a more volatile market.",
+    difficultyRelaxedTitle: "Relaxed",
+    difficultyRelaxedDesc: "More cash, lower risk, and a safer debt threshold. Prestige rewards are reduced.",
+    difficultyNormalTitle: "Normal",
+    difficultyNormalDesc: "The intended balance for the main game.",
+    difficultyHardTitle: "Hard",
+    difficultyHardDesc: "Less cash, higher risk, and faster debt collapse. Prestige rewards are increased.",
+    setupCash: "Starting cash",
+    setupDebt: "Starting debt",
+    setupRisk: "Starting risk",
+    setupReward: "Prestige reward",
+    setupRewardReduced: "×0.75",
+    setupRewardNormal: "×1.00",
+    setupRewardIncreased: "×1.25",
+    startingConfiguration: "{scenario} · {difficulty}",
+    titleScreenKicker: "A FINANCIAL ROGUELIKE",
+    titleScreenTagline: "{turns} rounds. One company. Every choice compounds.",
+    titleScreenMarketOpen: "MARKET OPEN",
+    titleScreenPlay: "Play",
+    titleScreenSettings: "Game settings",
+    titleScreenFooter: "Progress saves automatically",
+    welcomeTitle: "Build a company in {turns} rounds",
+    welcomeText: "Buy assets, grow profit, and do not let debt break the company.",
+    welcomeStepOne: "Choose a response",
+    welcomeStepTwo: "Make one move",
+    welcomeStepThree: "Review the result",
+    startFirstGame: "Start first game",
+    startNewGame: "Start new game",
+    configureGame: "Choose difficulty",
+    hideGameSettings: "Hide settings",
+    guidedRound: "Guided first round",
+    guidedRoundText: "We will show one task at a time. You can finish this round in about a minute.",
+    tutorialTaskEvent: "Your task: choose one response",
+    tutorialTaskAction: "Your task: choose what the company does now",
+    tutorialTaskResult: "Your task: review the numbers and continue",
+    tutorialNavLocked: "Other sections open after round one",
+    tabsUnlocked: "Portfolio, Market, and Economy are now open",
+    tabsUnlockedText: "You completed the guided round. The full game is available.",
+    whatChanged: "What changed",
+    cashChange: "Cash change",
+    profitChange: "Profit per round",
+    riskChange: "Risk change",
+    beforeAfter: "Company profit",
+    cashAfterPurchase: "Cash left",
+    paysBackIn: "Pays back in about {turns} rounds",
+    noPaybackNow: "Does not pay back in the current market",
+    profitPerRound: "Profit per round",
+    profitAdded: "Adds to profit",
+    currentOffers: "Offers this round",
+    currentOffersText: "Only {count} assets are offered. The set changes every round.",
+    assetCollection: "Asset collection",
+    assetCollectionDesc: "See every asset and how it enters the market.",
+    ownedStatus: "Owned",
+    offeredNowStatus: "Offered now",
+    discoveredStatus: "Discovered · not offered this round",
+    opensOnRound: "Enters the market on round {turn}",
+    needsPrestigeUnlock: "Unlock this sector with Prestige first",
+    newSectorOpened: "New sector opened: {sector}",
+    newSectors: "New sectors",
+    marketRefreshHint: "Three new opportunity cards are dealt each round.",
+    viewCollection: "View collection",
+    simpleBuyHint: "Compare the price, profit, and payback. Then choose one card.",
+    languageAuto: "Language: {language}",
+    change: "Change",
+    currentLevelProfit: "Profit now",
+    nextLevelProfit: "After upgrade"
   },
   ru: {
     gameTitle: "Finance Roguelike",
     chooseLanguage: "Выберите язык",
+    languageWelcome: "Выберите язык, чтобы начать первую партию.",
     russian: "Русский",
     english: "English",
     currentRun: "Текущая партия",
@@ -386,14 +708,59 @@ const translations = {
     cash: "Деньги",
     profit: "Прибыль",
     debt: "Долг",
-    valuation: "Оценка",
+    valuation: "Стоимость компании",
     dashboard: "Обзор",
+    gameTab: "Игра",
     decisions: "Решения",
-    portfolio: "Портфель",
+    portfolio: "Активы",
     market: "Рынок",
     stocks: "Акции",
     economy: "Экономика",
+    cashNow: "Деньги сейчас",
+    profitAfterChoice: "Прибыль после выбора",
+    cashAfterAction: "Деньги после",
+    debtAfterAction: "Долг после",
+    profitAfterAction: "Прибыль после",
+    receiveNow: "Получите",
     nextTurn: "Следующий",
+    currentRoundStatus: "Раунд {turn} из {maxTurns}",
+    flowEventButton: "1. Решить событие",
+    flowActionButton: "2. Выбрать действие",
+    flowFinishButton: "Итог раунда {turn}",
+    finishStep: "Итог",
+    eventStepBrief: "Выбрать исход",
+    actionStepBrief: "Сделать один ход",
+    finishStepBrief: "Проверить расчёт",
+    roundExplainerTitle: "Как проходит раунд",
+    roundExplainerText: "Сначала решите одно событие, затем совершите одно действие. Завершите раунд — начислится прибыль, изменится рынок и появится новое событие.",
+    finishRoundHint: "Действие выполнено. Проверьте расчёт и переходите дальше.",
+    continueRound: "Продолжить раунд",
+    eventStageTitle: "Что случилось",
+    eventStageHint: "Посмотрите, что произошло, и выберите ответ.",
+    eventImpact: "Что меняется на рынке",
+    chooseResponse: "Что будете делать?",
+    tapCardToChoose: "Нажмите на одну из двух карточек.",
+    actionStageTitle: "Что сделать сейчас?",
+    actionStageHint: "Выберите только одно действие.",
+    backToGame: "Назад в игру",
+    roundResultTitle: "Результат раунда {turn}",
+    roundResultSubtitle: "Вот сколько компания заработает и сколько денег будет дальше.",
+    operatingRevenue: "Заработали бизнесы",
+    operatingExpenses: "Потратили бизнесы",
+    interestPaid: "Проценты по долгу",
+    dividendsReceived: "Дивиденды",
+    projectedCash: "Деньги после раунда",
+    startNextRound: "Начать раунд {turn}",
+    completeRun: "Завершить партию",
+    noUpgradesAvailable: "Сейчас нет бизнесов, которые можно улучшить.",
+    lastBusinessLocked: "Последний бизнес нельзя продать.",
+    noCardsAvailable: "Нет доступных карт действий.",
+    insufficientFunds: "Не хватает денег",
+    holdCash: "Ничего не покупать",
+    holdCashHint: "Закончить раунд и оставить деньги в запасе.",
+    heldCash: "Деньги сохранены. Капитал не был потрачен.",
+    quickStartRun: "Начать с выбранными настройками",
+    recommendedStep: "Дальше",
     reset: "Сброс",
     language: "Язык",
     resolveEventBeforeNextTurn: "Решите событие перед следующим ходом",
@@ -412,7 +779,7 @@ const translations = {
     eventPendingShort: "Событие не решено",
     actionDone: "Действие сделано",
     actionPendingShort: "Действие не выбрано",
-    macroRegime: "Макро-режим",
+    macroRegime: "Что происходит на рынке",
     runSnapshot: "Снимок партии",
     currentEvent: "Текущее событие",
     actionCards: "Карты действий",
@@ -444,16 +811,16 @@ const translations = {
     upgrade: "Улучшить",
     sell: "Продать",
     buy: "Купить",
-    expectedProfit: "Ожидаемая прибыль",
-    macroSensitivity: "Чувствительность к макро",
-    synergyHooks: "Синергии",
+    expectedProfit: "Прибыль за раунд",
+    macroSensitivity: "Зависит от",
+    synergyHooks: "Работает вместе",
     industryLabel: "Отрасль",
     recentEvents: "Последние события",
     whoWinsAndLoses: "Кто выигрывает и проигрывает",
     positive: "Плюс",
     negative: "Минус",
-    noCost: "Без стоимости",
-    strategicShift: "Стратегический сдвиг",
+    noCost: "Бесплатно",
+    strategicShift: "Меняет положение компании",
     lower: "Ниже",
     neutral: "Нейтрально",
     medium: "Средний",
@@ -465,6 +832,7 @@ const translations = {
     chooseLanguageLater: "Сменить язык без сброса текущей партии.",
     actionCompleted: "Действие выполнено",
     runStarted: "Партия началась",
+    runRestored: "Сохранённая партия восстановлена",
     choiceSelected: "Выбран вариант",
     boughtBusiness: "Куплен {name}",
     upgradedBusiness: "{name} улучшен до ур. {level}",
@@ -610,8 +978,8 @@ const translations = {
     playCardAction: "Сыграть карту",
     eventResolvedPanel: "Событие решено",
     actionPanelLocked: "Действие откроется после выбора по событию.",
-    actionCategoryBuyHint: "Выберите один новый бизнес на этот ход.",
-    actionCategoryUpgradeHint: "Улучшите один свой бизнес на этот ход.",
+    actionCategoryBuyHint: "Купить один из трёх активов этого раунда.",
+    actionCategoryUpgradeHint: "Вложить деньги в один свой бизнес.",
     actionCategorySellHint: "Продайте один бизнес для ликвидности.",
     actionCategoryCardsHint: "Сыграйте одну карту действия на этот ход.",
     turnShort: "Ход",
@@ -643,8 +1011,8 @@ const translations = {
     businessesCategory: "Бизнесы",
     realEstateCategory: "Недвижимость",
     stockMarketCategory: "Биржа",
-    businessesCategoryDesc: "Покупайте компании и развивайте доход.",
-    realEstateCategoryDesc: "Покупайте объекты с пассивным доходом.",
+    businessesCategoryDesc: "Три доступных бизнеса этого раунда.",
+    realEstateCategoryDesc: "Объекты появятся по мере открытия рынка.",
     stockMarketCategoryDesc: "Покупайте и продавайте акции.",
     chooseAssetType: "Выберите тип актива",
     backToMarket: "Назад к рынку",
@@ -725,7 +1093,26 @@ const translations = {
     maxAction: "Макс.",
     currentEffectLabel: "Текущий эффект",
     nextEffectLabel: "Следующий уровень",
-    costLabel: "Стоимость",
+    costLabel: "Цена",
+    marketSignal: "Рыночный сигнал",
+    financialStatement: "Финансовый отчёт",
+    strategyLabel: "Стратегия",
+    strategyGrowth: "Рост",
+    strategyDefense: "Защита",
+    strategyLiquidity: "Деньги",
+    strategyLeverage: "Кредит",
+    strategyEfficiency: "Экономия",
+    strategyBalanced: "Баланс",
+    categoryConsumer: "Потребители",
+    categoryMonetary: "Ставки и кредит",
+    categoryPrices: "Цены",
+    categoryEnergy: "Энергия",
+    categoryMarkets: "Рынки",
+    categorySupply: "Поставки",
+    categoryRegulation: "Регулирование",
+    categoryLabor: "Рынок труда",
+    categoryTechnology: "Технологии",
+    categoryProperty: "Недвижимость",
     statusLabel: "Статус",
     levelProgressLabel: "Уровень",
     repeatableLabel: "Повторяемое",
@@ -734,7 +1121,86 @@ const translations = {
     noMetaItemsMatchFilter: "Нет улучшений престижа для этого фильтра.",
     stockRising: "Акция растет",
     stockFalling: "Акция падает",
-    stockNeutral: "Нейтрально"
+    stockNeutral: "Нейтрально",
+    newRunSetup: "Новая партия",
+    newRunSetupDesc: "Выберите стартовую позицию и уровень давления в партии.",
+    chooseScenario: "Стартовый сценарий",
+    chooseDifficulty: "Сложность",
+    startConfiguredRun: "Начать партию",
+    cancelSetup: "Оставить текущую партию",
+    scenarioLabel: "Сценарий",
+    difficultyLabel: "Сложность",
+    scenarioBalancedTitle: "Сбалансированный старт",
+    scenarioBalancedDesc: "Классический старт с одним случайным бизнесом и без долга.",
+    scenarioLeveragedTitle: "Рост на заёмные",
+    scenarioLeveragedDesc: "SaaS-бизнес, дополнительная ликвидность и опасное долговое давление.",
+    scenarioTraderTitle: "Биржевой трейдер",
+    scenarioTraderDesc: "Технологический бизнес и позиция в Aplix на более волатильном рынке.",
+    difficultyRelaxedTitle: "Спокойная",
+    difficultyRelaxedDesc: "Больше денег, ниже риск и безопаснее долг. Награда престижа уменьшена.",
+    difficultyNormalTitle: "Обычная",
+    difficultyNormalDesc: "Основной задуманный баланс игры.",
+    difficultyHardTitle: "Сложная",
+    difficultyHardDesc: "Меньше денег, выше риск и быстрее долговой крах. Награда престижа увеличена.",
+    setupCash: "Деньги на старте",
+    setupDebt: "Долг на старте",
+    setupRisk: "Стартовый риск",
+    setupReward: "Награда престижа",
+    setupRewardReduced: "×0,75",
+    setupRewardNormal: "×1,00",
+    setupRewardIncreased: "×1,25",
+    startingConfiguration: "{scenario} · {difficulty}",
+    titleScreenKicker: "ФИНАНСОВЫЙ РОГАЛИК",
+    titleScreenTagline: "{turns} раундов. Одна компания. Каждый выбор имеет цену.",
+    titleScreenMarketOpen: "РЫНОК ОТКРЫТ",
+    titleScreenPlay: "Играть",
+    titleScreenSettings: "Настройки игры",
+    titleScreenFooter: "Прогресс сохраняется автоматически",
+    welcomeTitle: "Постройте компанию за {turns} раундов",
+    welcomeText: "Покупайте активы, увеличивайте прибыль и не дайте долгу разрушить компанию.",
+    welcomeStepOne: "Выберите ответ",
+    welcomeStepTwo: "Сделайте один ход",
+    welcomeStepThree: "Посмотрите итог",
+    startFirstGame: "Начать первую игру",
+    startNewGame: "Начать новую игру",
+    configureGame: "Настроить игру",
+    hideGameSettings: "Скрыть настройки",
+    guidedRound: "Первый раунд с подсказками",
+    guidedRoundText: "Будем показывать по одной задаче. Раунд займёт около минуты.",
+    tutorialTaskEvent: "Задача: выберите один ответ",
+    tutorialTaskAction: "Задача: решите, что сделать компании",
+    tutorialTaskResult: "Задача: посмотрите цифры и продолжайте",
+    tutorialNavLocked: "Остальные разделы откроются после первого раунда",
+    tabsUnlocked: "Открыты «Мои активы», «Рынок» и «Условия рынка»",
+    tabsUnlockedText: "Раунд с подсказками пройден. Теперь доступна вся игра.",
+    whatChanged: "Что изменилось",
+    cashChange: "Изменение денег",
+    profitChange: "Прибыль за раунд",
+    riskChange: "Изменение риска",
+    beforeAfter: "Прибыль компании",
+    cashAfterPurchase: "Останется денег",
+    paysBackIn: "Окупится примерно за {turns} раундов",
+    noPaybackNow: "На текущем рынке не окупается",
+    profitPerRound: "Прибыль за раунд",
+    profitAdded: "Добавит к прибыли",
+    currentOffers: "Предложения этого раунда",
+    currentOffersText: "Сейчас доступны только {count} активов. Набор меняется каждый раунд.",
+    assetCollection: "Коллекция активов",
+    assetCollectionDesc: "Посмотрите все активы и условия их появления на рынке.",
+    ownedStatus: "Уже ваш",
+    offeredNowStatus: "Продаётся сейчас",
+    discoveredStatus: "Открыт · не продаётся в этом раунде",
+    opensOnRound: "Появится на рынке в раунде {turn}",
+    needsPrestigeUnlock: "Сначала откройте отрасль за Престиж",
+    newSectorOpened: "Открылась новая отрасль: {sector}",
+    newSectors: "Новые отрасли",
+    marketRefreshHint: "Каждый раунд рынок раздаёт три новые карты возможностей.",
+    viewCollection: "Открыть коллекцию",
+    simpleBuyHint: "Сравните цену, прибыль и срок окупаемости. Затем выберите одну карту.",
+    languageAuto: "Язык: {language}",
+    change: "Сменить",
+    currentLevelProfit: "Прибыль сейчас",
+    nextLevelProfit: "После улучшения"
   }
 };
 
@@ -751,8 +1217,12 @@ const state = {
   portfolioFilter: "all",
   marketFilterIndustry: "all",
   marketFilterRisk: "all",
-  selectedLanguage: localStorage.getItem(LANGUAGE_KEY),
+  selectedLanguage: localStorage.getItem(LANGUAGE_KEY) || detectPreferredLanguage(),
   languageModalOpen: false,
+  runSetupOpen: false,
+  runSetupAdvanced: false,
+  selectedScenarioId: "balanced",
+  selectedDifficultyId: "normal",
   pendingActionType: null,
   selectedActionType: null,
   selectedActionItem: null,
@@ -762,27 +1232,29 @@ const state = {
   activeStockPointIndex: null,
   stockBuyPercent: 0,
   stockSellPercent: 0,
-  decisionCarouselIndex: {}
+  transitionLocked: false,
 };
 
 const ui = {
+  appShell: document.querySelector(".app-shell"),
+  appHeader: document.querySelector(".app-header"),
   eyebrow: document.querySelector(".eyebrow"),
   headerTitle: document.querySelector(".header-top h1"),
   newRunButton: document.getElementById("new-run-button"),
   nextTurnButton: document.getElementById("next-turn-button"),
   turnLabel: document.getElementById("turn-label"),
   statusHint: document.getElementById("status-hint"),
+  turnGuide: document.getElementById("turn-guide"),
   statsGrid: document.getElementById("stats-grid"),
   tabContent: document.getElementById("tab-content"),
   bottomNav: document.getElementById("bottom-nav")
 };
 
 const NAV_ITEMS = [
-  { id: "dashboard", labelKey: "dashboard", icon: "./assets/icons/dashboard.png" },
-  { id: "decisions", labelKey: "decisions", icon: "./assets/icons/decisions.png" },
-  { id: "portfolio", labelKey: "portfolio", icon: "./assets/icons/portfolio.png" },
-  { id: "market", labelKey: "market", icon: "./assets/icons/market.png" },
-  { id: "economy", labelKey: "economy", icon: "./assets/icons/economy.png" }
+  { id: "dashboard", labelKey: "gameTab", icon: "game" },
+  { id: "portfolio", labelKey: "portfolio", icon: "portfolio" },
+  { id: "market", labelKey: "market", icon: "market" },
+  { id: "economy", labelKey: "economy", icon: "economy" }
 ];
 
 boot();
@@ -805,12 +1277,16 @@ async function boot() {
   window.validateGameData = validateGameData;
   window.simulateRuns = simulateRuns;
 
-  ui.newRunButton.addEventListener("click", startRun);
-  ui.nextTurnButton.addEventListener("click", advanceTurn);
+  if (!localStorage.getItem(LANGUAGE_KEY)) {
+    localStorage.setItem(LANGUAGE_KEY, state.selectedLanguage);
+  }
+
+  ui.newRunButton.addEventListener("click", openRunSetup);
+  ui.nextTurnButton.addEventListener("click", handlePrimaryFlowAction);
 
   renderBottomNav();
   if (hasSelectedLanguage()) {
-    startRun();
+    if (!restoreSavedRun()) openRunSetup();
   } else {
     render();
   }
@@ -826,6 +1302,11 @@ function hasSelectedLanguage() {
   return state.selectedLanguage === "ru" || state.selectedLanguage === "en";
 }
 
+function detectPreferredLanguage() {
+  const languages = navigator.languages?.length ? navigator.languages : [navigator.language || "en"];
+  return languages.some((language) => String(language).toLowerCase().startsWith("ru")) ? "ru" : "en";
+}
+
 function t(key, params = {}) {
   const language = hasSelectedLanguage() ? state.selectedLanguage : "en";
   const phrase = translations[language][key] || translations.en[key] || key;
@@ -836,7 +1317,7 @@ function setLanguage(language) {
   state.selectedLanguage = language;
   localStorage.setItem(LANGUAGE_KEY, language);
   state.languageModalOpen = false;
-  if (!state.run) startRun();
+  if (!state.run) openRunSetup();
   else render();
 }
 
@@ -852,7 +1333,8 @@ function createDefaultMetaProgression() {
     bestTurnReached: 0,
     purchasedUnlockIds: [],
     unlockLevels: {},
-    achievements: []
+    achievements: [],
+    tutorialCompleted: false
   };
 }
 
@@ -863,6 +1345,7 @@ function loadMetaProgression() {
     return {
       ...createDefaultMetaProgression(),
       ...parsed,
+      tutorialCompleted: parsed.tutorialCompleted ?? (Number(parsed.completedRuns || 0) > 0),
       unlockedIndustries: uniqueList([...(parsed.unlockedIndustries || []), ...STARTING_UNLOCKED_INDUSTRIES]),
       unlockedBusinesses: uniqueList(parsed.unlockedBusinesses || []),
       unlockedCards: uniqueList(parsed.unlockedCards || []),
@@ -889,10 +1372,11 @@ function closeLanguageModal() {
   render();
 }
 
-function backToDecisionsTab() {
-  state.activeTab = "decisions";
+function backToGameTab() {
+  state.activeTab = "dashboard";
   state.marketView = "root";
-  if (state.pendingActionType !== "buy_asset") state.pendingActionType = null;
+  state.pendingActionType = null;
+  state.selectedActionType = null;
   render();
 }
 
@@ -900,12 +1384,67 @@ function nextRunMaxTurns() {
   return MAX_TURNS + (unlockLevel("unlock_extended_run") * 2);
 }
 
+function restoreSavedRun() {
+  const savedRun = loadRunState(localStorage, RUN_KEY);
+  if (!savedRun) return false;
+  state.run = savedRun;
+  state.runSetupOpen = false;
+  state.activeTab = "dashboard";
+  state.marketView = "root";
+  state.pendingActionType = null;
+  state.selectedActionType = null;
+  state.selectedActionItem = null;
+  state.activeStockId = null;
+  state.selectedTradeMode = null;
+  state.stockBuyPercent = 0;
+  state.stockSellPercent = 0;
+  state.run.tutorialActive = state.run.tutorialActive ?? (!state.meta.tutorialCompleted && state.run.turn === 1);
+  state.run.discoveredIndustries = state.run.discoveredIndustries || [];
+  state.run.marketOfferIds = state.run.marketOfferIds || [];
+  state.run.newlyDiscoveredIndustries = state.run.newlyDiscoveredIndustries || [];
+  state.run.lastChoiceSummary = state.run.lastChoiceSummary || null;
+  if (!state.run.marketOfferIds.length) refreshMarketOffers();
+  state.run.statusMessage = t("runRestored");
+  if (!state.run.currentReport) state.run.currentReport = calculateReport();
+  render();
+  return true;
+}
+
+function saveCurrentRun() {
+  if (!state.run || state.run.finished) return false;
+  return saveRunState(localStorage, RUN_KEY, state.run);
+}
+
+function openRunSetup() {
+  state.runSetupOpen = true;
+  state.runSetupAdvanced = false;
+  state.selectedScenarioId = "balanced";
+  state.selectedDifficultyId = "normal";
+  render();
+}
+
+function closeRunSetup() {
+  if (!state.run) return;
+  state.runSetupOpen = false;
+  render();
+}
+
 function startRun() {
-  const starter = sample(["coffee_shop", "mini_market", "mobile_studio"]);
+  clearRunState(localStorage, RUN_KEY);
   const startingBonus = metaStartingBonuses();
+  const configuration = createRunConfiguration({
+    scenarioId: state.selectedScenarioId,
+    difficultyId: state.selectedDifficultyId,
+    baseCash: STARTING_CASH,
+    metaExtraCash: startingBonus.extraCash,
+    stocks: state.stocks
+  });
+  const starter = configuration.company.businesses[0].businessId;
   state.run = {
     id: `run-${Date.now()}`,
     maxTurns: nextRunMaxTurns(),
+    scenarioId: configuration.scenario.id,
+    difficultyId: configuration.difficulty.id,
     turn: 1,
     finished: false,
     endReason: null,
@@ -916,33 +1455,33 @@ function startRun() {
     currentReport: null,
     currentCards: [],
     marketCycle: "balanced",
+    marketOfferIds: [],
+    discoveredIndustries: [],
+    newlyDiscoveredIndustries: [],
+    marketOffersTurn: 0,
     selectedChoiceId: null,
+    lastChoiceSummary: null,
+    tutorialActive: !state.meta.tutorialCompleted,
+    tabsJustUnlocked: false,
     pendingActionDone: false,
     eventResolved: false,
     statusMessage: t("resolveEventBeforeNextTurn"),
-    company: {
-      cash: STARTING_CASH + startingBonus.extraCash,
-      debt: 0,
-      risk: 0.05,
-      revenueBonus: 0,
-      expenseBonus: 0,
-      businesses: [{ businessId: starter, level: 1 }],
-      stocks: []
-    },
-    macro: {
-      interestRate: 0.04,
-      inflation: 0.03,
-      demand: 1,
-      energyCost: 1,
-      creditAvailability: 1,
-      marketRisk: 0.05
-    },
+    company: configuration.company,
+    macro: configuration.macro,
     history: [
-      { turn: 1, title: t("runStarted"), body: t("startingAsset", { name: businessById(starter).name }) }
+      {
+        turn: 1,
+        title: t("runStarted"),
+        body: `${t("startingAsset", { name: businessName(businessById(starter)) })}. ${t("startingConfiguration", {
+          scenario: t(configuration.scenario.titleKey),
+          difficulty: t(configuration.difficulty.titleKey)
+        })}`
+      }
     ],
     activeModifiers: [],
     stockMarket: createInitialStockMarket()
   };
+  state.runSetupOpen = false;
   state.activeTab = "dashboard";
   state.marketView = "root";
   state.pendingActionType = null;
@@ -966,13 +1505,42 @@ function beginTurn() {
   tickModifiers();
   run.currentEvent = chooseEvent();
   run.currentCards = drawCards();
+  refreshMarketOffers();
   run.selectedChoiceId = null;
+  run.lastChoiceSummary = null;
   run.pendingActionDone = false;
   run.eventResolved = false;
   run.statusMessage = t("resolveEventBeforeNextTurn");
   state.pendingActionType = null;
   state.marketView = "root";
+  saveCurrentRun();
   render();
+}
+
+function refreshMarketOffers() {
+  const run = state.run;
+  if (!run) return;
+  const previousIndustries = run.discoveredIndustries || [];
+  const discoveredIndustries = discoveredIndustriesForTurn({
+    turn: run.turn,
+    unlockedIndustries: state.meta.unlockedIndustries,
+    previousIndustries
+  });
+  run.newlyDiscoveredIndustries = newlyDiscoveredIndustries(previousIndustries, discoveredIndustries);
+  run.discoveredIndustries = discoveredIndustries;
+  run.marketOfferIds = createMarketOffers({
+    businesses: state.businesses,
+    ownedBusinessIds: run.company.businesses.map((item) => item.businessId),
+    discoveredIndustries,
+    previousOfferIds: run.marketOfferIds || [],
+    count: MARKET_OFFER_COUNT,
+    availableCash: run.company.cash
+  });
+  run.marketOffersTurn = run.turn;
+}
+
+function isTutorialRound() {
+  return Boolean(state.run?.tutorialActive && state.run.turn === 1);
 }
 
 function render() {
@@ -983,61 +1551,142 @@ function render() {
     bindLanguageEvents();
     return;
   }
+  if (state.runSetupOpen || !state.run) {
+    ui.tabContent.innerHTML = renderRunSetupScreen();
+    bindTabEvents();
+    return;
+  }
   ui.tabContent.innerHTML = `${state.languageModalOpen ? renderLanguageModal() : ""}${renderActiveTab()}`;
   bindTabEvents();
 }
 
+function primaryFlowStatus(run) {
+  const phase = getTurnPhase(run);
+  if (phase === TURN_PHASES.EVENT) return t("resolveEventBeforeNextTurn");
+  if (phase === TURN_PHASES.ACTION) return t("chooseAction");
+  if (phase === TURN_PHASES.FINISH) return t("finishRoundHint");
+  return run.statusMessage;
+}
+
+function handlePrimaryFlowAction() {
+  if (!state.run || state.run.finished) return;
+  state.activeTab = "dashboard";
+  state.marketView = "root";
+  state.pendingActionType = null;
+  render();
+}
+
+function renderTurnGuide(run) {
+  const labels = {
+    event: [t("eventStep"), t("eventStepBrief")],
+    action: [t("actionStep"), t("actionStepBrief")],
+    finish: [t("finishStep"), t("finishStepBrief")]
+  };
+  const steps = getTurnStepStates(run).map((step, index) => {
+    const current = step.state === "active" ? ' aria-current="step"' : "";
+    const marker = step.state === "done" ? "✓" : index + 1;
+    return '<div class="turn-guide-step ' + step.state + '"' + current + '>'
+      + '<span class="turn-guide-index">' + marker + '</span>'
+      + '<span><strong>' + labels[step.id][0] + '</strong><small>' + labels[step.id][1] + '</small></span>'
+      + '</div>';
+  }).join("");
+  return '<div class="turn-guide-track" aria-label="' + t("turnProgress") + '">' + steps + '</div>';
+}
+
 function renderHeader() {
   document.title = t("gameTitle");
+  ui.appShell.classList.toggle("is-playing", Boolean(hasSelectedLanguage() && state.run && !state.runSetupOpen));
+  ui.appHeader.classList.toggle("onboarding-header-hidden", !hasSelectedLanguage() || state.runSetupOpen || !state.run);
   ui.eyebrow.textContent = t("gameTitle");
   ui.newRunButton.textContent = t("reset");
+  if (hasSelectedLanguage() && (state.runSetupOpen || !state.run)) {
+    ui.headerTitle.textContent = t("newRunSetup");
+    ui.turnLabel.textContent = t("chooseScenario");
+    ui.statusHint.textContent = t("newRunSetupDesc");
+    ui.nextTurnButton.style.display = "none";
+    ui.nextTurnButton.disabled = true;
+    ui.newRunButton.style.display = "none";
+    ui.turnGuide.innerHTML = "";
+    ui.statsGrid.innerHTML = "";
+    return;
+  }
+  ui.newRunButton.style.display = "";
   if (!state.run || !hasSelectedLanguage()) {
+    ui.newRunButton.style.display = "none";
     ui.headerTitle.textContent = t("currentRun");
     ui.turnLabel.textContent = t("gameTitle");
     ui.statusHint.textContent = t("chooseLanguage");
     ui.nextTurnButton.textContent = t("nextTurn");
     ui.nextTurnButton.disabled = true;
+    ui.nextTurnButton.style.display = "";
+    ui.turnGuide.innerHTML = "";
     ui.statsGrid.innerHTML = "";
     return;
   }
 
   const run = state.run;
-  const report = run.currentReport || calculateReport();
+  const report = calculateReport();
   const dashboardMode = state.activeTab === "dashboard";
-  ui.headerTitle.textContent = dashboardMode ? t("currentRun") : tabTitle();
-  ui.turnLabel.textContent = dashboardMode
-    ? (run.finished
-      ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
-      : t("currentTurnStatus", { turn: run.turn, maxTurns: currentMaxTurns() }))
-    : "";
-  ui.statusHint.textContent = dashboardMode ? headerStatusText(run) : "";
-  ui.nextTurnButton.textContent = t("nextTurn");
-  ui.nextTurnButton.disabled = !turnReady() || run.finished || !dashboardMode;
-  ui.nextTurnButton.style.display = dashboardMode ? "" : "none";
-  ui.statsGrid.innerHTML = dashboardMode
+  const tableMode = !run.finished;
+  ui.appHeader.classList.toggle("play-header", tableMode);
+  ui.headerTitle.textContent = tableMode ? t("gameTab") : tabTitle();
+  ui.turnLabel.textContent = run.finished
+    ? t("runFinishedAtTurn", { turn: Math.min(run.turn, currentMaxTurns()) })
+    : t("currentRoundStatus", { turn: run.turn, maxTurns: currentMaxTurns() });
+  ui.statusHint.textContent = primaryFlowStatus(run);
+  ui.nextTurnButton.textContent = t("continueRound");
+  ui.nextTurnButton.disabled = run.finished;
+  ui.nextTurnButton.style.display = tableMode || run.finished ? "none" : "";
+  ui.nextTurnButton.classList.toggle("flow-ready", getTurnPhase(run) === TURN_PHASES.FINISH);
+  ui.turnGuide.innerHTML = run.finished ? "" : renderTurnGuide(run);
+  ui.statsGrid.innerHTML = tableMode
     ? [
       [t("cash"), money(run.company.cash)],
       [t("profit"), money(report.profit)],
-      [t("debt"), money(run.company.debt)],
-      [t("valuation"), money(report.valuation)]
+      [t("debt"), money(run.company.debt)]
     ].map(([label, value]) => `<div class="stat-tile"><span>${label}</span><strong>${value}</strong></div>`).join("")
     : "";
 }
 
 function renderBottomNav() {
-  if (!hasSelectedLanguage()) {
+  if (!hasSelectedLanguage() || state.runSetupOpen || !state.run) {
+    ui.bottomNav.hidden = true;
     ui.bottomNav.innerHTML = "";
     return;
   }
+  ui.bottomNav.hidden = false;
+  const tableMode = !state.run.finished;
+  ui.bottomNav.classList.toggle("play-bottom-nav", tableMode);
+  if (isTutorialRound()) {
+    const item = NAV_ITEMS[0];
+    ui.bottomNav.classList.add("tutorial-bottom-nav");
+    ui.bottomNav.innerHTML = `
+      <button class="nav-item active" data-tab="dashboard">
+        ${uiIcon(item.icon)}
+        <strong>${t(item.labelKey)}</strong>
+      </button>
+      <span class="tutorial-nav-message">🔒 ${t("tutorialNavLocked")}</span>
+    `;
+    ui.bottomNav.querySelector("[data-tab=\"dashboard\"]")?.addEventListener("click", backToGameTab);
+    return;
+  }
+  ui.bottomNav.classList.remove("tutorial-bottom-nav");
+  const recommendedTab = getRecommendedTab(state.run);
+  const phase = getTurnPhase(state.run);
+  const recommendedMarker = phase === TURN_PHASES.EVENT ? "1" : phase === TURN_PHASES.ACTION ? "2" : "✓";
   ui.bottomNav.innerHTML = NAV_ITEMS.map((item) => `
-    <button class="nav-item ${state.activeTab === item.id ? "active" : ""}" data-tab="${item.id}">
-      <img src="${item.icon}" alt="${t(item.labelKey)}" class="nav-icon">
+    <button class="nav-item ${state.activeTab === item.id ? "active" : ""} ${recommendedTab === item.id && state.activeTab !== item.id ? "recommended" : ""}" data-tab="${item.id}">
+      ${uiIcon(item.icon)}
       <strong>${t(item.labelKey)}</strong>
+      ${recommendedTab === item.id && state.activeTab !== item.id ? `<span class="nav-badge" aria-label="${t("recommendedStep")}">${recommendedMarker}</span>` : ""}
     </button>
   `).join("");
   ui.bottomNav.querySelectorAll("[data-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeTab = button.dataset.tab;
+      if (state.activeTab === "dashboard") {
+        state.pendingActionType = null;
+      }
       render();
     });
   });
@@ -1049,7 +1698,7 @@ function renderLanguageSelectScreen() {
       <div class="language-card">
         <p class="eyebrow">${t("gameTitle")}</p>
         <h2>${t("chooseLanguage")}</h2>
-        <p>${t("chooseLanguageLater")}</p>
+        <p>${t("languageWelcome")}</p>
         <div class="language-actions">
           <button class="language-button primary" data-language="ru">${translations.ru.russian}</button>
           <button class="language-button" data-language="en">${translations.en.english}</button>
@@ -1076,11 +1725,107 @@ function renderLanguageModal() {
   `;
 }
 
+function previewRunConfiguration() {
+  return createRunConfiguration({
+    scenarioId: state.selectedScenarioId,
+    difficultyId: state.selectedDifficultyId,
+    baseCash: STARTING_CASH,
+    metaExtraCash: metaStartingBonuses().extraCash,
+    stocks: state.stocks,
+    random: () => 0
+  });
+}
+
+function difficultyRewardLabel(difficultyId) {
+  if (difficultyId === "relaxed") return t("setupRewardReduced");
+  if (difficultyId === "hard") return t("setupRewardIncreased");
+  return t("setupRewardNormal");
+}
+
+function renderRunSetupScreen() {
+  const preview = previewRunConfiguration();
+  return `
+    <section class="run-setup-screen menu-screen ${state.runSetupAdvanced ? "settings-open" : ""}">
+      <div class="menu-world" aria-hidden="true">
+        <span class="menu-scene menu-scene--ledger">
+          <i class="scene-bloom"></i><i class="scene-desk"></i><i class="scene-ledgers"></i>
+        </span>
+        <span class="menu-scene menu-scene--gears">
+          <i class="scene-bloom"></i><i class="scene-gear scene-gear--one"></i><i class="scene-gear scene-gear--two"></i><i class="scene-gear scene-gear--three"></i>
+        </span>
+        <span class="menu-scene menu-scene--market">
+          <i class="scene-bloom"></i><i class="scene-board"></i><i class="scene-coins"></i>
+        </span>
+        <span class="menu-pixels"></span>
+        <span class="menu-scanlines"></span>
+        <span class="menu-vignette"></span>
+      </div>
+      <div class="menu-topbar">
+        <button class="language-inline-button" data-open-language aria-label="${t("changeLanguage")}">${state.selectedLanguage.toUpperCase()}</button>
+        <span class="menu-build">BUILD 01 // LOCAL MARKET</span>
+      </div>
+      <div class="menu-content">
+        <div class="run-setup-intro menu-brand-block">
+          <div class="menu-logo-mark" aria-hidden="true"><span>F</span><span>R</span></div>
+          <p class="eyebrow">${t("titleScreenKicker")}</p>
+          <h2><span>FINANCE</span><strong>ROGUE</strong></h2>
+          <p>${t("titleScreenTagline", { turns: nextRunMaxTurns() })}</p>
+        </div>
+        <div class="menu-loop" aria-label="${t("roundExplainerTitle")}">
+          <span><b>01</b><em>${t("welcomeStepOne")}</em></span>
+          <span><b>02</b><em>${t("welcomeStepTwo")}</em></span>
+          <span><b>03</b><em>${t("welcomeStepThree")}</em></span>
+        </div>
+        <div class="menu-actions">
+          <button class="primary-button setup-quick-start welcome-start-button" data-start-configured-run>${t("titleScreenPlay")}</button>
+          <button class="secondary-button welcome-config-button" data-toggle-run-setup>${t("titleScreenSettings")}</button>
+          ${state.run ? `<button class="ghost-button title-return-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
+        </div>
+      </div>
+
+      ${state.runSetupAdvanced ? `<div class="setup-overlay"><div class="run-setup-section setup-advanced-panel">
+        <div class="setup-panel-head"><div><span>RUN CONFIG</span><h2>${t("chooseScenario")}</h2></div><button class="ghost-button setup-close-button" data-toggle-run-setup>×</button></div>
+        <div class="setup-option-grid scenario-option-grid">
+          ${RUN_SCENARIOS.map((scenario) => `
+            <button class="setup-option-card ${state.selectedScenarioId === scenario.id ? "selected" : ""}" data-run-scenario="${scenario.id}" aria-pressed="${state.selectedScenarioId === scenario.id}">
+              <strong>${t(scenario.titleKey)}</strong>
+              <span>${t(scenario.descriptionKey)}</span>
+            </button>
+          `).join("")}
+        </div>
+
+      <div class="run-setup-section setup-difficulty-section">
+        <div class="tab-header"><h2>${t("chooseDifficulty")}</h2></div>
+        <div class="setup-option-grid difficulty-option-grid">
+          ${RUN_DIFFICULTIES.map((difficulty) => `
+            <button class="setup-option-card ${state.selectedDifficultyId === difficulty.id ? "selected" : ""}" data-run-difficulty="${difficulty.id}" aria-pressed="${state.selectedDifficultyId === difficulty.id}">
+              <strong>${t(difficulty.titleKey)}</strong>
+              <span>${t(difficulty.descriptionKey)}</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+
+      <article class="setup-preview-card">
+        <div><span>${t("setupCash")}</span><strong>${money(preview.company.cash)}</strong></div>
+        <div><span>${t("setupDebt")}</span><strong>${money(preview.company.debt)}</strong></div>
+        <div><span>${t("setupRisk")}</span><strong>${percent(preview.company.risk)}</strong></div>
+        <div><span>${t("setupReward")}</span><strong>${difficultyRewardLabel(preview.difficulty.id)}</strong></div>
+      </article>
+
+      <div class="setup-actions">
+        <button class="primary-button" data-start-configured-run>${t("startConfiguredRun")}</button>
+        ${state.run ? `<button class="secondary-button" data-cancel-run-setup>${t("cancelSetup")}</button>` : ""}
+      </div></div></div>` : ""}
+      ${state.languageModalOpen ? renderLanguageModal() : ""}
+    </section>
+  `;
+}
+
 function renderActiveTab() {
   if (state.activeTab === "meta") return renderMetaTab();
   if (state.activeTab === "runEnd") return renderRunEndScreen();
   if (state.activeTab === "dashboard") return renderDashboardTab();
-  if (state.activeTab === "decisions") return renderDecisionsTab();
   if (state.activeTab === "portfolio") return renderPortfolioTab();
   if (state.activeTab === "market") return renderMarketTab();
   return renderEconomyTab();
@@ -1088,29 +1833,318 @@ function renderActiveTab() {
 
 function renderDashboardTab() {
   const run = state.run;
-  const regime = economyRegime();
-  const macro = effectiveMacro();
+  const phase = getTurnPhase(run);
   return `
-    <section class="tab-screen">
-      <button class="dashboard-cta" data-dashboard-primary>
-        <strong>${turnReady() ? t("nextTurn") : run.eventResolved ? t("chooseAction") : t("resolveEventCta")}</strong>
-        <span>${turnReady() ? t("turnReadyToAdvance") : run.eventResolved ? t("openDecisions") : run.statusMessage}</span>
-      </button>
-      <div class="dashboard-secondary-actions">
-        <button class="secondary-button" data-open-meta>${t("metaProgress")}</button>
+    <section class="tab-screen game-screen play-table-screen phase-${phase}">
+      ${run.tabsJustUnlocked ? `<article class="unlock-banner"><span>✓</span><div><strong>${t("tabsUnlocked")}</strong><p>${t("tabsUnlockedText")}</p></div></article>` : ""}
+      ${isTutorialRound() ? renderTutorialTask(phase) : ""}
+      ${phase === TURN_PHASES.EVENT ? renderEventStage() : ""}
+      ${phase === TURN_PHASES.ACTION ? renderActionStage() : ""}
+      ${phase === TURN_PHASES.FINISH ? renderRoundResultStage() : ""}
+    </section>
+  `;
+}
+
+function renderTutorialTask(phase) {
+  const task = phase === TURN_PHASES.EVENT
+    ? t("tutorialTaskEvent")
+    : phase === TURN_PHASES.ACTION
+      ? t("tutorialTaskAction")
+      : t("tutorialTaskResult");
+  return `
+    <article class="tutorial-task-card">
+      <span class="tutorial-task-badge">${t("guidedRound")}</span>
+      <strong>${task}</strong>
+      <p>${t("guidedRoundText")}</p>
+    </article>
+  `;
+}
+
+function uiIcon(type) {
+  const glyphs = {
+    game: '<path d="M4 7h16v12H4zM8 7V4h8v3M8 13h4M10 11v4M16 12h.01M18 15h.01"/>',
+    portfolio: '<path d="M3 8h18v11H3zM8 8V5h8v3M3 12h18M10 12v2h4v-2"/>',
+    market: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7M16 6h4v4"/>',
+    economy: '<path d="M4 19h16M6 19v-6h3v6M11 19V9h3v10M16 19V5h3v14"/>',
+    buy: '<path d="M4 7h16v12H4zM8 7V4h8v3M12 10v6M9 13h6"/>',
+    upgrade: '<path d="M5 19h14M7 16l5-5 5 5M12 11V4"/>',
+    sell: '<path d="M4 7h16v12H4zM8 7V4h8v3M8 13h8"/>',
+    cards: '<path d="m7 5 11-2 2 14-11 2zM4 8v13h11"/>',
+    hold: '<path d="M5 6h14v14H5zM8 3h8M8 11h8M8 15h5"/>',
+    debt: '<path d="M5 5h14v14H5zM12 7v8M8 12l4 4 4-4"/>',
+    businesses: '<path d="M4 20V8h6v12M10 20V4h10v16M7 11h.01M14 8h2M14 12h2M14 16h2"/>',
+    real_estate: '<path d="m3 11 9-7 9 7M5 10v10h14V10M9 20v-6h6v6"/>',
+    stocks: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7"/>',
+    collection: '<path d="m12 3 8 5v8l-8 5-8-5V8zM8 10h8M8 14h8"/>',
+    consumer: '<path d="M5 8h14l-1 12H6zM8 8a4 4 0 0 1 8 0"/>',
+    monetary: '<path d="M12 3v18M16 7c0-2-2-3-4-3S8 5 8 7s2 3 4 3 4 1 4 3-2 4-4 4-4-1-4-3"/>',
+    prices: '<path d="M7 18 17 6M8 6h.01M16 18h.01"/>',
+    energy: '<path d="m13 2-7 12h6l-1 8 7-12h-6z"/>',
+    markets: '<path d="M4 19V5M4 19h16M7 15l4-4 3 2 6-7"/>',
+    growth: '<path d="M5 17 12 5l7 12zM12 9v8"/>',
+    supply: '<path d="m12 3 8 4-8 4-8-4zM4 12l8 4 8-4M4 17l8 4 8-4"/>',
+    regulation: '<path d="M12 3v18M5 7h14M7 7l-3 6h6zM17 7l-3 6h6z"/>',
+    labor: '<path d="M8 5h8l2 4v11H6V9zM9 5V3h6v2M6 12h12"/>',
+    technology: '<path d="M7 7h10v10H7zM9 2v5M15 2v5M9 17v5M15 17v5M2 9h5M17 9h5M2 15h5M17 15h5"/>',
+    property: '<path d="m3 11 9-7 9 7M5 10v10h14V10M9 20v-6h6v6"/>',
+    defense: '<path d="m12 3 7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+    liquidity: '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+    leverage: '<path d="M4 18h16M7 15l5-9 5 9"/>',
+    efficiency: '<path d="M4 8h16M4 12h12M4 16h8"/>',
+    balanced: '<path d="M12 4v16M4 12h16"/>'
+  };
+  const paths = glyphs[type] || glyphs.balanced;
+  return `<span class="ui-icon ui-icon--${type}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter">${paths}</svg></span>`;
+}
+
+function visualIcon(type) {
+  return uiIcon(type);
+}
+
+function eventPresentation(event) {
+  const [theme, categoryKey, trend] = EVENT_PRESENTATIONS[event.id] || ["markets", "categoryMarkets", "up"];
+  return { theme, category: t(categoryKey), trend };
+}
+
+function renderEventVisual(event) {
+  const presentation = eventPresentation(event);
+  const chartPath = presentation.trend === "down"
+    ? "M8 22 C24 12 34 18 48 28 S76 40 92 31 S118 48 142 61"
+    : "M8 62 C24 54 34 58 48 45 S76 42 92 31 S118 25 142 10";
+  return `
+    <div class="event-visual event-visual--${presentation.theme}" aria-hidden="true">
+      <span class="event-visual-grid"></span>
+      <span class="event-visual-icon">${visualIcon(presentation.theme)}</span>
+      <span class="event-visual-copy"><small>${t("marketSignal")}</small><strong>${presentation.category}</strong></span>
+      <svg class="event-visual-chart" viewBox="0 0 150 72" preserveAspectRatio="none">
+        <path d="${chartPath}"></path>
+      </svg>
+    </div>
+  `;
+}
+
+function choicePresentation(choice) {
+  const temporary = choice.temporary_effects || {};
+  if ((choice.debt || 0) > 0) return { type: "leverage", label: t("strategyLeverage") };
+  if ((choice.risk || 0) < 0 || (choice.debt || 0) < 0 || (temporary.risk || 0) < 0) return { type: "defense", label: t("strategyDefense") };
+  if ((choice.expense_bonus || 0) < 0 || (temporary.expense_bonus || 0) < 0) return { type: "efficiency", label: t("strategyEfficiency") };
+  if ((choice.revenue_bonus || 0) > 0 || (temporary.revenue_bonus || 0) > 0) return { type: "growth", label: t("strategyGrowth") };
+  if ((choice.cash || 0) > 0) return { type: "liquidity", label: t("strategyLiquidity") };
+  return { type: "balanced", label: t("strategyBalanced") };
+}
+
+function riskLevel(choice) {
+  if ((choice.risk || 0) >= 0.04) return "high";
+  if ((choice.risk || 0) > 0) return "medium";
+  return "low";
+}
+
+function businessVisualMarkup(business) {
+  const theme = businessTheme(business);
+  const code = business.id.split("_").map((part) => part[0]).join("").slice(0, 3).toUpperCase();
+  return `
+    <div class="business-card-visual business-card-visual--${theme}" aria-hidden="true">
+      <span class="business-visual-icon">${visualIcon(theme)}</span>
+      <span class="business-visual-copy"><small>${t("industryLabel")}</small><strong>${industryName(business.industry)}</strong></span>
+      <span class="business-visual-code">${code}</span>
+    </div>
+  `;
+}
+
+function businessTheme(business) {
+  const themeByIndustry = {
+    retail: "consumer",
+    it: "technology",
+    logistics: "supply",
+    manufacturing: "efficiency",
+    energy: "energy",
+    real_estate: "property",
+    media: "markets"
+  };
+  return themeByIndustry[business.industry] || "markets";
+}
+
+function actionChoiceCover(theme, label) {
+  return `
+    <span class="action-choice-cover action-cover--${theme}" aria-hidden="true">
+      <span class="action-choice-icon">${visualIcon(theme)}</span>
+      <small>${label}</small>
+    </span>
+  `;
+}
+
+function renderEventStage() {
+  const event = state.run.currentEvent;
+  const presentation = eventPresentation(event);
+  const eventEffect = describeEffects(event)
+    .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
+  return `
+    <div class="game-stage event-stage ${isTutorialRound() ? "tutorial-event-stage" : ""}">
+      <div class="stage-heading">
+        <span class="stage-number">1</span>
+        <div><h2>${t("eventStageTitle")}</h2><p>${t("eventStageHint")}</p></div>
       </div>
-      <article class="overview-card">
-        <h3>${t("macroRegime")}</h3>
-        <p>${regime.description}</p>
-        <div class="macro-strip">
-          ${macroPill(t("rate"), percent(macro.interestRate))}
-          ${macroPill(t("inflation"), percent(macro.inflation))}
-          ${macroPill(t("demand"), macro.demand.toFixed(2))}
-          ${macroPill(t("energyCost"), macro.energyCost.toFixed(2))}
-          ${macroPill(t("creditAvailability"), macro.creditAvailability.toFixed(2))}
+      <article class="event-hero-card event-theme--${presentation.theme}">
+        <div class="event-dossier-meta event-dossier-meta--single"><span>${presentation.category}</span></div>
+        ${renderEventVisual(event)}
+        <div class="event-dossier-copy">
+          <h2>${eventTitle(event)}</h2>
+          <p>${eventText(event)}</p>
+          ${eventEffect ? `<div class="event-impact"><span>${t("eventImpact")}</span><strong>${eventEffect}</strong></div>` : ""}
         </div>
       </article>
-    </section>
+      <div class="choice-section-heading">
+        <h3>${t("chooseResponse")}</h3>
+        <p>${t("tapCardToChoose")}</p>
+      </div>
+      <div class="decision-card-list table-choice-hand">
+        ${event.choices.map(renderEventChoiceCard).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function actionCategories() {
+  let categories = [
+    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), kicker: t("market"), tone: "market", icon: "buy" },
+    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), kicker: t("portfolio"), tone: "portfolio", icon: "upgrade" },
+    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), kicker: t("cash"), tone: "liquidity", icon: "sell" },
+    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), kicker: t("actionCards"), tone: "cards", icon: "cards" },
+    { id: "hold", label: t("holdCash"), hint: t("holdCashHint"), kicker: t("strategyDefense"), tone: "defense", icon: "hold" }
+  ];
+  if (state.run.company.debt > 0) {
+    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), kicker: t("debt"), tone: "debt", icon: "debt" });
+  }
+  if (isTutorialRound()) categories = categories.filter((category) => ["buy", "upgrade", "hold"].includes(category.id));
+  return categories;
+}
+
+function actionCategoryState(id) {
+  const cash = state.run.company.cash;
+  if (id === "buy") {
+    const offers = (state.run.marketOfferIds || []).map(businessById).filter(Boolean);
+    if (!offers.some((business) => business.cost <= cash)) return { disabled: true, reason: t("insufficientFunds") };
+  }
+  if (id === "upgrade") {
+    const upgradeable = state.run.company.businesses.filter((owned) => owned.level < businessById(owned.businessId).max_level);
+    if (!upgradeable.length) return { disabled: true, reason: t("noUpgradesAvailable") };
+    if (!upgradeable.some((owned) => upgradeCost(owned) <= cash)) return { disabled: true, reason: t("insufficientFunds") };
+  }
+  if (id === "sell" && state.run.company.businesses.length <= 1) {
+    return { disabled: true, reason: t("lastBusinessLocked") };
+  }
+  if (id === "cards") {
+    if (!state.run.currentCards.length) return { disabled: true, reason: t("noCardsAvailable") };
+    if (!state.run.currentCards.some((card) => (card.cost || 0) <= cash)) return { disabled: true, reason: t("insufficientFunds") };
+  }
+  if (id === "repay" && (!state.run.company.debt || cash <= 0)) {
+    return { disabled: true, reason: t("insufficientFunds") };
+  }
+  return { disabled: false, reason: "" };
+}
+
+function renderActionStage() {
+  const categories = actionCategories();
+  const activeCategory = categories.find((item) => item.id === state.selectedActionType);
+  if (activeCategory) {
+    const actionItems = actionItemsForCurrentCategory();
+    const itemCount = actionItems.length;
+    const densityClass = itemCount > 6 ? "option-count-many" : itemCount > 3 ? "option-count-crowded" : "";
+    return `
+      <div class="game-stage action-detail-stage action-detail--${activeCategory.id} ${densityClass}">
+        <button class="screen-back-button" data-action-back>← ${t("backToGame")}</button>
+        <div class="stage-heading">
+          <span class="stage-number">2</span>
+          <div><h2>${activeCategory.label}</h2><p>${activeCategory.hint}</p></div>
+        </div>
+        ${renderLastChoiceSummary()}
+        <div class="decision-card-list action-option-list action-options--${activeCategory.id} ${densityClass}" style="--option-columns:${Math.max(1, Math.min(itemCount, 3))}; --option-count:${itemCount}">
+          ${actionItems.join("")}
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="game-stage action-stage">
+      <div class="stage-heading">
+        <span class="stage-number">2</span>
+        <div><h2>${t("actionStageTitle")}</h2><p>${t("actionStageHint")}</p></div>
+      </div>
+      ${renderLastChoiceSummary()}
+      <div class="action-type-grid" style="--action-count:${categories.length}">
+        ${categories.map((category, index) => {
+          const availability = actionCategoryState(category.id);
+          return `
+            <button class="action-type-button motion-card action-tone--${category.tone} ${availability.disabled ? "unavailable" : ""}" style="--card-index:${index}" data-action-type="${category.id}" ${availability.disabled ? "disabled" : ""}>
+              <span class="action-card-index">${String(index + 1).padStart(2, "0")}</span>
+              <span class="action-card-visual">
+                <span class="action-icon-wrap">${uiIcon(category.icon)}</span>
+              </span>
+              <span class="action-card-kicker">${category.kicker}</span>
+              <strong>${category.label}</strong>
+              <span class="action-card-description">${availability.reason || category.hint}</span>
+              <em>${availability.disabled ? "—" : "→"}</em>
+            </button>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderLastChoiceSummary() {
+  const summary = state.run.lastChoiceSummary;
+  if (!summary) return "";
+  const profitDelta = summary.profitAfter - summary.profitBefore;
+  const deltas = [
+    summary.cashDelta ? `<span><small>${t("cash")}</small><strong class="${summary.cashDelta >= 0 ? "positive" : "negative"}">${signedMoney(summary.cashDelta)}</strong></span>` : "",
+    `<span><small>${t("profit")}</small><strong class="${profitDelta >= 0 ? "positive" : "negative"}">${signedMoney(profitDelta)}</strong></span>`,
+    summary.riskDelta ? `<span><small>${t("risk")}</small><strong>${signedPercent(summary.riskDelta)}</strong></span>` : ""
+  ].filter(Boolean).join("");
+  return `
+    <article class="choice-result-strip">
+      <div class="choice-result-title"><span>✓</span><div><small>${t("whatChanged")}</small><strong>${summary.title}</strong></div></div>
+      <div class="choice-result-metrics">${deltas}</div>
+    </article>
+  `;
+}
+
+function renderRoundResultStage() {
+  const report = calculateReport();
+  const result = getRoundResultSummary(report, state.run.company.cash);
+  const lastRound = state.run.turn >= currentMaxTurns();
+  return `
+    <div class="game-stage result-stage">
+      <article class="round-result-card">
+        <div class="result-dossier-heading">
+          <div>
+            <span class="event-card-kicker">${t("financialStatement")}</span>
+            <h2>${t("roundResultTitle", { turn: state.run.turn })}</h2>
+          </div>
+          <div class="result-check">✓</div>
+        </div>
+        <div class="result-mini-visual" aria-hidden="true">
+          <span style="--bar-height: 46%"></span>
+          <span style="--bar-height: 62%"></span>
+          <span style="--bar-height: 54%"></span>
+          <span style="--bar-height: ${result.profit >= 0 ? "84%" : "30%"}"></span>
+          <svg viewBox="0 0 180 64" preserveAspectRatio="none"><path d="M4 52 C28 44 40 50 62 34 S95 42 116 24 S148 28 176 8"></path></svg>
+        </div>
+        <p>${t("roundResultSubtitle")}</p>
+        <div class="settlement-list">
+          <div><span>${t("operatingRevenue")}</span><strong class="positive">+${money(result.revenue)}</strong></div>
+          <div><span>${t("operatingExpenses")}</span><strong class="negative">−${money(result.expenses)}</strong></div>
+          <div><span>${t("interestPaid")}</span><strong class="negative">−${money(result.interest)}</strong></div>
+          <div><span>${t("dividendsReceived")}</span><strong class="positive">+${money(result.dividends)}</strong></div>
+        </div>
+        <div class="result-profit-row">
+          <span>${t("profit")}</span>
+          <strong class="${result.profit >= 0 ? "positive" : "negative"}">${signedMoney(result.profit)}</strong>
+        </div>
+        <div class="projected-cash-row"><span>${t("projectedCash")}</span><strong>${money(result.projectedCash)}</strong></div>
+        <button class="primary-button result-next-button" data-finish-turn>${lastRound ? t("completeRun") : t("startNextRound", { turn: state.run.turn + 1 })} →</button>
+      </article>
+    </div>
   `;
 }
 
@@ -1256,81 +2290,47 @@ function renderRunEndScreen() {
   `;
 }
 
-function renderTurnProgressCard() {
-  return `
-    <article class="overview-card">
-      <h3>${t("turnProgress")}</h3>
-      <div class="progress-list">
-        <div class="progress-row">${statusChip(state.run.eventResolved ? "✓" : "•", state.run.eventResolved ? "done" : "active")}<span>${state.run.eventResolved ? t("eventResolved") : t("eventPendingShort")}</span></div>
-        <div class="progress-row">${statusChip(state.run.pendingActionDone ? "✓" : "•", state.run.pendingActionDone ? "done" : "")}<span>${state.run.pendingActionDone ? t("actionSelected") : t("actionNotSelected")}</span></div>
-        <div class="progress-row">${statusChip(turnReady() ? "✓" : "•", turnReady() ? "done" : "")}<span>${turnReady() ? t("turnReadyToAdvance") : t("nextTurnLocked")}</span></div>
-      </div>
-    </article>
-  `;
-}
-
-function renderDecisionStepper(eventActive, actionActive) {
-  return `
-    <article class="stepper-card">
-      <div class="step-item ${state.run.eventResolved ? "done" : eventActive ? "active" : ""}">
-        <span class="step-index">1</span>
-        <div><strong>${t("eventStep")}</strong><p>${state.run.eventResolved ? t("completed") : eventActive ? t("active") : t("pending")}</p></div>
-      </div>
-      <div class="step-line"></div>
-      <div class="step-item ${state.run.pendingActionDone ? "done" : actionActive ? "active" : ""}">
-        <span class="step-index">2</span>
-        <div><strong>${t("actionStep")}</strong><p>${state.run.pendingActionDone ? t("completed") : actionActive ? t("active") : t("pending")}</p></div>
-      </div>
-    </article>
-  `;
-}
-
 function renderEventChoiceCard(choice, index) {
-  const effectText = describeEffects(choice)
-    .replace(/ \/ (\d+)t/g, (_, turns) => `, ${t("lastsTurns", { turns })}`);
   const selected = state.run.selectedChoiceId === choice.title;
+  const presentation = choicePresentation(choice);
+  const projection = eventChoiceProjection(choice);
+  const cashDelta = choice.cash || 0;
+  const debtDelta = choice.debt || 0;
+  const riskDelta = (choice.risk || 0) + (choice.temporary_effects?.risk || 0);
+  const riskTone = riskDelta >= 0.04 ? "high" : riskDelta > 0 ? "medium" : "low";
+  const impactRows = [
+    cashDelta ? `<span class="choice-impact-row"><small>${t("cashNow")}</small><strong class="${cashDelta >= 0 ? "positive" : "negative"}">${signedMoney(cashDelta)}</strong></span>` : "",
+    `<span class="choice-impact-row choice-impact-row--profit"><small>${t("profitAfterChoice")}</small><strong>${money(projection.profitBefore)} <b>→</b> ${money(projection.profitAfter)}</strong></span>`,
+    debtDelta ? `<span class="choice-impact-row"><small>${t("debt")}</small><strong class="${debtDelta <= 0 ? "positive" : "negative"}">${signedMoney(debtDelta)}</strong></span>` : ""
+  ].filter(Boolean).join("");
   return `
-    <article class="choice-card ${selected ? "selected" : ""}">
-      <div class="panel-head">
-        <strong>${choice.title}</strong>
-        ${statusChip(riskLabel(choice), riskTone(choice))}
-      </div>
-      <p>${decisionDescription(choice)}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${effectText || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(choice)}</strong></div>
-      </div>
-      <button class="business-button" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>${selected ? t("selected") : t("chooseOption")}</button>
-    </article>
+    <button class="choice-card decision-option-card motion-card choice-strategy--${presentation.type} ${selected ? "selected" : ""}" style="--card-index:${index}" data-choice="${index}" ${state.run.eventResolved || state.run.finished ? "disabled" : ""}>
+      <span class="choice-card-layout">
+        <span class="choice-visual">
+          <span class="choice-visual-icon">${visualIcon(presentation.type)}</span>
+          <small>${t("strategyLabel")}</small>
+          <strong>${presentation.label}</strong>
+        </span>
+        <span class="choice-card-copy">
+          <span class="panel-head">
+            <strong>${choiceTitle(choice)}</strong>
+            <span class="choice-meta-row">
+              ${choice.duration_turns ? `<span class="duration-badge">${t("lastsTurns", { turns: choice.duration_turns })}</span>` : ""}
+              ${riskDelta ? `<span class="risk-badge risk-badge--${riskTone}">${t("riskLabelTitle")} ${signedPercent(riskDelta)}</span>` : ""}
+            </span>
+          </span>
+          <span class="choice-description">${decisionDescription(choice)}</span>
+        </span>
+      </span>
+      <span class="choice-impact-list">${impactRows}</span>
+      <span class="card-select-label">${selected ? t("selected") : `${t("select")} →`}</span>
+    </button>
   `;
-}
-
-function renderDecisionCardCarousel(id, items, slideRenderer, hint = "") {
-  if (!items.length) return "";
-  const activeIndex = Math.max(0, Math.min(state.decisionCarouselIndex[id] || 0, items.length - 1));
-  return `
-    <div class="choice-carousel ${items.length === 1 ? "single" : ""}" data-carousel="${id}">
-      <div class="choice-carousel-track" data-carousel-track="${id}">
-        ${items.map((item, index) => `<div class="choice-carousel-slide" data-carousel-slide="${id}" data-carousel-index="${index}">${slideRenderer(item, index)}</div>`).join("")}
-      </div>
-      ${items.length > 1 ? `<p class="carousel-hint">${hint || t("swipeMoreOptions")}</p>` : ""}
-      ${items.length > 1 ? `<div class="carousel-dots">${items.map((_, index) => `<button class="carousel-dot ${index === activeIndex ? "active" : ""}" data-carousel-dot="${id}" data-carousel-index="${index}" aria-label="${index + 1}"></button>`).join("")}</div>` : ""}
-    </div>
-  `;
-}
-
-function renderActionCategoryContent() {
-  return actionItemsForCurrentCategory().join("");
 }
 
 function actionItemsForCurrentCategory() {
   if (!state.run.eventResolved) {
     return [`<div class="empty-state">${t("actionPanelLocked")}</div>`];
-  }
-  if (state.selectedActionType === "buy") {
-    const groups = groupedMarketBusinesses().filter((group) => !group.locked);
-    const items = groups.flatMap((group) => group.items).slice(0, 6);
-    return items.length ? items.map(renderDecisionBuyCard) : [`<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`];
   }
   if (state.selectedActionType === "upgrade") {
     const items = state.run.company.businesses.filter((owned) => owned.level < businessById(owned.businessId).max_level);
@@ -1349,10 +2349,6 @@ function actionItemsForCurrentCategory() {
   return [];
 }
 
-function renderDebtRepayCards() {
-  return debtRepayCardItems().join("");
-}
-
 function debtRepayCardItems() {
   const debt = state.run.company.debt;
   if (debt <= 0) return [`<div class="empty-state">${t("debtCleared")}</div>`];
@@ -1361,68 +2357,30 @@ function debtRepayCardItems() {
     { id: "half", label: t("repayHalf"), amount: repaymentAmount(0.5) },
     { id: "all", label: t("repayAll"), amount: repaymentAmount(1) }
   ].filter((item) => item.amount > 0);
-  return options.map((item) => `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("debt")} ${money(state.run.company.debt)}`, "accent")}${tag(`${t("cash")} ${money(state.run.company.cash)}`)}</div>
-      <h3>${item.label}</h3>
-      <p>${t("repayDebtHint")}</p>
-      <div class="business-metrics">
-        <div><span>${t("debtPayment")}</span><strong>${money(item.amount)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${signedPercent(-Math.min(0.03, item.amount / 100000))}</strong></div>
-      </div>
-      <button class="business-button" data-repay-debt="${item.id}" ${canTakeAction(item.amount) ? "" : "disabled"}>${item.label}</button>
-    </article>
-  `);
-}
-
-function renderDecisionsTab() {
-  const run = state.run;
-  const event = run.currentEvent;
-  const eventActive = !run.eventResolved;
-  const actionActive = run.eventResolved && !run.pendingActionDone;
-  const categories = [
-    { id: "buy", label: t("buyAsset"), hint: t("actionCategoryBuyHint"), icon: "./assets/icons/market.png" },
-    { id: "upgrade", label: t("upgradeAsset"), hint: t("actionCategoryUpgradeHint"), icon: "./assets/icons/portfolio.png" },
-    { id: "sell", label: t("sellAsset"), hint: t("actionCategorySellHint"), icon: "./assets/icons/dashboard.png" },
-    { id: "cards", label: t("playCardAction"), hint: t("actionCategoryCardsHint"), icon: "./assets/icons/decisions.png" }
-  ];
-  if (run.company.debt > 0) {
-    categories.push({ id: "repay", label: t("repayDebt"), hint: t("repayDebtHint"), icon: "./assets/icons/economy.png" });
-  }
-  return `
-    <section class="tab-screen">
-      <div class="decision-subheader">
-        <span>${t("cashShort")}: ${money(run.company.cash)}</span>
-        <span>${t("turnShort")} ${Math.min(run.turn, currentMaxTurns())}/${currentMaxTurns()}</span>
-        ${statusChip(compactStatusChip())}
-      </div>
-      ${renderDecisionStepper(eventActive, actionActive)}
-      ${!run.eventResolved ? renderDecisionCardCarousel("event-choices", event.choices, renderEventChoiceCard, t("swipeMoreOptions")) : ``}
-      ${run.eventResolved && !run.pendingActionDone ? `
-        <article class="overview-card">
-          <h3>${t("turnAction")}</h3>
-          <p>${state.selectedActionType ? (categories.find((item) => item.id === state.selectedActionType)?.hint || "") : t("chooseActionType")}</p>
-          ${state.selectedActionType
-            ? `<div class="action-toolbar"><button class="secondary-button" data-action-back>${t("back")}</button></div>`
-            : `<div class="action-type-grid">${categories.map((category) => `
-                <button class="action-type-button" data-action-type="${category.id}">
-                  <img src="${category.icon}" alt="${category.label}" class="action-type-icon">
-                  <strong>${category.label}</strong>
-                  <span>${category.hint}</span>
-                </button>
-              `).join("")}</div>`
-          }
-        </article>
-      ` : ""}
-      ${run.eventResolved && !run.pendingActionDone && state.selectedActionType ? `
-        ${renderDecisionCardCarousel(`action-${state.selectedActionType}`, actionItemsForCurrentCategory(), (item) => item, t("swipeMoreOptions"))}
-      ` : ""}
-      ${run.pendingActionDone ? `<article class="overview-card"><h3>${t("turnProgress")}</h3><p>${t("turnReadyToAdvance")}</p></article>` : ""}
-    </section>
-  `;
+  return options.map((item, index) => {
+    const riskChange = -Math.min(0.03, item.amount / 100000);
+    return `
+      <button class="selectable-action-card action-choice-card motion-card" style="--card-index:${index}" data-repay-debt="${item.id}" ${canTakeAction(item.amount) ? "" : "disabled"}>
+        ${actionChoiceCover("defense", t("debt"))}
+        <strong class="selectable-card-title">${item.label}</strong>
+        <span class="selectable-card-description">${t("repayDebtHint")}</span>
+        <span class="action-choice-impact">
+          <span><small>${t("debtPayment")}</small><strong>${money(item.amount)}</strong></span>
+          <span><small>${t("debtAfterAction")}</small><strong>${money(Math.max(0, debt - item.amount))}</strong></span>
+          <span><small>${t("risk")}</small><strong class="positive">${signedPercent(riskChange)}</strong></span>
+        </span>
+        <span class="card-select-label">${item.label} →</span>
+      </button>
+    `;
+  });
 }
 
 function renderPortfolioTab() {
+  const availableFilters = new Set(state.run.company.businesses.map((owned) => {
+    const industry = businessById(owned.businessId)?.industry;
+    return industry === "media" ? "finance" : industry;
+  }));
+  if (state.portfolioFilter !== "all" && !availableFilters.has(state.portfolioFilter)) state.portfolioFilter = "all";
   const filters = [
     { id: "all", label: t("all") },
     { id: "finance", label: t("finance") },
@@ -1430,20 +2388,21 @@ function renderPortfolioTab() {
     { id: "real_estate", label: t("realEstate") },
     { id: "manufacturing", label: t("industry") },
     { id: "energy", label: t("energy") },
-    { id: "retail", label: t("retail") }
-  ];
+    { id: "retail", label: t("retail") },
+    { id: "logistics", label: t("logistics") }
+  ].filter((item) => item.id === "all" || availableFilters.has(item.id));
   const owned = filteredPortfolio();
   const active = activeSynergies();
   const near = hasPurchasedUnlock("unlock_synergy_scanner") ? almostSynergies() : [];
   return `
-    <section class="tab-screen">
-      <div class="tab-header"><p>${t("portfolioSubtitle")}</p></div>
-      <div class="filter-row">
+    <section class="tab-screen section-screen-v3 portfolio-screen-v3">
+      <div class="section-heading-v3"><div><span>${t("portfolioReady")}</span><h2>${t("portfolio")}</h2></div><p>${t("portfolioSubtitle")}</p></div>
+      <div class="filter-row filter-row-v3">
         ${filters.map((item) => `<button class="filter-chip ${state.portfolioFilter === item.id ? "active" : ""}" data-portfolio-filter="${item.id}">${item.label}</button>`).join("")}
       </div>
-      <div class="portfolio-grid">${owned.map(renderOwnedBusinessCard).join("") || `<div class="empty-state">${t("noBusinessesMatchFilter")}</div>`}</div>
-      <div class="tab-header"><h2>${t("activeSynergies")}</h2><p>${t("portfolioSubtitle")}</p></div>
-      <div class="synergy-section">
+      <div class="portfolio-grid asset-grid-v3">${owned.map(renderOwnedBusinessCard).join("") || `<div class="empty-state">${t("noBusinessesMatchFilter")}</div>`}</div>
+      <div class="subsection-heading-v3"><h2>${t("activeSynergies")}</h2></div>
+      <div class="synergy-section synergy-section-v3">
         ${active.length ? active.map(renderActiveSynergy).join("") : `<div class="empty-state">${t("noActiveSynergies")}</div>`}
         ${near.map(renderNearSynergy).join("")}
       </div>
@@ -1452,41 +2411,140 @@ function renderPortfolioTab() {
 }
 
 function renderMarketTab() {
+  if (state.pendingActionType === "buy_asset") return renderMarketActionTable();
   const marketTiles = [
-    { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "./assets/icons/market.png" },
-    { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "./assets/icons/portfolio.png" },
-    { id: "stocks", label: t("stockMarketCategory"), description: t("stockMarketCategoryDesc"), icon: "./assets/icons/economy.png" }
+    { id: "businesses", label: t("businessesCategory"), description: t("businessesCategoryDesc"), icon: "businesses" },
+    { id: "real_estate", label: t("realEstateCategory"), description: t("realEstateCategoryDesc"), icon: "real_estate" },
+    { id: "stocks", label: t("stockMarketCategory"), description: t("stockMarketCategoryDesc"), icon: "stocks" },
+    { id: "collection", label: t("assetCollection"), description: t("assetCollectionDesc"), icon: "collection" }
   ];
   const categoryView = state.marketView !== "root";
-  const groups = groupedMarketBusinesses().filter((group) => state.marketView === "businesses"
-    ? group.industry !== "real_estate"
+  const browseOffers = currentMarketActionOffers().filter((business) => state.marketView === "businesses"
+    ? business.industry !== "real_estate"
     : state.marketView === "real_estate"
-      ? group.industry === "real_estate"
+      ? business.industry === "real_estate"
       : true);
   return `
-    <section class="tab-screen">
-      ${state.pendingActionType === "buy_asset" ? `<article class="overview-card market-action-banner"><h3>${t("turnActionBuyOneAsset")}</h3><p>${runActionStatusText()}</p></article>` : ""}
+    <section class="tab-screen section-screen-v3 market-tab-screen-v3">
+      <div class="section-heading-v3"><div><span>${t("currentRoundStatus", { turn: state.run.turn, maxTurns: currentMaxTurns() })}</span><h2>${t("market")}</h2></div><p>${t("simpleBuyHint")}</p></div>
       ${categoryView ? `<div class="market-back-row"><button class="dashboard-cta market-back-button" data-market-root><strong>${t("backToMarket")}</strong></button></div>` : ""}
       ${state.marketView === "root" ? `
-        <article class="overview-card">
-          <h3>${t("chooseAssetType")}</h3>
-          <p>${t("availableCash")}: ${money(state.run.company.cash)}</p>
+        <article class="overview-card market-deal-card">
+          <span class="market-deal-count">${MARKET_OFFER_COUNT}</span>
+          <h3>${t("currentOffers")}</h3>
+          <p>${t("currentOffersText", { count: MARKET_OFFER_COUNT })}</p>
+          <div class="market-cash-line"><span>${t("availableCash")}</span><strong>${money(state.run.company.cash)}</strong></div>
           <div class="market-category-grid">
-            ${marketTiles.map((item) => `
-              <button class="market-category-card" data-market-category="${item.id}">
-                <img src="${item.icon}" alt="${item.label}" class="action-type-icon">
+            ${marketTiles.map((item, index) => `
+              <button class="market-category-card motion-card" style="--card-index:${index}" data-market-category="${item.id}">
+                ${uiIcon(item.icon)}
                 <strong>${item.label}</strong>
                 <span>${item.description}</span>
               </button>
             `).join("")}
           </div>
         </article>
-      ` : state.marketView === "stocks" ? renderStockMarket() : `
-        <div class="portfolio-grid">${groups.length ? groups.map(renderMarketGroup).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}</div>
+      ` : state.marketView === "stocks" ? renderStockMarket() : state.marketView === "collection" ? renderAssetCollection() : `
+        <article class="market-offer-heading market-offer-heading-v3">
+          <div><span>${state.marketView === "real_estate" ? t("realEstateCategory") : t("businessesCategory")}</span><h2>${t("currentOffers")}</h2></div>
+          <strong>${browseOffers.length}/${MARKET_OFFER_COUNT}</strong>
+        </article>
+        ${state.run.newlyDiscoveredIndustries?.length ? `<div class="market-unlock-chip">✦ ${t("newSectors")}: ${state.run.newlyDiscoveredIndustries.map(industryName).join(" · ")}</div>` : ""}
+        <div class="market-deal-hand market-browser-hand" style="--deal-count:${Math.max(1, browseOffers.length)}">
+          ${browseOffers.length ? browseOffers.map((business, index) => renderMarketActionCard(business, index, "browse")).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}
+        </div>
+        <p class="market-refresh-copy">${t("marketRefreshHint")}</p>
       `}
-      ${state.pendingActionType === "buy_asset" && state.run.pendingActionDone ? `<div class="market-back-row"><button class="business-button" data-back-decisions>${t("backToDecisions")}</button></div>` : ""}
       ${state.activeStockId ? renderStockDetailSheet() : ""}
     </section>
+  `;
+}
+
+function currentMarketActionOffers() {
+  const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
+  return (state.run.marketOfferIds || [])
+    .map(businessById)
+    .filter((business) => business && !owned.has(business.id));
+}
+
+function renderMarketActionTable() {
+  const offers = currentMarketActionOffers();
+  return `
+    <section class="tab-screen market-play-screen play-table-screen market-action-screen-v3">
+      <div class="market-play-toolbar">
+        <button class="screen-back-button" data-back-game>← ${t("backToGame")}</button>
+        <div>
+          <small>${t("market")}</small>
+          <strong>${t("buyAsset")}</strong>
+        </div>
+        <span><small>${t("availableCash")}</small><strong>${money(state.run.company.cash)}</strong></span>
+      </div>
+      ${state.run.newlyDiscoveredIndustries?.length ? `<div class="market-unlock-chip">✦ ${t("newSectors")}: ${state.run.newlyDiscoveredIndustries.map(industryName).join(" · ")}</div>` : ""}
+      <div class="market-table-heading">
+        <div><h2>${t("currentOffers")}</h2><p>${t("simpleBuyHint")}</p></div>
+        <strong>${offers.length}/${MARKET_OFFER_COUNT}</strong>
+      </div>
+      <div class="market-deal-hand" style="--deal-count:${Math.max(1, offers.length)}">
+        ${offers.length ? offers.map(renderMarketActionCard).join("") : `<div class="empty-state">${t("noBusinessesMatchMarketFilter")}</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderMarketActionCard(business, index, context = "action") {
+  const projection = businessPurchaseProjection(business);
+  return `
+    <button class="market-table-card ${context === "browse" ? "market-browse-card" : ""} motion-card" style="--card-index:${index}" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>
+      ${businessVisualMarkup(business)}
+      <span class="market-table-card-copy">
+        <small>${industryName(business.industry)}</small>
+        <strong>${businessName(business)}</strong>
+      </span>
+      <span class="market-table-price-row"><span class="market-table-price"><small>${t("costLabel")}</small>${money(business.cost)}</span><span class="market-table-risk">${t("riskLabelTitle")} ${percent(business.risk)}</span></span>
+      <span class="market-table-metrics">
+        <span><small>${t("profitAdded")}</small><strong class="${projection.profitGain >= 0 ? "positive" : "negative"}">${signedMoney(projection.profitGain)}</strong></span>
+      </span>
+      <span class="market-table-payback">${projection.paybackTurns ? t("paysBackIn", { turns: projection.paybackTurns }) : t("noPaybackNow")}</span>
+      <span class="card-select-label">${canTakeAction(business.cost) ? `${t("buy")} →` : t("insufficientFunds")}</span>
+    </button>
+  `;
+}
+
+function renderAssetCollection() {
+  return `
+    <section class="asset-collection-screen asset-collection-v3">
+      <div class="subsection-heading-v3"><h2>${t("assetCollection")}</h2><p>${t("assetCollectionDesc")}</p></div>
+      <div class="collection-grid collection-grid-v3">
+        ${state.businesses.map((business, index) => renderCollectionCard(business, index)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderCollectionCard(business, index) {
+  const owned = state.run.company.businesses.some((item) => item.businessId === business.id);
+  const offered = state.run.marketOfferIds.includes(business.id);
+  const metaUnlocked = industryUnlocked(business.industry);
+  const discovered = state.run.discoveredIndustries.includes(business.industry);
+  const stateClass = owned ? "owned" : offered ? "offered" : discovered ? "discovered" : "locked";
+  const status = owned
+    ? t("ownedStatus")
+    : offered
+      ? t("offeredNowStatus")
+      : !metaUnlocked
+        ? t("needsPrestigeUnlock")
+        : discovered
+          ? t("discoveredStatus")
+          : t("opensOnRound", { turn: industryDiscoveryTurn(business.industry) });
+  return `
+    <article class="collection-card motion-card collection-card--${stateClass}" style="--card-index:${index}">
+      <span class="collection-card-number">${String(index + 1).padStart(2, "0")}</span>
+      <span class="collection-icon">${visualIcon(businessTheme(business))}</span>
+      <small>${industryName(business.industry)}</small>
+      <h3>${businessName(business)}</h3>
+      <p>${status}</p>
+      <div class="collection-card-footer"><span>${money(business.cost)}</span><strong>${owned ? "✓" : offered ? "→" : "🔒"}</strong></div>
+    </article>
   `;
 }
 
@@ -1496,20 +2554,14 @@ function renderEconomyTab() {
   const macro = effectiveMacro();
   const history = run.history.slice(0, 3);
   return `
-    <section class="tab-screen">
-      <article class="regime-card">
+    <section class="tab-screen section-screen-v3 economy-screen-v3">
+      <div class="section-heading-v3"><div><span>${t("economyWatch")}</span><h2>${t("economy")}</h2></div><p>${t("economySubtitle")}</p></div>
+      <article class="regime-card economy-regime-v3">
+        <span class="regime-status-dot"></span>
         <h3>${regime.name}</h3>
         <p>${regime.description}</p>
-        <div class="tag-row">
-          ${tag(`${t("rate")} ${percent(macro.interestRate)}`, "accent")}
-          ${tag(`${t("inflation")} ${percent(macro.inflation)}`, "accent")}
-          ${tag(`${t("demand")} ${macro.demand.toFixed(2)}`, "accent")}
-          ${tag(`${t("energyCost")} ${macro.energyCost.toFixed(2)}`, "accent")}
-          ${tag(`${t("creditAvailability")} ${macro.creditAvailability.toFixed(2)}`, "accent")}
-          ${tag(`${t("marketRisk")} ${percent(macro.marketRisk)}`, "accent")}
-        </div>
       </article>
-      <div class="macro-grid">
+      <div class="macro-grid macro-grid-v3">
         ${macroCard(t("rate"), percent(macro.interestRate), rateInsight(macro.interestRate))}
         ${macroCard(t("inflation"), percent(macro.inflation), inflationInsight(macro.inflation))}
         ${macroCard(t("demand"), macro.demand.toFixed(2), demandInsight(macro.demand))}
@@ -1517,16 +2569,16 @@ function renderEconomyTab() {
         ${macroCard(t("creditAvailability"), macro.creditAvailability.toFixed(2), creditInsight(macro.creditAvailability))}
         ${macroCard(t("marketRisk"), percent(macro.marketRisk), marketRiskInsight(macro.marketRisk))}
       </div>
-      ${run.activeModifiers.length ? `<article class="overview-card"><h3>${t("temporaryEffects")}</h3><p>${run.activeModifiers.map((modifier) => describeModifier(modifier)).join(", ")}</p></article>` : ""}
-      <article class="overview-card">
+      ${run.activeModifiers.length ? `<article class="overview-card economy-note-v3"><h3>${t("temporaryEffects")}</h3><p>${run.activeModifiers.map((modifier) => describeModifier(modifier)).join(", ")}</p></article>` : ""}
+      <article class="overview-card economy-note-v3">
         <h3>${t("whoWinsAndLoses")}</h3>
-        <div class="winners-grid">
+        <div class="winners-grid winners-grid-v3">
           <div><span class="eyebrow">${t("positive")}</span><p class="positive">${regime.winners.join(", ")}</p></div>
           <div><span class="eyebrow">${t("negative")}</span><p class="negative">${regime.losers.join(", ")}</p></div>
         </div>
       </article>
-      <div class="tab-header"><h2>${t("recentEvents")}</h2></div>
-      <div class="timeline-list">
+      <div class="subsection-heading-v3"><h2>${t("recentEvents")}</h2></div>
+      <div class="timeline-list timeline-list-v3">
         ${history.map((item) => `<article class="timeline-item"><strong>${t("turn")} ${item.turn}: ${item.title}</strong><p>${item.body}</p></article>`).join("")}
       </div>
     </section>
@@ -1536,13 +2588,15 @@ function renderEconomyTab() {
 function renderStockMarket() {
   const cycle = currentCycleLabel();
   return `
-    <article class="regime-card">
-      <h3>${t("stockCycle")}: ${cycle.name}</h3>
-      <p>${cycle.description}</p>
-    </article>
-    <div class="stock-list">
-      ${state.run.stockMarket.listings.map(renderStockCard).join("")}
-    </div>
+    <section class="stock-market-v3">
+      <article class="regime-card stock-cycle-v3">
+        <h3>${t("stockCycle")}: ${cycle.name}</h3>
+        <p>${cycle.description}</p>
+      </article>
+      <div class="stock-list stock-list-v3">
+        ${state.run.stockMarket.listings.map(renderStockCard).join("")}
+      </div>
+    </section>
   `;
 }
 
@@ -1554,20 +2608,32 @@ function runActionStatusText() {
 
 function bindTabEvents() {
   bindLanguageEvents();
-  ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
-  ui.tabContent.querySelectorAll("[data-dashboard-primary]").forEach((button) => button.addEventListener("click", () => {
-    if (turnReady()) advanceTurn();
-    else {
-      state.activeTab = "decisions";
-      render();
-    }
+  ui.tabContent.querySelectorAll("[data-toggle-run-setup]").forEach((button) => button.addEventListener("click", () => {
+    state.runSetupAdvanced = !state.runSetupAdvanced;
+    render();
   }));
+  ui.tabContent.querySelectorAll("[data-run-scenario]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedScenarioId = button.dataset.runScenario;
+    render();
+  }));
+  ui.tabContent.querySelectorAll("[data-run-difficulty]").forEach((button) => button.addEventListener("click", () => {
+    state.selectedDifficultyId = button.dataset.runDifficulty;
+    render();
+  }));
+  ui.tabContent.querySelectorAll("[data-start-configured-run]").forEach((button) => button.addEventListener("click", startRun));
+  ui.tabContent.querySelectorAll("[data-cancel-run-setup]").forEach((button) => button.addEventListener("click", closeRunSetup));
+  ui.tabContent.querySelectorAll("[data-open-meta]").forEach((button) => button.addEventListener("click", openMeta));
+  ui.tabContent.querySelectorAll("[data-finish-turn]").forEach((button) => button.addEventListener("click", advanceTurn));
   ui.tabContent.querySelectorAll("[data-action-type]").forEach((button) => button.addEventListener("click", () => {
     const actionType = button.dataset.actionType;
+    if (actionType === "hold") {
+      finalizeTurnAction(t("heldCash"));
+      return;
+    }
     if (actionType === "buy") {
       state.pendingActionType = "buy_asset";
       state.selectedActionType = null;
-      state.marketView = "root";
+      state.marketView = "businesses";
       state.activeTab = "market";
       render();
       return;
@@ -1581,7 +2647,7 @@ function bindTabEvents() {
   }));
   ui.tabContent.querySelectorAll("[data-meta-unlock]").forEach((button) => button.addEventListener("click", () => purchaseUnlock(button.dataset.metaUnlock)));
   ui.tabContent.querySelectorAll("[data-reset-meta]").forEach((button) => button.addEventListener("click", resetMetaProgression));
-  ui.tabContent.querySelectorAll("[data-new-run]").forEach((button) => button.addEventListener("click", startRun));
+  ui.tabContent.querySelectorAll("[data-new-run]").forEach((button) => button.addEventListener("click", openRunSetup));
   ui.tabContent.querySelectorAll("[data-back-dashboard]").forEach((button) => button.addEventListener("click", backToDashboard));
   ui.tabContent.querySelectorAll("[data-choice]").forEach((button) => button.addEventListener("click", () => resolveEventChoice(Number(button.dataset.choice))));
   ui.tabContent.querySelectorAll("[data-play-card]").forEach((button) => button.addEventListener("click", () => playCard(button.dataset.playCard)));
@@ -1595,7 +2661,7 @@ function bindTabEvents() {
   ui.tabContent.querySelectorAll("[data-market-view]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketView; render(); }));
   ui.tabContent.querySelectorAll("[data-market-category]").forEach((button) => button.addEventListener("click", () => { state.marketView = button.dataset.marketCategory; render(); }));
   ui.tabContent.querySelectorAll("[data-market-root]").forEach((button) => button.addEventListener("click", () => { state.marketView = "root"; render(); }));
-  ui.tabContent.querySelectorAll("[data-back-decisions]").forEach((button) => button.addEventListener("click", backToDecisionsTab));
+  ui.tabContent.querySelectorAll("[data-back-game]").forEach((button) => button.addEventListener("click", backToGameTab));
   ui.tabContent.querySelectorAll("[data-open-stock]").forEach((button) => button.addEventListener("click", () => openStockSheet(button.dataset.openStock)));
   ui.tabContent.querySelectorAll("[data-close-stock-sheet]").forEach((button) => button.addEventListener("click", closeStockSheet));
   ui.tabContent.querySelectorAll("[data-stock-trade-mode]").forEach((button) => button.addEventListener("click", () => {
@@ -1610,8 +2676,8 @@ function bindTabEvents() {
   }));
   ui.tabContent.querySelectorAll("[data-buy-stock]").forEach((button) => button.addEventListener("click", () => buyStock(button.dataset.buyStock)));
   ui.tabContent.querySelectorAll("[data-sell-stock]").forEach((button) => button.addEventListener("click", () => sellStock(button.dataset.sellStock)));
-  bindCarouselInteractions();
   bindTradeBars();
+  bindCardMotion();
 }
 
 function bindLanguageEvents() {
@@ -1620,83 +2686,70 @@ function bindLanguageEvents() {
   ui.tabContent.querySelectorAll("[data-close-language]").forEach((button) => button.addEventListener("click", closeLanguageModal));
 }
 
-function bindCarouselInteractions() {
-  ui.tabContent.querySelectorAll("[data-carousel-track]").forEach((carousel) => {
-    const carouselId = carousel.dataset.carouselTrack;
-    const slides = carousel.querySelectorAll(`[data-carousel-slide="${carouselId}"]`);
-    const gap = 14;
-    const syncDots = () => {
-      if (!slides.length) return;
-      const slideWidth = slides[0].getBoundingClientRect().width + gap;
-      const index = Math.max(0, Math.min(slides.length - 1, Math.round(carousel.scrollLeft / Math.max(1, slideWidth))));
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((dot, dotIndex) => {
-        dot.classList.toggle("active", dotIndex === index);
-      });
-    };
-
-    syncDots();
-    carousel.addEventListener("wheel", (event) => {
-      if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-        event.preventDefault();
-        carousel.scrollLeft += event.deltaY;
-      }
-    }, { passive: false });
-
-    let isDown = false;
-    let startX = 0;
-    let startLeft = 0;
-
-    carousel.addEventListener("mousedown", (event) => {
-      isDown = true;
-      startX = event.pageX;
-      startLeft = carousel.scrollLeft;
-      carousel.classList.add("dragging");
+function bindCardMotion() {
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  ui.tabContent.querySelectorAll(".motion-card").forEach((card) => {
+    card.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch") return;
+      const rect = card.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = (event.clientY - rect.top) / rect.height;
+      card.style.setProperty("--tilt-x", `${((0.5 - y) * 5).toFixed(2)}deg`);
+      card.style.setProperty("--tilt-y", `${((x - 0.5) * 6).toFixed(2)}deg`);
+      card.style.setProperty("--shine-x", `${Math.round(x * 100)}%`);
+      card.style.setProperty("--shine-y", `${Math.round(y * 100)}%`);
     });
-    window.addEventListener("mouseup", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mouseleave", () => {
-      isDown = false;
-      carousel.classList.remove("dragging");
-    });
-    carousel.addEventListener("mousemove", (event) => {
-      if (!isDown) return;
-      event.preventDefault();
-      carousel.scrollLeft = startLeft - (event.pageX - startX);
-    });
-    carousel.addEventListener("scroll", syncDots, { passive: true });
-  });
-
-  ui.tabContent.querySelectorAll("[data-carousel-dot]").forEach((dot) => {
-    dot.addEventListener("click", () => {
-      const carouselId = dot.dataset.carouselDot;
-      const index = Number(dot.dataset.carouselIndex || 0);
-      const track = ui.tabContent.querySelector(`[data-carousel-track="${carouselId}"]`);
-      const slide = track?.querySelector(`[data-carousel-slide="${carouselId}"][data-carousel-index="${index}"]`);
-      if (!track || !slide) return;
-      track.scrollTo({ left: slide.offsetLeft - 20, behavior: "smooth" });
-      state.decisionCarouselIndex[carouselId] = index;
-      ui.tabContent.querySelectorAll(`[data-carousel-dot="${carouselId}"]`).forEach((item, dotIndex) => {
-        item.classList.toggle("active", dotIndex === index);
-      });
+    card.addEventListener("pointerleave", () => {
+      card.style.removeProperty("--tilt-x");
+      card.style.removeProperty("--tilt-y");
+      card.style.removeProperty("--shine-x");
+      card.style.removeProperty("--shine-y");
     });
   });
 }
 
 function resolveEventChoice(choiceIndex) {
   const run = state.run;
-  if (run.finished || run.eventResolved) return;
+  if (run.finished || run.eventResolved || state.transitionLocked) return;
+  const selectedCard = ui.tabContent.querySelector(`[data-choice="${choiceIndex}"]`);
+  const cards = ui.tabContent.querySelectorAll("[data-choice]");
+  selectedCard?.classList.add("is-picked");
+  cards.forEach((card) => {
+    if (card !== selectedCard) card.classList.add("is-folded");
+  });
+  state.transitionLocked = true;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  window.setTimeout(() => commitEventChoice(choiceIndex), reducedMotion ? 0 : 280);
+}
+
+function commitEventChoice(choiceIndex) {
+  const run = state.run;
+  if (!run || run.finished || run.eventResolved) {
+    state.transitionLocked = false;
+    return;
+  }
   const choice = run.currentEvent.choices[choiceIndex];
+  const projection = eventChoiceProjection(choice);
+  const cashBefore = run.company.cash;
+  const riskBefore = run.company.risk;
   applyEffects(run.currentEvent);
   applyEffects(choice);
   run.selectedChoiceId = choice.title;
   run.eventResolved = true;
+  run.lastChoiceSummary = {
+    title: choiceTitle(choice),
+    cashDelta: run.company.cash - cashBefore,
+    riskDelta: run.company.risk - riskBefore,
+    profitBefore: projection.profitBefore,
+    profitAfter: projection.profitAfter
+  };
   run.statusMessage = t("decisionLocked");
-  run.history.unshift({ turn: run.turn, title: run.currentEvent.title, body: `${t("choiceSelected")}: ${choice.title}` });
+  run.history.unshift({ turn: run.turn, title: eventTitle(run.currentEvent), body: `${t("choiceSelected")}: ${choiceTitle(choice)}` });
+  run.currentReport = calculateReport();
   state.selectedActionType = null;
-  state.activeTab = "decisions";
+  state.activeTab = "dashboard";
+  state.transitionLocked = false;
+  saveCurrentRun();
   render();
 }
 
@@ -1707,22 +2760,23 @@ function playCard(cardId) {
   state.selectedActionItem = cardId;
   run.company.cash -= card.cost || 0;
   applyEffects(card);
-  finalizeTurnAction(t("cardPlayed", { name: card.title }));
+  finalizeTurnAction(t("cardPlayed", { name: cardTitle(card) }));
 }
 
 function buyBusiness(businessId) {
   const run = state.run;
   const business = businessById(businessId);
   if (!business || !canTakeAction(business.cost)) return;
+  if (!(run.marketOfferIds || []).includes(businessId)) return;
   if (run.company.businesses.some((item) => item.businessId === businessId)) return;
   state.selectedActionItem = businessId;
   run.company.cash -= business.cost;
   run.company.businesses.push({ businessId, level: 1 });
   if (state.pendingActionType === "buy_asset") {
-    finalizeTurnAction(`${t("assetPurchased")}. ${t("turnActionCompletedLabel")}.`, { activeTab: "market" });
+    finalizeTurnAction(t("boughtBusiness", { name: businessName(business) }));
     return;
   }
-  finalizeTurnAction(t("boughtBusiness", { name: business.name }));
+  finalizeTurnAction(t("boughtBusiness", { name: businessName(business) }));
 }
 
 function upgradeBusiness(businessId) {
@@ -1735,7 +2789,7 @@ function upgradeBusiness(businessId) {
   state.selectedActionItem = businessId;
   run.company.cash -= cost;
   owned.level += 1;
-  finalizeTurnAction(t("upgradedBusiness", { name: business.name, level: owned.level }));
+  finalizeTurnAction(t("upgradedBusiness", { name: businessName(business), level: owned.level }));
 }
 
 function sellBusiness(businessId) {
@@ -1747,7 +2801,7 @@ function sellBusiness(businessId) {
   state.selectedActionItem = businessId;
   run.company.businesses = run.company.businesses.filter((item) => item.businessId !== businessId);
   run.company.cash += saleValue;
-  finalizeTurnAction(t("soldBusiness", { name: business.name, value: money(saleValue) }));
+  finalizeTurnAction(t("soldBusiness", { name: businessName(business), value: money(saleValue) }));
 }
 
 function buyStock(stockId) {
@@ -1811,14 +2865,25 @@ function finalizeTurnAction(message, options = {}) {
   state.selectedTradeMode = null;
   state.stockBuyPercent = 0;
   state.stockSellPercent = 0;
+  state.pendingActionType = null;
+  run.currentReport = calculateReport();
   state.activeTab = options.activeTab || "dashboard";
   if (options.marketView) state.marketView = options.marketView;
+  saveCurrentRun();
   render();
 }
 
 function advanceTurn() {
   const run = state.run;
   if (!run || !run.eventResolved || !run.pendingActionDone || run.finished) return;
+  if (isTutorialRound()) {
+    run.tutorialActive = false;
+    run.tabsJustUnlocked = true;
+    state.meta.tutorialCompleted = true;
+    saveMetaProgression();
+  } else if (run.tabsJustUnlocked) {
+    run.tabsJustUnlocked = false;
+  }
   run.turn += 1;
   if (checkGameEnd()) {
     render();
@@ -1829,10 +2894,13 @@ function advanceTurn() {
 
 function checkGameEnd() {
   const run = state.run;
-  const debtPressure = run.company.debt > debtPressureThreshold(run);
-  const cashBankruptcy = run.company.cash < -5000;
-  const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < run.company.risk;
-  const bankrupt = cashBankruptcy || debtCollapse;
+  const { cashBankruptcy, debtCollapse, bankrupt } = assessSolvency({
+    cash: run.company.cash,
+    debt: run.company.debt,
+    risk: run.company.risk,
+    debtThreshold: debtPressureThreshold(run),
+    randomValue: Math.random()
+  });
   const maxed = run.turn > currentMaxTurns();
   if (bankrupt || maxed) {
     run.finished = true;
@@ -1841,6 +2909,7 @@ function checkGameEnd() {
     run.resultSummary = summarizeRun(run);
     run.knowledgeEarned = calculateKnowledgeReward(run);
     claimRunReward(run);
+    clearRunState(localStorage, RUN_KEY);
     run.history.unshift({
       turn: Math.min(run.turn, currentMaxTurns()),
       title: t("runComplete"),
@@ -1855,52 +2924,151 @@ function checkGameEnd() {
 }
 
 function calculateReport() {
-  const run = state.run;
-  const temporary = activeTemporaryTotals();
-  const macro = effectiveMacro();
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of run.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    const demandFactor = 1 + ((macro.demand - 1) * business.demand_sensitivity);
-    const inflationRevenue = 1 + macro.inflation * 0.7;
-    const inflationExpense = 1 + macro.inflation;
-    const energyFactor = 1 + ((macro.energyCost - 1) * business.energy_use);
-    revenue += business.revenue * levelMultiplier * demandFactor * inflationRevenue;
-    expenses += business.expense * levelMultiplier * Math.max(0.5, energyFactor) * inflationExpense;
+  return calculateReportForSnapshot({
+    company: state.run.company,
+    macro: state.run.macro,
+    activeModifiers: state.run.activeModifiers
+  });
+}
+
+function calculateReportForSnapshot({ company, macro, activeModifiers = [] }) {
+  const temporary = sumModifierEffects(activeModifiers);
+  const effective = calculateEffectiveMacro(macro, temporary);
+  const synergy = activeSynergyBonusFor(company.businesses);
+  const listings = state.run.stockMarket?.listings || state.stocks;
+  return calculateEconomyReport({
+    company,
+    macro: effective,
+    businesses: company.businesses.map((owned) => ({
+      definition: businessById(owned.businessId),
+      level: owned.level
+    })),
+    stocks: company.stocks
+      .map((holding) => ({
+        definition: listings.find((item) => item.id === holding.stockId),
+        shares: holding.shares
+      }))
+      .filter((position) => position.definition),
+    modifierTotals: temporary,
+    synergyBonus: synergy
+  });
+}
+
+function cloneValue(value) {
+  return typeof structuredClone === "function"
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
+}
+
+function applyEffectsToSnapshot(snapshot, source) {
+  const effects = { ...(source.effects || {}), ...source };
+  const { company, macro, activeModifiers } = snapshot;
+  company.cash += effects.cash || 0;
+  company.debt = Math.max(0, company.debt + (effects.debt || 0));
+  company.risk = clamp(company.risk + (effects.risk || 0), 0.01, 0.95);
+  company.revenueBonus += effects.revenue_bonus || 0;
+  company.expenseBonus += effects.expense_bonus || 0;
+  if (effects.interest_rate) macro.interestRate = Math.max(0.01, macro.interestRate + effects.interest_rate);
+  if (effects.inflation) macro.inflation = Math.max(0.01, macro.inflation + effects.inflation);
+  if (effects.demand) macro.demand = Math.max(0.01, macro.demand + effects.demand);
+  if (effects.energy_cost) macro.energyCost = Math.max(0.01, macro.energyCost + effects.energy_cost);
+  if (effects.credit_availability) macro.creditAvailability = Math.max(0.01, macro.creditAvailability + effects.credit_availability);
+  if (effects.market_risk) macro.marketRisk = Math.max(0.01, macro.marketRisk + effects.market_risk);
+  if (effects.temporary_effects && effects.duration_turns) {
+    activeModifiers.push({
+      label: effects.title || effects.id || "Modifier",
+      effects: effects.temporary_effects,
+      remainingTurns: effects.duration_turns
+    });
   }
-  const synergy = activeSynergyBonus();
-  revenue *= 1 + run.company.revenueBonus + temporary.revenue_bonus + synergy.revenue;
-  expenses *= Math.max(0.2, 1 + run.company.expenseBonus + temporary.expense_bonus + synergy.expense);
-  const effectiveRisk = clamp(run.company.risk + temporary.risk, 0.01, 0.95);
-  const interest = run.company.debt * macro.interestRate;
-  const dividends = stockDividends();
-  const profit = revenue - expenses - interest + dividends;
-  const valuation = run.company.cash + assetValue() + stockHoldingsValue() + Math.max(0, profit * 8) - run.company.debt;
-  return { revenue, expenses, interest, profit, valuation, effectiveRisk, dividends };
 }
 
-function assetValue() {
-  return state.run.company.businesses.reduce((sum, owned) => {
-    const business = businessById(owned.businessId);
-    return sum + business.cost * (1 + owned.level * 0.25);
-  }, 0);
+function eventChoiceProjection(choice) {
+  const before = calculateReport();
+  const snapshot = {
+    company: cloneValue(state.run.company),
+    macro: cloneValue(state.run.macro),
+    activeModifiers: cloneValue(state.run.activeModifiers)
+  };
+  applyEffectsToSnapshot(snapshot, state.run.currentEvent);
+  applyEffectsToSnapshot(snapshot, choice);
+  const after = calculateReportForSnapshot(snapshot);
+  return {
+    cashAfter: snapshot.company.cash,
+    riskAfter: snapshot.company.risk,
+    profitBefore: before.profit,
+    profitAfter: after.profit
+  };
 }
 
-function stockHoldingsValue() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    return sum + (listing ? listing.price * holding.shares : 0);
-  }, 0);
+function businessPurchaseProjection(business) {
+  const before = calculateReport();
+  const company = cloneValue(state.run.company);
+  company.cash -= business.cost;
+  company.businesses.push({ businessId: business.id, level: 1 });
+  const after = calculateReportForSnapshot({ company, macro: state.run.macro, activeModifiers: state.run.activeModifiers });
+  const profitGain = after.profit - before.profit;
+  return {
+    before,
+    after,
+    cashAfter: company.cash,
+    profitGain,
+    paybackTurns: profitGain > 0 ? Math.ceil(business.cost / profitGain) : null
+  };
 }
 
-function stockDividends() {
-  return state.run.company.stocks.reduce((sum, holding) => {
-    const listing = stockById(holding.stockId);
-    if (!listing) return sum;
-    return sum + (listing.price * holding.shares * (listing.dividend_yield || 0));
-  }, 0);
+function businessUpgradeProjection(owned) {
+  const before = calculateReport();
+  const company = cloneValue(state.run.company);
+  const projected = company.businesses.find((item) => item.businessId === owned.businessId);
+  const cost = upgradeCost(owned);
+  company.cash -= cost;
+  projected.level += 1;
+  const after = calculateReportForSnapshot({ company, macro: state.run.macro, activeModifiers: state.run.activeModifiers });
+  const profitGain = after.profit - before.profit;
+  return {
+    cost,
+    before,
+    after,
+    cashAfter: company.cash,
+    profitGain,
+    paybackTurns: profitGain > 0 ? Math.ceil(cost / profitGain) : null
+  };
+}
+
+function actionCardProjection(card) {
+  const before = calculateReport();
+  const snapshot = {
+    company: cloneValue(state.run.company),
+    macro: cloneValue(state.run.macro),
+    activeModifiers: cloneValue(state.run.activeModifiers)
+  };
+  const cashBefore = snapshot.company.cash;
+  const debtBefore = snapshot.company.debt;
+  const riskBefore = snapshot.company.risk;
+  snapshot.company.cash -= card.cost || 0;
+  applyEffectsToSnapshot(snapshot, card);
+  const after = calculateReportForSnapshot(snapshot);
+  return {
+    before,
+    after,
+    cashAfter: snapshot.company.cash,
+    cashDelta: snapshot.company.cash - cashBefore,
+    debtAfter: snapshot.company.debt,
+    debtDelta: snapshot.company.debt - debtBefore,
+    riskDelta: (card.risk || 0) + (card.temporary_effects?.risk || 0) || (snapshot.company.risk - riskBefore)
+  };
+}
+
+function businessSellProjection(owned) {
+  const business = businessById(owned.businessId);
+  const before = calculateReport();
+  const company = cloneValue(state.run.company);
+  const saleValue = Math.round(business.cost * (0.55 + owned.level * 0.15));
+  company.businesses = company.businesses.filter((item) => item.businessId !== owned.businessId);
+  company.cash += saleValue;
+  const after = calculateReportForSnapshot({ company, macro: state.run.macro, activeModifiers: state.run.activeModifiers });
+  return { business, before, after, saleValue, cashAfter: company.cash };
 }
 
 function createInitialStockMarket() {
@@ -2064,22 +3232,23 @@ function tickStockMarket() {
 
 function applyEffects(source) {
   const run = state.run;
-  run.company.cash += source.cash || 0;
-  run.company.debt = Math.max(0, run.company.debt + (source.debt || 0));
-  run.company.risk = clamp(run.company.risk + (source.risk || 0), 0.01, 0.95);
-  run.company.revenueBonus += source.revenue_bonus || 0;
-  run.company.expenseBonus += source.expense_bonus || 0;
-  if (source.interest_rate) run.macro.interestRate = Math.max(0.01, run.macro.interestRate + source.interest_rate);
-  if (source.inflation) run.macro.inflation = Math.max(0.01, run.macro.inflation + source.inflation);
-  if (source.demand) run.macro.demand = Math.max(0.01, run.macro.demand + source.demand);
-  if (source.energy_cost) run.macro.energyCost = Math.max(0.01, run.macro.energyCost + source.energy_cost);
-  if (source.credit_availability) run.macro.creditAvailability = Math.max(0.01, run.macro.creditAvailability + source.credit_availability);
-  if (source.market_risk) run.macro.marketRisk = Math.max(0.01, run.macro.marketRisk + source.market_risk);
-  if (source.temporary_effects && source.duration_turns) {
+  const effects = { ...(source.effects || {}), ...source };
+  run.company.cash += effects.cash || 0;
+  run.company.debt = Math.max(0, run.company.debt + (effects.debt || 0));
+  run.company.risk = clamp(run.company.risk + (effects.risk || 0), 0.01, 0.95);
+  run.company.revenueBonus += effects.revenue_bonus || 0;
+  run.company.expenseBonus += effects.expense_bonus || 0;
+  if (effects.interest_rate) run.macro.interestRate = Math.max(0.01, run.macro.interestRate + effects.interest_rate);
+  if (effects.inflation) run.macro.inflation = Math.max(0.01, run.macro.inflation + effects.inflation);
+  if (effects.demand) run.macro.demand = Math.max(0.01, run.macro.demand + effects.demand);
+  if (effects.energy_cost) run.macro.energyCost = Math.max(0.01, run.macro.energyCost + effects.energy_cost);
+  if (effects.credit_availability) run.macro.creditAvailability = Math.max(0.01, run.macro.creditAvailability + effects.credit_availability);
+  if (effects.market_risk) run.macro.marketRisk = Math.max(0.01, run.macro.marketRisk + effects.market_risk);
+  if (effects.temporary_effects && effects.duration_turns) {
     run.activeModifiers.push({
-      label: source.title || source.id || "Modifier",
-      effects: source.temporary_effects,
-      remainingTurns: source.duration_turns
+      label: effects.title || effects.id || "Modifier",
+      effects: effects.temporary_effects,
+      remainingTurns: effects.duration_turns
     });
   }
 }
@@ -2134,7 +3303,12 @@ function almostSynergies() {
 }
 
 function activeSynergyBonus() {
-  return activeSynergies().reduce((acc, synergy) => ({
+  return activeSynergyBonusFor(state.run.company.businesses);
+}
+
+function activeSynergyBonusFor(businessPositions) {
+  const owned = new Set(businessPositions.map((item) => item.businessId));
+  return state.synergies.filter((synergy) => synergy.requires.every((id) => owned.has(id))).reduce((acc, synergy) => ({
     revenue: acc.revenue + (synergy.revenue_bonus || 0),
     expense: acc.expense + (synergy.expense_bonus || 0)
   }), { revenue: 0, expense: 0 });
@@ -2151,7 +3325,8 @@ function filteredPortfolio() {
 
 function groupedMarketBusinesses() {
   const owned = new Set(state.run.company.businesses.map((item) => item.businessId));
-  const visible = state.businesses.filter((business) => !owned.has(business.id)).filter((business) => {
+  const offers = new Set(state.run.marketOfferIds || []);
+  const visible = state.businesses.filter((business) => offers.has(business.id) && !owned.has(business.id)).filter((business) => {
     const industryOk = state.marketFilterIndustry === "all" || business.industry === state.marketFilterIndustry;
     const riskOk = state.marketFilterRisk === "all" || matchRiskFilter(business.risk, state.marketFilterRisk);
     return industryOk && riskOk;
@@ -2163,110 +3338,100 @@ function groupedMarketBusinesses() {
   }
   return [...groups.entries()].map(([industry, items]) => ({
     industry,
-    locked: !industryUnlocked(industry),
-    items: industryUnlocked(industry) ? items : []
+    locked: false,
+    items
   }));
 }
 
 function renderOwnedBusinessCard(owned) {
   const business = businessById(owned.businessId);
-  const revenue = business.revenue * (1 + (owned.level - 1) * 0.45);
-  const expenses = business.expense * (1 + (owned.level - 1) * 0.45);
-  const profit = revenue - expenses;
+  const profit = (business.revenue - business.expense) * (1 + (owned.level - 1) * 0.45);
   const cost = upgradeCost(owned);
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("revenue")}</span><strong>${money(revenue)}</strong></div>
-        <div><span>${t("expenses")}</span><strong>${money(expenses)}</strong></div>
-        <div><span>${t("profit")}</span><strong>${money(profit)}</strong></div>
+    <article class="business-card asset-card-v3 motion-card" style="--card-index:${owned.level}">
+      ${businessVisualMarkup(business)}
+      <div class="asset-card-heading"><div><small>${industryName(business.industry)}</small><h3>${businessName(business)}</h3></div><span>${t("level")} ${owned.level}</span></div>
+      <div class="business-metrics asset-card-metrics">
+        <div><span>${t("profit")}</span><strong class="${profit >= 0 ? "positive" : "negative"}">${money(profit)}</strong></div>
         <div><span>${t("risk")}</span><strong>${percent(business.risk)}</strong></div>
       </div>
-      <div class="button-row">
-        <button class="business-button" data-upgrade="${business.id}" ${canTakeAction(cost) && owned.level < business.max_level ? "" : "disabled"}>${t("upgrade")}</button>
+      <div class="button-row asset-card-actions">
+        <button class="business-button" title="${t("costLabel")}: ${money(cost)}" data-upgrade="${business.id}" ${canTakeAction(cost) && owned.level < business.max_level ? "" : "disabled"}>${t("upgrade")}</button>
         <button class="secondary-button" data-sell="${business.id}" ${canTakeAction(0) && state.run.company.businesses.length > 1 ? "" : "disabled"}>${t("sell")}</button>
       </div>
     </article>
   `;
 }
 
-function renderDecisionBuyCard(business) {
-  return `
-    <article class="business-card">
-      <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(industryName(business.industry))}${tag(riskBucketLabel(business.risk))}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-        <div><span>${t("risk")}</span><strong>${percent(business.risk)}</strong></div>
-        <div><span>${t("synergyHooks")}</span><strong>${synergyHooks(business.id)}</strong></div>
-        <div><span>${t("macroSensitivity")}</span><strong>${macroSensitivity(business)}</strong></div>
-      </div>
-      <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buyAsset")}</button>
-    </article>
-  `;
-}
-
 function renderDecisionUpgradeCard(owned) {
   const business = businessById(owned.businessId);
-  const upgradePrice = upgradeCost(owned);
-  const revenueGain = Math.round(business.revenue * 0.45);
+  const projection = businessUpgradeProjection(owned);
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("upgrade")}</span><strong>${money(upgradePrice)}</strong></div>
-        <div><span>${t("revenue")}</span><strong>+${money(revenueGain)}</strong></div>
-      </div>
-      <button class="business-button" data-upgrade="${business.id}" ${canTakeAction(upgradePrice) ? "" : "disabled"}>${t("upgradeAsset")}</button>
-    </article>
+    <button class="selectable-action-card action-choice-card motion-card" style="--card-index:${owned.level}" data-upgrade="${business.id}" ${canTakeAction(projection.cost) ? "" : "disabled"}>
+      ${actionChoiceCover(businessTheme(business), industryName(business.industry))}
+      <span class="action-choice-meta"><span>${t("level")} ${owned.level} → ${owned.level + 1}</span></span>
+      <strong class="selectable-card-title">${businessName(business)}</strong>
+      <span class="selectable-card-description">${businessBlurb(business)}</span>
+      <span class="action-choice-impact">
+        <span><small>${t("costLabel")}</small><strong>${money(projection.cost)}</strong></span>
+        <span><small>${t("profitAdded")}</small><strong class="positive">${signedMoney(projection.profitGain)}</strong></span>
+      </span>
+      <span class="payback-line">${projection.paybackTurns ? t("paysBackIn", { turns: projection.paybackTurns }) : t("noPaybackNow")}</span>
+      <span class="card-select-label">${t("upgrade")} →</span>
+    </button>
   `;
 }
 
 function renderDecisionSellCard(owned) {
-  const business = businessById(owned.businessId);
-  const saleValue = Math.round(business.cost * (0.55 + owned.level * 0.15));
+  const projection = businessSellProjection(owned);
+  const business = projection.business;
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(industryName(business.industry), "accent")}${tag(`${t("level")} ${owned.level}`)}</div>
-      <h3>${business.name}</h3>
-      <p>${businessBlurb(business)}</p>
-      <div class="business-metrics">
-        <div><span>${t("sell")}</span><strong>${money(saleValue)}</strong></div>
-        <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-      </div>
-      <button class="business-button" data-sell="${business.id}" ${canTakeAction(0) ? "" : "disabled"}>${t("sellAsset")}</button>
-    </article>
+    <button class="selectable-action-card action-choice-card motion-card" style="--card-index:${owned.level}" data-sell="${business.id}" ${canTakeAction(0) ? "" : "disabled"}>
+      ${actionChoiceCover(businessTheme(business), industryName(business.industry))}
+      <span class="action-choice-meta"><span>${t("level")} ${owned.level}</span></span>
+      <strong class="selectable-card-title">${businessName(business)}</strong>
+      <span class="selectable-card-description">${businessBlurb(business)}</span>
+      <span class="action-choice-impact">
+        <span><small>${t("receiveNow")}</small><strong class="positive">+${money(projection.saleValue)}</strong></span>
+        <span><small>${t("profit")}</small><strong class="negative">${signedMoney(projection.after.profit - projection.before.profit)}</strong></span>
+      </span>
+      <span class="card-select-label">${t("sell")} →</span>
+    </button>
   `;
 }
 
 function renderDecisionCardPlay(card) {
+  const presentation = choicePresentation(card);
+  const projection = actionCardProjection(card);
+  const riskDelta = projection.riskDelta;
+  const meta = [
+    `<span class="${card.cost ? "is-cost" : "is-free"}">${card.cost ? money(card.cost) : t("noCost")}</span>`,
+    card.duration_turns ? `<span>${t("lastsTurns", { turns: card.duration_turns })}</span>` : "",
+    riskDelta ? `<span class="${riskDelta > 0 ? "is-risk" : "is-safe"}">${t("risk")} ${signedPercent(riskDelta)}</span>` : ""
+  ].filter(Boolean).join("");
   return `
-    <article class="business-card">
-      <div class="tag-row">${tag(card.cost ? `${t("buy")} ${money(card.cost)}` : t("noCost"), "accent")}</div>
-      <h3>${card.title}</h3>
-      <p>${card.text}</p>
-      <div class="choice-meta stacked">
-        <div><span>${t("effectLabel")}</span><strong>${describeEffects(card) || t("strategicShift")}</strong></div>
-        <div><span>${t("riskLabelTitle")}</span><strong>${riskLabel(card)}</strong></div>
-      </div>
-      <button class="business-button" data-play-card="${card.id}" ${canTakeAction(card.cost || 0) ? "" : "disabled"}>${t("playCardAction")}</button>
-    </article>
+    <button class="selectable-action-card action-choice-card action-play-card motion-card" data-play-card="${card.id}" ${canTakeAction(card.cost || 0) ? "" : "disabled"}>
+      ${actionChoiceCover(presentation.type, presentation.label)}
+      <span class="action-choice-meta">${meta}</span>
+      <strong class="selectable-card-title">${cardTitle(card)}</strong>
+      <span class="selectable-card-description">${cardText(card)}</span>
+      <span class="action-choice-impact">
+        <span><small>${t("profit")}</small><strong class="${projection.after.profit >= projection.before.profit ? "positive" : "negative"}">${signedMoney(projection.after.profit - projection.before.profit)}</strong></span>
+        <span><small>${t("cashAfterAction")}</small><strong>${money(projection.cashAfter)}</strong></span>
+        ${projection.debtDelta ? `<span><small>${t("debtAfterAction")}</small><strong>${money(projection.debtAfter)}</strong></span>` : ""}
+      </span>
+      <span class="card-select-label">${t("playCardAction").replace(/ карту$/i, "")} →</span>
+    </button>
   `;
 }
 
 function renderActiveSynergy(synergy) {
-  return `<article class="synergy-card"><strong>${synergy.name}</strong><p>${synergy.requires.map((id) => businessById(id).name).join(" + ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`, "accent") : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`, "accent") : ""}</div></article>`;
+  return `<article class="synergy-card"><strong>${synergyName(synergy)}</strong><p>${synergy.requires.map((id) => businessName(businessById(id))).join(" + ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`, "accent") : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`, "accent") : ""}</div></article>`;
 }
 
 function renderNearSynergy(synergy) {
   const missing = synergy.requires.filter((id) => !state.run.company.businesses.some((item) => item.businessId === id));
-  return `<article class="synergy-card"><strong>${t("almostReady")}: ${synergy.name}</strong><p>${missing.map((id) => businessById(id).name).join(", ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`) : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`) : ""}</div></article>`;
+  return `<article class="synergy-card"><strong>${t("almostReady")}: ${synergyName(synergy)}</strong><p>${missing.map((id) => businessName(businessById(id))).join(", ")}</p><div class="tag-row">${synergy.revenue_bonus ? tag(`${t("revenue")} ${signedPercent(synergy.revenue_bonus)}`) : ""}${synergy.expense_bonus ? tag(`${t("expenses")} ${signedPercent(synergy.expense_bonus)}`) : ""}</div></article>`;
 }
 
 function renderMarketGroup(group) {
@@ -2287,20 +3452,24 @@ function renderMarketGroup(group) {
     <section class="market-group">
       <div class="market-group-header"><h3>${industryName(group.industry)}</h3><p>${group.items.length} ${t("offers")}</p></div>
       <div class="market-grid">
-        ${group.items.map((business) => `
-          <article class="business-card">
+        ${group.items.map((business, index) => {
+          const projection = businessPurchaseProjection(business);
+          return `
+          <article class="business-card market-business-card motion-card" style="--card-index:${index}">
+            ${businessVisualMarkup(business)}
             <div class="tag-row">${tag(`${t("buy")} ${money(business.cost)}`, "accent")}${tag(riskBucketLabel(business.risk))}</div>
-            <h3>${business.name}</h3>
+            <h3>${businessName(business)}</h3>
             <p>${businessBlurb(business)}</p>
-            <div class="business-metrics">
-              <div><span>${t("expectedProfit")}</span><strong>${money(business.revenue - business.expense)}</strong></div>
-              <div><span>${t("industryLabel")}</span><strong>${industryName(business.industry)}</strong></div>
-              <div><span>${t("macroSensitivity")}</span><strong>${macroSensitivity(business)}</strong></div>
-              <div><span>${t("synergyHooks")}</span><strong>${synergyHooks(business.id)}</strong></div>
+            <div class="business-metrics economy-card-metrics">
+              <div><span>${t("cashAfterPurchase")}</span><strong>${money(projection.cashAfter)}</strong></div>
+              <div><span>${t("profitAdded")}</span><strong class="${projection.profitGain >= 0 ? "positive" : "negative"}">${signedMoney(projection.profitGain)}</strong></div>
+              <div class="metric-wide"><span>${t("beforeAfter")}</span><strong>${money(projection.before.profit)} → ${money(projection.after.profit)}</strong></div>
             </div>
-            <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buy")}</button>
+            <div class="payback-line">${projection.paybackTurns ? t("paysBackIn", { turns: projection.paybackTurns }) : t("noPaybackNow")}</div>
+            <div class="market-card-footnote"><span>${t("macroSensitivity")}: ${macroSensitivity(business)}</span><span>${t("synergyHooks")}: ${synergyHooks(business.id)}</span></div>
+            <button class="business-button" data-buy="${business.id}" ${canTakeAction(business.cost) ? "" : "disabled"}>${t("buy")} · ${money(business.cost)}</button>
           </article>
-        `).join("")}
+        `;}).join("")}
       </div>
     </section>
   `;
@@ -2358,8 +3527,8 @@ function renderInteractiveStockChart(points, momentum) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const mid = (min + max) / 2;
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
+  const stroke = momentum >= 0 ? "#70b78f" : "#d87370";
+  const fill = momentum >= 0 ? "rgba(112,183,143,0.12)" : "rgba(216,115,112,0.12)";
   const plotFloor = height - 28;
   const path = coords.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
   const area = `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${plotFloor.toFixed(2)} L ${coords[0].x.toFixed(2)} ${plotFloor.toFixed(2)} Z`;
@@ -2403,7 +3572,7 @@ function renderStockCard(stock) {
 
 function renderSparkline(points, momentum) {
   const path = chartPath(points, 92, 34);
-  const tone = momentum >= 0 ? "#0f8b72" : "#bb4a42";
+  const tone = momentum >= 0 ? "#70b78f" : "#d87370";
   return `<svg class="sparkline" viewBox="0 0 92 34" aria-hidden="true"><path d="${path}" fill="none" stroke="${tone}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
@@ -2412,8 +3581,8 @@ function renderFullChart(points, momentum) {
   const height = 200;
   const path = chartPath(points, width, height);
   const area = chartArea(points, width, height);
-  const stroke = momentum >= 0 ? "#0f8b72" : "#bb4a42";
-  const fill = momentum >= 0 ? "rgba(15,139,114,0.12)" : "rgba(187,74,66,0.12)";
+  const stroke = momentum >= 0 ? "#70b78f" : "#d87370";
+  const fill = momentum >= 0 ? "rgba(112,183,143,0.12)" : "rgba(216,115,112,0.12)";
   return `<svg class="stock-full-chart" viewBox="0 0 ${width} ${height}" aria-label="${t("openChart")}"><path d="${area}" fill="${fill}"></path><path d="${path}" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
 }
 
@@ -2525,7 +3694,7 @@ function renderTradePercentBar(mode, value) {
 }
 
 function macroCard(title, value, helper) {
-  return `<article class="macro-card"><h3>${title}</h3><p class="helper">${helper}</p><div class="tag-row">${tag(value, "accent")}</div></article>`;
+  return `<article class="macro-card macro-card-v3"><small>${title}</small><strong>${value}</strong><p class="helper">${helper}</p></article>`;
 }
 
 function macroPill(label, value) {
@@ -2543,6 +3712,16 @@ function economyRegime() {
 }
 
 function decisionDescription(choice) {
+  if (state.selectedLanguage === "ru") {
+    if (choice.revenue_bonus && choice.risk > 0) return "Больше прибыли, но выше риск";
+    if (choice.debt && choice.debt < 0) return "Долг станет меньше";
+    if (choice.debt && choice.debt > 0) return "Больше денег сейчас, но вырастет долг";
+    if (choice.cash && choice.cash > 0) return "Деньги поступят сразу";
+    if (choice.cash && choice.cash < 0) return "Нужно заплатить сейчас";
+    if (choice.expense_bonus && choice.expense_bonus < 0) return "Расходы станут меньше";
+    if (choice.risk && choice.risk < 0) return "Риск станет ниже";
+    return "Изменит доход, расходы или риск";
+  }
   if (choice.revenue_bonus && choice.risk > 0) return t("high");
   if (choice.debt && choice.debt < 0) return t("lower");
   if (choice.cash && choice.cash > 0) return t("cashLabel");
@@ -2577,6 +3756,35 @@ function businessById(id) {
   return state.businesses.find((item) => item.id === id);
 }
 
+function businessName(business) {
+  if (!business) return "";
+  return state.selectedLanguage === "ru" ? (RU_BUSINESS_NAMES[business.id] || business.name) : business.name;
+}
+
+function eventTitle(event) {
+  return state.selectedLanguage === "ru" ? (RU_EVENT_COPY[event.id]?.[0] || event.title) : event.title;
+}
+
+function eventText(event) {
+  return state.selectedLanguage === "ru" ? (RU_EVENT_COPY[event.id]?.[1] || event.text) : event.text;
+}
+
+function choiceTitle(choice) {
+  return state.selectedLanguage === "ru" ? (RU_CHOICE_TITLES[choice.title] || choice.title) : choice.title;
+}
+
+function cardTitle(card) {
+  return state.selectedLanguage === "ru" ? (RU_CARD_COPY[card.id]?.[0] || card.title) : card.title;
+}
+
+function cardText(card) {
+  return state.selectedLanguage === "ru" ? (RU_CARD_COPY[card.id]?.[1] || card.text) : card.text;
+}
+
+function synergyName(synergy) {
+  return state.selectedLanguage === "ru" ? (RU_SYNERGY_NAMES[synergy.id] || synergy.name) : synergy.name;
+}
+
 function industryName(id) {
   const map = { retail: t("retail"), it: t("tech"), tech: t("tech"), logistics: t("logistics"), manufacturing: t("industry"), industry: t("industry"), energy: t("energy"), real_estate: t("realEstate"), media: t("media"), fund: t("finance") };
   return map[id] || id;
@@ -2593,7 +3801,7 @@ function businessBlurb(business) {
 }
 
 function synergyHooks(businessId) {
-  const hooks = state.synergies.filter((item) => item.requires.includes(businessId)).map((item) => item.name);
+  const hooks = state.synergies.filter((item) => item.requires.includes(businessId)).map(synergyName);
   return hooks.length ? hooks.slice(0, 2).join(", ") : t("standalone");
 }
 
@@ -2643,44 +3851,31 @@ function marketRiskInsight(value) {
 }
 
 function describeEffects(source) {
+  const effects = { ...(source.effects || {}), ...source };
   const parts = [];
-  if (source.cash) parts.push(`${t("cash")} ${signedMoney(source.cash)}`);
-  if (source.debt) parts.push(`${t("debt")} ${signedMoney(source.debt)}`);
-  if (source.risk) parts.push(`${t("risk")} ${signedPercent(source.risk)}`);
-  if (source.revenue_bonus) parts.push(`${t("revenue")} ${signedPercent(source.revenue_bonus)}`);
-  if (source.expense_bonus) parts.push(`${t("expenses")} ${signedPercent(source.expense_bonus)}`);
-  if (source.interest_rate) parts.push(`${t("rate")} ${signedPercent(source.interest_rate)}`);
-  if (source.inflation) parts.push(`${t("inflation")} ${signedPercent(source.inflation)}`);
-  if (source.demand) parts.push(`${t("demand")} ${signedPercent(source.demand)}`);
-  if (source.energy_cost) parts.push(`${t("energyCost")} ${signedPercent(source.energy_cost)}`);
-  if (source.credit_availability) parts.push(`${t("creditAvailability")} ${signedPercent(source.credit_availability)}`);
-  if (source.market_risk) parts.push(`${t("marketRisk")} ${signedPercent(source.market_risk)}`);
-  if (source.temporary_effects && source.duration_turns) {
-    parts.push(`${formatTemporaryEffects(source.temporary_effects)} / ${source.duration_turns}t`);
+  if (effects.cash) parts.push(`${t("cash")} ${signedMoney(effects.cash)}`);
+  if (effects.debt) parts.push(`${t("debt")} ${signedMoney(effects.debt)}`);
+  if (effects.risk) parts.push(`${t("risk")} ${signedPercent(effects.risk)}`);
+  if (effects.revenue_bonus) parts.push(`${t("revenue")} ${signedPercent(effects.revenue_bonus)}`);
+  if (effects.expense_bonus) parts.push(`${t("expenses")} ${signedPercent(effects.expense_bonus)}`);
+  if (effects.interest_rate) parts.push(`${t("rate")} ${signedPercent(effects.interest_rate)}`);
+  if (effects.inflation) parts.push(`${t("inflation")} ${signedPercent(effects.inflation)}`);
+  if (effects.demand) parts.push(`${t("demand")} ${signedPercent(effects.demand)}`);
+  if (effects.energy_cost) parts.push(`${t("energyCost")} ${signedPercent(effects.energy_cost)}`);
+  if (effects.credit_availability) parts.push(`${t("creditAvailability")} ${signedPercent(effects.credit_availability)}`);
+  if (effects.market_risk) parts.push(`${t("marketRisk")} ${signedPercent(effects.market_risk)}`);
+  if (effects.temporary_effects && effects.duration_turns) {
+    parts.push(`${formatTemporaryEffects(effects.temporary_effects)} / ${effects.duration_turns}t`);
   }
   return parts.join(" | ");
 }
 
 function activeTemporaryTotals() {
-  return state.run.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) {
-      acc[key] = (acc[key] || 0) + value;
-    }
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
+  return sumModifierEffects(state.run.activeModifiers);
 }
 
 function effectiveMacro() {
-  const base = state.run.macro;
-  const temporary = activeTemporaryTotals();
-  return {
-    interestRate: Math.max(0.01, base.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, base.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, base.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, base.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, base.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, base.marketRisk + (temporary.market_risk || 0))
-  };
+  return calculateEffectiveMacro(state.run.macro, activeTemporaryTotals());
 }
 
 function tickModifiers() {
@@ -2704,14 +3899,9 @@ function describeModifier(modifier) {
   return `${modifier.label}: ${formatTemporaryEffects(modifier.effects)} (${modifier.remainingTurns}t)`;
 }
 
-function headerActions() {
-  return "";
-}
-
 function tabTitle() {
   const map = {
-    dashboard: t("dashboard"),
-    decisions: t("decisions"),
+    dashboard: t("gameTab"),
     portfolio: t("portfolio"),
     market: t("market"),
     economy: t("economy"),
@@ -2721,33 +3911,8 @@ function tabTitle() {
   return map[state.activeTab] || t("gameTitle");
 }
 
-function headerStatusText(run) {
-  if (run.finished) return run.statusMessage;
-  if (run.eventResolved) return run.pendingActionDone ? t("turnReadyToAdvance") : t("chooseAction");
-  return t("resolveEventThenAction");
-}
-
-function compactStatusChip() {
-  if (!state.run.eventResolved && ["decisions", "portfolio", "market"].includes(state.activeTab)) {
-    return t("eventNeedsDecision");
-  }
-  if (state.activeTab === "decisions") {
-    if (!state.run.eventResolved) return t("eventNeedsDecision");
-    if (!state.run.pendingActionDone) return t("chooseAction");
-    return t("turnReadyToAdvance");
-  }
-  if (state.activeTab === "portfolio") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("portfolioReady");
-  if (state.activeTab === "market") return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("marketReady");
-  if (state.activeTab === "economy") return t("economyWatch");
-  return state.run.pendingActionDone ? t("turnReadyToAdvance") : t("active");
-}
-
 function statusChip(text, tone = "") {
   return `<span class="status-chip ${tone}">${text}</span>`;
-}
-
-function turnReady() {
-  return !!(state.run && state.run.eventResolved && state.run.pendingActionDone);
 }
 
 function openMeta() {
@@ -2809,6 +3974,7 @@ function purchaseUnlock(unlockId) {
   state.meta.purchasedUnlockIds = uniqueList(state.meta.purchasedUnlockIds);
   saveMetaProgression();
   if (state.run) state.run.statusMessage = `${t("unlockPurchased")}: ${t(unlock.titleKey)}`;
+  saveCurrentRun();
   render();
 }
 
@@ -2835,7 +4001,11 @@ function currentMaxTurns(targetRun = state.run) {
 }
 
 function debtPressureThreshold(run) {
-  return Math.max(10000 + metaStartingBonuses().debtThresholdBonus, run.company.cash * 4);
+  const baseThreshold = calculateBaseDebtThreshold(
+    run.company.cash,
+    metaStartingBonuses().debtThresholdBonus
+  );
+  return applyDifficultyToDebtThreshold(baseThreshold, run.difficultyId);
 }
 
 function summarizeRun(run) {
@@ -2857,7 +4027,7 @@ function calculateKnowledgeReward(run) {
   reward += Math.floor(Math.max(0, summary.valuation) / 25000);
   if (summary.turnReached >= currentMaxTurns(run)) reward += 3;
   if (summary.valuation > 150000) reward += 5;
-  return reward;
+  return applyDifficultyToKnowledgeReward(reward, run.difficultyId);
 }
 
 function claimRunReward(run) {
@@ -3040,10 +4210,18 @@ function simulateSingleRun() {
       }
     }
 
-    const debtPressure = sim.company.debt > Math.max(10000 + metaStartingBonuses().debtThresholdBonus, sim.company.cash * 4);
-    const cashBankruptcy = sim.company.cash < -5000;
-    const debtCollapse = !cashBankruptcy && debtPressure && Math.random() < sim.company.risk;
-    if (cashBankruptcy || debtCollapse) {
+    const simulationThreshold = calculateBaseDebtThreshold(
+      sim.company.cash,
+      metaStartingBonuses().debtThresholdBonus
+    );
+    const { cashBankruptcy, debtCollapse, bankrupt } = assessSolvency({
+      cash: sim.company.cash,
+      debt: sim.company.debt,
+      risk: sim.company.risk,
+      debtThreshold: applyDifficultyToDebtThreshold(simulationThreshold, sim.difficultyId),
+      randomValue: Math.random()
+    });
+    if (bankrupt) {
       const finalReport = simulationReport(sim);
       return { reason: debtCollapse ? "debt_collapse" : "bankruptcy", turnReached: sim.turn, cash: sim.company.cash, debt: sim.company.debt, valuation: finalReport.valuation };
     }
@@ -3056,32 +4234,18 @@ function simulateSingleRun() {
 }
 
 function simulationReport(sim) {
-  const temporary = sim.activeModifiers.reduce((acc, modifier) => {
-    for (const [key, value] of Object.entries(modifier.effects)) acc[key] = (acc[key] || 0) + value;
-    return acc;
-  }, { revenue_bonus: 0, expense_bonus: 0, risk: 0, interest_rate: 0, inflation: 0, demand: 0, energy_cost: 0, credit_availability: 0, market_risk: 0 });
-  const macro = {
-    interestRate: Math.max(0.01, sim.macro.interestRate + (temporary.interest_rate || 0)),
-    inflation: Math.max(0.01, sim.macro.inflation + (temporary.inflation || 0)),
-    demand: Math.max(0.01, sim.macro.demand + (temporary.demand || 0)),
-    energyCost: Math.max(0.01, sim.macro.energyCost + (temporary.energy_cost || 0)),
-    creditAvailability: Math.max(0.01, sim.macro.creditAvailability + (temporary.credit_availability || 0)),
-    marketRisk: Math.max(0.01, sim.macro.marketRisk + (temporary.market_risk || 0))
-  };
-  let revenue = 0;
-  let expenses = 0;
-  for (const owned of sim.company.businesses) {
-    const business = businessById(owned.businessId);
-    const levelMultiplier = 1 + (owned.level - 1) * 0.45;
-    revenue += business.revenue * levelMultiplier * (1 + ((macro.demand - 1) * business.demand_sensitivity)) * (1 + macro.inflation * 0.7);
-    expenses += business.expense * levelMultiplier * Math.max(0.5, 1 + ((macro.energyCost - 1) * business.energy_use)) * (1 + macro.inflation);
-  }
-  revenue *= 1 + sim.company.revenueBonus + temporary.revenue_bonus;
-  expenses *= Math.max(0.2, 1 + sim.company.expenseBonus + temporary.expense_bonus);
-  const interest = sim.company.debt * macro.interestRate;
-  const profit = revenue - expenses - interest;
-  const assetTotal = sim.company.businesses.reduce((sum, owned) => sum + businessById(owned.businessId).cost * (1 + owned.level * 0.25), 0);
-  return { profit, valuation: sim.company.cash + assetTotal + Math.max(0, profit * 8) - sim.company.debt };
+  const temporary = sumModifierEffects(sim.activeModifiers);
+  return calculateEconomyReport({
+    company: sim.company,
+    macro: calculateEffectiveMacro(sim.macro, temporary),
+    businesses: sim.company.businesses.map((owned) => ({
+      definition: businessById(owned.businessId),
+      level: owned.level
+    })),
+    stocks: [],
+    modifierTotals: temporary,
+    synergyBonus: {}
+  });
 }
 
 function simulationApplyEffects(sim, source) {
@@ -3180,4 +4344,3 @@ function clamp(value, min, max) {
 function sample(items) {
   return items[Math.floor(Math.random() * items.length)];
 }
-

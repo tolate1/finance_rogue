@@ -1,138 +1,84 @@
-# Finance Roguelike Roadmap
+# Finance Roguelike — Agent Delivery Guide
 
-## Current Stage
+The detailed Russian product roadmap in `ROADMAP.user.ru.md` is the source of truth. This file translates it into implementation order for contributors and coding agents.
 
-Current stage: Stage 4 UI prototype with Stage 3 temporary modifiers implemented.
+## Product direction
 
-## Progress Overview
+Build a stable mobile-first browser beta in which players manage businesses, stocks, debt, and macro shocks through short roguelike runs. Decisions should be legible but non-obvious, and every strong action should carry a cost, risk, or opportunity cost.
 
-- [x] Repository initialized
-- [x] Text prototype entry point created
-- [x] Basic 10-turn run loop implemented
-- [x] Bankruptcy condition implemented
-- [x] Basic economy formula implemented
-- [x] Debt and interest implemented
-- [x] Valuation output implemented
-- [x] Business purchase implemented
-- [x] Business upgrades implemented
-- [x] Macro state implemented
-- [x] Event system implemented
-- [x] Event choices implemented
-- [x] Decision card system implemented
-- [x] Synergy system implemented
-- [x] Industry data added
-- [x] Content validation for industries and synergies added
-- [x] First MVP-sized data pack added
-- [x] README with run instructions and status added
-- [x] First-launch language select
-- [x] RU/EN interface localization
-- [x] PNG tab icons
-- [ ] Balance pass
-- [ ] Action economy pass
-- [ ] Turn count review for MVP
-- [x] Run logging for balancing
-- [x] Meta progression
-- [x] Automated tests
-- [x] Mobile-style browser UI prototype
+## Delivery rules
 
-## Stage Checklist
+1. Work through small pull requests; do not commit feature work directly to `main`.
+2. Keep game rules out of rendering code whenever a touched area can be extracted safely.
+3. A formula must have one canonical implementation shared by live play and simulation.
+4. Add or update tests with every behavior change.
+5. Run `npm run check` before publishing a branch.
+6. Update the user roadmap and README whenever shipped scope changes.
+7. Do not add content before validating its references and basic economy values.
 
-### Stage 0: Documentation and Prototyping
+## Completed milestone: reliability foundation
 
-- [x] Core concept written
-- [x] MVP scope defined in working notes
-- [x] First content direction fixed
-- [ ] Formal game design document
-- [ ] Economy balancing sheet
-- [ ] Wireframes
+Goal: protect player progress and make all future changes automatically verifiable.
 
-### Stage 1: Basic Game Loop
+- [x] Versioned unfinished-run persistence.
+- [x] Automatic restore after reload.
+- [x] Invalid and incompatible save rejection.
+- [x] Persistence unit tests.
+- [x] Content-integrity tests.
+- [x] GitHub Actions CI definition.
+- [x] Current product roadmap and README.
 
-- [x] New run start
-- [x] Turn flow
-- [x] Financial report per turn
-- [x] Player action phase
-- [x] End-of-run result screen in text form
-- [x] Input loop for manual play
-- [ ] Better fail states and feedback
+Acceptance checks:
 
-### Stage 2: Economy and Businesses
+- `npm run check` succeeds.
+- A fresh run writes a versioned save.
+- Reload restores the same run id and turn.
+- A finished run is not restored.
+- Corrupted storage starts safely with a fresh run.
 
-- [x] Business definitions
-- [x] Industry definitions
-- [x] Buy flow
-- [x] Upgrade flow
-- [x] Debt flow
-- [x] Interest flow
-- [x] Macro modifiers
-- [x] Valuation model
-- [ ] Balance business prices and output
-- [ ] Add industry-specific logic beyond scalar modifiers
+## Next milestone: canonical game engine
 
-### Stage 3: Roguelike Events and Choices
+Goal: stop duplicating economy behavior across UI, simulation, and the Python prototype.
 
-- [x] Event pool
-- [x] Event macro effects
-- [x] Choice effects
-- [x] Decision cards
-- [x] Initial variety for runs
-- [x] Event weighting and conditions
-- [x] Temporary modifiers with duration
+The browser build now includes three starting scenarios and three difficulty levels. Their configuration lives in `src/engine/run-config.js`; keep future run setup rules in that module instead of returning them to UI code.
 
-### Stage 4: UI/UX
+Revenue, expenses, interest, dividends, asset value, valuation, macro modifiers, debt thresholds, and insolvency now live in `src/engine/economy.js`. Live play and the simulator both call this module. Do not duplicate these formulas in UI or simulation code.
 
-- [x] Mobile card UI
-- [x] Fixed bottom tab navigation
-- [x] Single active tab content model
-- [x] Dashboard / Decisions / Portfolio / Market / Economy split
-- [x] Synergies merged into Portfolio for MVP
-- [x] Better report readability
-- [x] Action previews
-- [x] End-run summary screen
+Round guidance now lives in `src/ui/turn-flow.js`. It provides the canonical UI phase, three-step state, recommended game tab, and projected settlement summary. Keep future navigation prompts and result cards aligned with this module instead of recreating phase checks in individual renderers.
 
-### Stage 5: Balancing
+Recommended module boundaries:
 
-- [x] Simulation runner
-- [x] Run logs
-- [ ] Dominant strategy checks
-- [ ] Economy tuning pass
+- `src/engine/state.js` — run creation, schema version, migrations.
+- `src/engine/economy.js` — revenue, expenses, interest, dividends, valuation.
+- `src/engine/actions.js` — buy, sell, upgrade, cards, and debt operations.
+- `src/engine/events.js` — eligibility, weighted selection, and effects.
+- `src/engine/stocks.js` — market cycle and stock ticks.
+- `src/engine/synergies.js` — active and near synergies.
+- `src/engine/simulation.js` — seeded strategies using the live engine.
+- `src/ui/` — rendering and browser event bindings only.
+- `src/i18n/` — locale dictionaries and formatting.
 
-### Stage 6: Meta Progression
+Extraction order:
 
-- [x] Unlock currency
-- [x] Unlock table
-- [x] Persistent save
+1. [x] Economy pure functions and tests.
+2. [ ] Seeded random source.
+3. Event/effect functions.
+4. Business and stock actions.
+5. Simulation migration.
+6. Rendering split.
+7. Decide whether `finance_roguelike.py` becomes an adapter or an archived prototype.
 
-### Stage 7: Content
+## Balance milestone
 
-- [x] 10 businesses
-- [x] 7 industries including media
-- [x] 20 events
-- [x] 20 cards
-- [x] 10 synergies
-- [ ] Scenario content
-- [ ] More starter variants
+Target ranges on normal difficulty:
 
-### Stage 8: Testing
+- bankruptcy rate: 15–35%;
+- full-run completion: 65–85%;
+- no sub-three-turn payback unless explicitly designed as rare;
+- no strategy that dominates every common macro regime.
 
-- [x] Manual playthroughs
-- [x] Syntax check
-- [x] JSON validation
-- [ ] Economy unit tests
-- [x] Content integrity tests
+The simulator must include stocks, dividends, synergies, selling, upgrading, debt repayment, and meta bonuses before its output is used for final tuning.
 
-### Stage 9: Soft Launch
+## Beta milestone
 
-- [ ] Not started
-
-### Stage 10: Release and Growth
-
-- [ ] Not started
-
-## Next Work
-
-1. Rework action usefulness so buying is not blocked too often.
-2. Tune business prices, upgrade costs, and debt pressure.
-3. Run 100/1000 simulations and inspect bankruptcy/valuation spread.
-4. Add event/card unlock extensions beyond industries and finance cards.
-5. Port the browser prototype into the final mobile stack.
+The public build now has one card-first game screen for event → action → result, four-section navigation, vertical choice lists without nested carousels, projected settlement feedback, and static HTTPS deployment. Before the wider beta, finish interactive onboarding, pre-confirmation action previews, mobile/accessibility QA, PWA support, save migrations, graceful loading errors, and a feedback path. Analytics require a separate product/privacy decision and are not implied by this roadmap.

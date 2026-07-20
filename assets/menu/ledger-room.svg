@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 1280" role="img" aria-label="Кинематографичный стол с финансовыми книгами">
+  <defs>
+    <linearGradient id="wall" x2="0" y2="1"><stop stop-color="#5d432c"/><stop offset=".48" stop-color="#211a14"/><stop offset="1" stop-color="#09090a"/></linearGradient>
+    <radialGradient id="lamp" cx=".24" cy=".17" r=".68"><stop stop-color="#fff0bd"/><stop offset=".16" stop-color="#e9a756" stop-opacity=".86"/><stop offset=".48" stop-color="#8b4d24" stop-opacity=".25"/><stop offset="1" stop-color="#060708" stop-opacity="0"/></radialGradient>
+    <linearGradient id="desk" x2="0" y2="1"><stop stop-color="#74624b"/><stop offset=".12" stop-color="#3c342b"/><stop offset="1" stop-color="#101113"/></linearGradient>
+    <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#e5d6b5"/><stop offset="1" stop-color="#877860"/></linearGradient>
+    <pattern id="grain" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M0 5h9M17 14h11M4 23h14" stroke="#f4d89c" stroke-opacity=".08" stroke-width="2"/><path d="M12 2v4M23 18v7" stroke="#08090a" stroke-opacity=".22" stroke-width="2"/></pattern>
+    <pattern id="ledgerLines" width="42" height="34" patternUnits="userSpaceOnUse"><path d="M0 1h42M0 17h42" stroke="#544b3e" stroke-width="2"/><path d="M10 0v34M31 0v34" stroke="#9d8765" stroke-opacity=".45"/></pattern>
+  </defs>
+  <rect width="720" height="1280" fill="url(#wall)"/>
+  <rect width="720" height="1280" fill="url(#grain)"/>
+  <rect width="720" height="850" fill="url(#lamp)"/>
+  <path d="M0 438 720 360v920H0Z" fill="url(#desk)"/>
+  <path d="M0 480 720 402" stroke="#b68a54" stroke-opacity=".42" stroke-width="5"/>
+  <g opacity=".92">
+    <path d="M44 676 354 620l52 314-324 43Z" fill="#151617" stroke="#8f754d" stroke-width="5"/>
+    <path d="M72 696 332 650l40 252-272 37Z" fill="url(#paper)"/>
+    <path d="M95 736 336 696M101 782l241-40M108 827l240-38M115 870l238-34" stroke="#5d5448" stroke-width="4"/>
+    <path d="M151 675 190 923M258 658l35 248" stroke="#8d7654" stroke-width="3"/>
+    <path d="m296 713 25 14-17 25-25-14zM180 801l22 13-15 21-22-13z" fill="#8e382f"/>
+  </g>
+  <g transform="translate(382 540)">
+    <path d="m0 88 255-34 32 272-263 25z" fill="#15191b" stroke="#a6844f" stroke-width="6"/>
+    <path d="m27 106 204-28 22 217-210 21z" fill="#0a2429" stroke="#31515a" stroke-width="3"/>
+    <path d="M52 139h158M55 175h158M58 211h158M61 247h158" stroke="#3b7f87" stroke-opacity=".7" stroke-width="4"/>
+    <path d="M90 115v182M153 106v185" stroke="#c9954e" stroke-opacity=".5" stroke-width="3"/>
+    <circle cx="236" cy="105" r="13" fill="#d09a47"/><circle cx="241" cy="271" r="9" fill="#42aebf"/>
+  </g>
+  <g transform="translate(36 390)">
+    <path d="M0 108 208 80l15 112L12 217Z" fill="#22211d" stroke="#745d3e" stroke-width="5"/>
+    <path d="m17 75 198-29 8 35L8 111Z" fill="#87582d"/><path d="m28 39 180-27 8 35L18 74Z" fill="#283f43"/>
+    <path d="m49 7 145-21 8 28L43 37Z" fill="#a87a3b"/>
+    <path d="M58 24 176 7M39 58l148-22M26 92l174-25" stroke="#d9ba76" stroke-opacity=".5" stroke-width="3"/>
+  </g>
+  <g transform="translate(470 892)">
+    <path d="M0 55 177 38l22 171-181 14Z" fill="#17191b" stroke="#6f5a3e" stroke-width="5"/>
+    <rect x="31" y="73" width="120" height="39" fill="#0d3137" stroke="#3da6b5" stroke-width="3"/>
+    <path d="M43 91h75" stroke="#b9e4db" stroke-width="5"/>
+    <g fill="#bf873f"><rect x="30" y="130" width="31" height="24"/><rect x="71" y="126" width="31" height="24"/><rect x="112" y="122" width="31" height="24"/><rect x="35" y="166" width="31" height="24"/><rect x="76" y="162" width="31" height="24"/><rect x="117" y="158" width="31" height="24"/></g>
+  </g>
+  <path d="M0 1120c168-83 353-72 720-22v182H0Z" fill="#050607" fill-opacity=".82"/>
+  <path d="M0 0h720v1280H0z" fill="none" stroke="#050505" stroke-width="34" stroke-opacity=".45"/>
+</svg>
